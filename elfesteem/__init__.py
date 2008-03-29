@@ -20,6 +20,8 @@ class StructWrapper(object):
     def __init__(self, parent, *args, **kargs):
         self.cstr = self.wrapped(*args, **kargs)
         self.parent = parent
+    def __getitem__(self, item):
+        return getattr(self,item)
     def __repr__(self):
         return "<W-"+repr(self.cstr)[1:]
             
@@ -33,12 +35,19 @@ class WEhdr(StructWrapper):
 
 class WSym(StructWrapper):
     wrapped = elf.Sym
+    def get_name(self):
+        return self.parent.linksection.get_name(self.cstr.name)
+
+class WRel(StructWrapper):
+    wrapped = elf.Rel
+
+class WRela(StructWrapper):
+    wrapped = elf.Rela
 
 class WShdr(StructWrapper):
     wrapped = elf.Shdr
     def get_name(self):
         return self.parent.parent._shstr.get_name(self.cstr.name)
-
 
 class ContentManager(object):
     def __get__(self, owner, x):
@@ -64,7 +73,8 @@ class Section(object):
                 Section.register(o)
             return o
         def register(cls, o):
-            cls.sectypes[o.sht] = o
+            if o.sht is not None:
+                cls.sectypes[o.sht] = o
         def __call__(cls, parent, shstr=None):
             sh = None
             if shstr is not None:
@@ -80,6 +90,22 @@ class Section(object):
     content = ContentManager()
     def parse_content(self):
         pass
+    def get_linksection(self):
+        return self.parent[self.sh.link]
+    def set_linksection(self, val):
+        if isinstance(val, Section):
+            val = self.parent.seclist.find(val)
+        if type(val) is int:
+            self.sh.link = val
+    linksection = property(get_linksection, set_linksection)
+    def get_infosection(self):
+        return self.parent[self.sh.info]
+    def set_infosection(self, val):
+        if isinstance(val, Section):
+            val = self.parent.seclist.find(val)
+        if type(val) is int:
+            self.sh.info = val
+    infosection = property(get_infosection, set_infosection)
     
     
     def __init__(self, parent, sh=None):
@@ -87,7 +113,59 @@ class Section(object):
         self.sh=sh
 
     
+class NullSection(Section):
+    sht = elf.SHT_NULL
 
+class ProgBits(Section):
+    sht = elf.SHT_PROGBITS
+
+class HashSection(Section):
+    sht = elf.SHT_HASH
+
+class Dynamic(Section):
+    sht = elf.SHT_DYNAMIC
+
+class NoteSection(Section):
+    sht = elf.SHT_NOTE
+
+class NoBitsSection(Section):
+    sht = elf.SHT_NOBITS
+
+class ShLibSection(Section):
+    sht = elf.SHT_SHLIB
+
+class InitArray(Section):
+    sht = elf.SHT_INIT_ARRAY
+
+class FiniArray(Section):
+    sht = elf.SHT_FINI_ARRAY
+    
+class GroupSection(Section):
+    sht = elf.SHT_GROUP
+    
+class SymTabSHIndeces(Section):
+    sht = elf.SHT_SYMTAB_SHNDX
+    
+class GNUVerSym(Section):
+    sht = elf.SHT_GNU_versym
+    
+class GNUVerNeed(Section):
+    sht = elf.SHT_GNU_verneed
+    
+class GNUVerDef(Section):
+    sht = elf.SHT_GNU_verdef
+    
+class GNULibLIst(Section):
+    sht = elf.SHT_GNU_LIBLIST
+    
+class CheckSumSection(Section):
+    sht = elf.SHT_CHECKSUM
+    
+
+
+
+
+    
 
 class StrTable(Section):
     sht = elf.SHT_STRTAB
@@ -117,29 +195,40 @@ class StrTable(Section):
         self.content += name+"\0"
         return n
 
+    
 class SymTable(Section):
     sht = elf.SHT_SYMTAB
-
-    def get_strtable(self):
-        return self.parent[self.sh.link]
-    def set_strtable(self, val):
-        if isinstance(val, Section):
-            val = self.seclist.find(val)
-        if type(val) is int:
-            self.sh.link = val
-    strtable = property(get_strtable, set_strtable)
     def parse_content(self):
         c = self.content
-        self.symtab={}
+        self.symtab=[]
+        self.symbols={}
         while c:
             s,c = c[:16],c[16:]
             sym = WSym(self,s)
-            symname = self.strtable.get_name(sym.name)
-            self.symtab[symname] = sym
+            self.symtab.append(sym)
+            self.symbols[sym.name] = sym
+    def __getitem__(self,item):
+        if type(item) is str:
+            return self.symbols[item]
+        return self.symtab[item]
 
 class DynSymTable(SymTable):
     sht = elf.SHT_DYNSYM
 
+
+class RelTable(Section):
+    sht = elf.SHT_REL
+    def parse_content(self):
+        c = self.content
+        self.reltab=[]
+        self.rel = {}
+        while c:
+            s,c = c[:8],c[8:]
+            rel = WRel(self,s)
+            relname = self.linksection.symtab[rel.sym].name
+            self.reltab.append(rel)
+            self.rel[relname] = rel
+    
 
 ### Section List
 
@@ -156,8 +245,20 @@ class SectionList:
         self._shstr = self.seclist[self.parent.Ehdr.shstrndx]
         for s in self.seclist:
             s._content = parent[s.sh.offset:s.sh.offset+s.sh.size]
-        for s in self.seclist:
-            s.parse_content()
+
+        # Follow dependencies when initializing sections
+        zero = self.seclist[0]
+        todo = self.seclist[1:]
+        done = []
+        while todo:
+            s = todo.pop(0)
+            if ( (s.linksection == zero or s.linksection in done)
+                 and  (s.infosection == zero or s.infosection in done)):
+                done.append(s)
+                s.parse_content()
+            else:
+                todo.append(s)
+            
         for s in self.seclist:
             self.do_add_section(s)
         
@@ -173,6 +274,14 @@ class SectionList:
         self.seclist.append(item)
     def __getitem__(self, item):
         return self.seclist[item]
+    def __repr__(self):
+        rep = ["#  section      offset   size   addr     flags"]
+        for i,s in enumerate(self.seclist):
+            l = "%(name)-15s %(offset)08x %(size)06x %(addr)08x %(flags)x " % s.sh
+            l = ("%2i " % i)+ l + s.__class__.__name__
+            rep.append(l)
+        return "\n".join(rep)
+        
 
 
 # ELF object
@@ -184,7 +293,7 @@ class ELF(object):
     content = ContentManager()
     def parse_content(self):
         self.Ehdr = WEhdr(self, self.content)
-        self.section = SectionList(self)
+        self.sections = SectionList(self)
     def __getitem__(self, item):
         return self.content[item]
         
@@ -193,6 +302,7 @@ class ELF(object):
 
 if __name__ == "__main__":
     import rlcompleter,readline,pdb
+    from pprint import pprint as pp
     readline.parse_and_bind("tab: complete")
 
     z = ELF(open("/bin/ls").read())
