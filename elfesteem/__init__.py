@@ -50,6 +50,13 @@ class WShdr(StructWrapper):
     def get_name(self):
         return self.parent.parent._shstr.get_name(self.cstr.name)
 
+class WDynamic(StructWrapper):
+    wrapped = elf.Dynamic
+    def get_name(self):
+        if self.type == 1:
+            return self.parent.linksection.get_name(self.cstr.name)
+        return self.cstr.name
+
 class WPhdr(StructWrapper):
     wrapped = elf.Phdr
 
@@ -127,9 +134,6 @@ class ProgBits(Section):
 class HashSection(Section):
     sht = elf.SHT_HASH
 
-class Dynamic(Section):
-    sht = elf.SHT_DYNAMIC
-
 class NoBitsSection(Section):
     sht = elf.SHT_NOBITS
 
@@ -178,6 +182,26 @@ class NoteSection(Section):
 
 
 
+class Dynamic(Section):
+    sht = elf.SHT_DYNAMIC
+    def parse_content(self):
+        c = self.content
+        self.dyntab = []
+        self.dynamic = {}
+        sz = self.sh.entsize
+        while c:
+            s,c = c[:sz],c[sz:]
+            dyn = WDynamic(self,s)
+            self.dyntab.append(dyn)
+            if type(dyn.name) is str:
+                self.dynamic[dyn.name] = dyn
+    def __getitem__(self,item):
+        if type(item) is str:
+            return self.dynamic[item]
+        return self.dyntab[item]
+            
+            
+        
     
 
 class StrTable(Section):

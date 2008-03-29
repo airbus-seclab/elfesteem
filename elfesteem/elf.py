@@ -67,6 +67,10 @@ class Rela(CStruct):
                 ("zero","H"),
                 ("addend","i") ]
 
+class Dynamic(CStruct):
+    _fields = [ ("type","I"),
+                ("name","I") ]
+
 
 # Legal values for e_type (object file type). 
 
