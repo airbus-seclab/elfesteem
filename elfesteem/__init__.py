@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 
+import struct
 import elf
 
 class StructWrapper(object):
@@ -129,9 +130,6 @@ class HashSection(Section):
 class Dynamic(Section):
     sht = elf.SHT_DYNAMIC
 
-class NoteSection(Section):
-    sht = elf.SHT_NOTE
-
 class NoBitsSection(Section):
     sht = elf.SHT_NOBITS
 
@@ -166,6 +164,17 @@ class CheckSumSection(Section):
     sht = elf.SHT_CHECKSUM
     
 
+class NoteSection(Section):
+    sht = elf.SHT_NOTE
+    def parse_content(self):
+        c = self.content
+        self.notes = []
+        while c:
+            namesz,descsz,typ = struct.unpack("III",c[:12])
+            name = c[12:12+namesz]
+            desc = c[12+namesz:12+namesz+descsz]
+            c = c[12+namesz+descsz:]
+            self.notes.append((typ,name,desc))
 
 
 
@@ -279,7 +288,7 @@ class SHList:
         n = section.sh.name
         if n.startswith("."):
             n = n[1:]
-        n = n.replace(".","_")
+        n = n.replace(".","_").replace("-","_")
         setattr(self, n, section) #xxx
         
     def append(self, item):
