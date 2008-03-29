@@ -206,8 +206,9 @@ class SymTable(Section):
         c = self.content
         self.symtab=[]
         self.symbols={}
+        sz = self.sh.entsize
         while c:
-            s,c = c[:16],c[16:]
+            s,c = c[:sz],c[sz:]
             sym = WSym(self,s)
             self.symtab.append(sym)
             self.symbols[sym.name] = sym
@@ -226,8 +227,9 @@ class RelTable(Section):
         c = self.content
         self.reltab=[]
         self.rel = {}
+        sz = self.sh.entsize
         while c:
-            s,c = c[:8],c[8:]
+            s,c = c[:sz],c[sz:]
             rel = WRel(self,s)
             relname = self.linksection.symtab[rel.sym].name
             self.reltab.append(rel)
