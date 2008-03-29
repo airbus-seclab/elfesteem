@@ -49,6 +49,10 @@ class WShdr(StructWrapper):
     def get_name(self):
         return self.parent.parent._shstr.get_name(self.cstr.name)
 
+class WPhdr(StructWrapper):
+    wrapped = elf.Phdr
+
+
 class ContentManager(object):
     def __get__(self, owner, x):
         if hasattr(owner, '_content'):
@@ -94,7 +98,7 @@ class Section(object):
         return self.parent[self.sh.link]
     def set_linksection(self, val):
         if isinstance(val, Section):
-            val = self.parent.seclist.find(val)
+            val = self.parent.shlist.find(val)
         if type(val) is int:
             self.sh.link = val
     linksection = property(get_linksection, set_linksection)
@@ -102,7 +106,7 @@ class Section(object):
         return self.parent[self.sh.info]
     def set_infosection(self, val):
         if isinstance(val, Section):
-            val = self.parent.seclist.find(val)
+            val = self.parent.shlist.find(val)
         if type(val) is int:
             self.sh.info = val
     infosection = property(get_infosection, set_infosection)
@@ -232,23 +236,30 @@ class RelTable(Section):
 
 ### Section List
 
-class SectionList:
+class SHList:
     def __init__(self, parent):
         self.parent = parent
-        self.seclist = []
-        sof1 = self.parent.Ehdr.shoff
-        for i in range(self.parent.Ehdr.shnum):
-            sof2 = sof1+self.parent.Ehdr.shentsize
-            shstr = parent.content[sof1:sof2]
-            self.seclist.append( Section(self, shstr=shstr) )
-            sof1=sof2
-        self._shstr = self.seclist[self.parent.Ehdr.shstrndx]
-        for s in self.seclist:
+        self.shlist = []
+        ehdr = self.parent.Ehdr
+        of1 = ehdr.shoff
+        for i in range(ehdr.shnum):
+            of2 = of1+ehdr.shentsize
+            shstr = parent[of1:of2]
+            self.shlist.append( Section(self, shstr=shstr) )
+            of1=of2
+        self._shstr = self.shlist[ehdr.shstrndx]
+        
+        if self.shlist:
+            if len(self.shlist) > 1:
+                for s,s2 in zip(self.shlist[:-1],self.shlist[1:]):
+                    s._content = parent[s.sh.offset: min(s.sh.offset+s.sh.size, s2.sh.offset) ]
+            s = self.shlist[-1]
             s._content = parent[s.sh.offset:s.sh.offset+s.sh.size]
-
+            
+            
         # Follow dependencies when initializing sections
-        zero = self.seclist[0]
-        todo = self.seclist[1:]
+        zero = self.shlist[0]
+        todo = self.shlist[1:]
         done = []
         while todo:
             s = todo.pop(0)
@@ -259,7 +270,7 @@ class SectionList:
             else:
                 todo.append(s)
             
-        for s in self.seclist:
+        for s in self.shlist:
             self.do_add_section(s)
         
     def do_add_section(self, section):
@@ -271,18 +282,64 @@ class SectionList:
         
     def append(self, item):
         self.do_add_section(item)
-        self.seclist.append(item)
+        self.shlist.append(item)
     def __getitem__(self, item):
-        return self.seclist[item]
+        return self.shlist[item]
     def __repr__(self):
         rep = ["#  section      offset   size   addr     flags"]
-        for i,s in enumerate(self.seclist):
+        for i,s in enumerate(self.shlist):
             l = "%(name)-15s %(offset)08x %(size)06x %(addr)08x %(flags)x " % s.sh
             l = ("%2i " % i)+ l + s.__class__.__name__
             rep.append(l)
         return "\n".join(rep)
         
 
+### Program Header List
+
+
+class ProgramHeader:
+    def __init__(self, parent, phstr):
+        self.parent = parent
+        self.ph = WPhdr(self,phstr)
+        self.shlist = []
+        for s in self.parent.parent.sh:
+            if isinstance(s, NullSection):
+                continue
+            if ( (isinstance(s,NoBitsSection) and s.sh.offset == self.ph.offset+self.ph.filesz)
+                 or  self.ph.offset <= s.sh.offset < self.ph.offset+self.ph.filesz ):
+                s.phparent = self
+                self.shlist.append(s)
+        
+                
+    
+
+class PHList:
+    def __init__(self, parent):
+        self.parent = parent
+        self.phlist = []
+        ehdr = self.parent.Ehdr
+        of1 = ehdr.phoff
+        for i in range(ehdr.phnum):
+            of2 = of1+ehdr.phentsize
+            phstr = parent[of1:of2]
+            self.phlist.append(ProgramHeader(self, phstr))
+            of1 = of2
+        
+    def __getitem__(self, item):
+        return self.phlist[item]
+
+    def __repr__(self):
+        r = ["   offset filesz vaddr    memsz"]
+        for i,p in enumerate(self.phlist):
+            l = "%(offset)06x %(filesz)06x %(vaddr)08x %(memsz)06x "%p.ph
+            l = ("%2i " % i)+l
+            r.append(l)
+            r.append("   "+" ".join([s.sh.name for s in p.shlist]))
+        return "\n".join(r)
+            
+            
+                               
+                       
 
 # ELF object
 
@@ -293,7 +350,8 @@ class ELF(object):
     content = ContentManager()
     def parse_content(self):
         self.Ehdr = WEhdr(self, self.content)
-        self.sections = SectionList(self)
+        self.sh = SHList(self)
+        self.ph = PHList(self)
     def __getitem__(self, item):
         return self.content[item]
         
