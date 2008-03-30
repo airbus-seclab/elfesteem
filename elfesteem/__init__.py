@@ -122,10 +122,10 @@ class Section(object):
             self.sh.info = val
     infosection = property(get_infosection, set_infosection)
     
-    
     def __init__(self, parent, sh=None):
         self.parent=parent
         self.sh=sh
+        self._content=""
 
     
 class NullSection(Section):
@@ -286,13 +286,10 @@ class SHList:
             self.shlist.append( Section(self, shstr=shstr) )
             of1=of2
         self._shstr = self.shlist[ehdr.shstrndx]
-        
-        if self.shlist:
-            if len(self.shlist) > 1:
-                for s,s2 in zip(self.shlist[:-1],self.shlist[1:]):
-                    s._content = parent[s.sh.offset: min(s.sh.offset+s.sh.size, s2.sh.offset) ]
-            s = self.shlist[-1]
-            s._content = parent[s.sh.offset:s.sh.offset+s.sh.size]
+
+        for s in self.shlist:
+            if not isinstance(s, NoBitsSection):
+                s._content = parent[s.sh.offset: s.sh.offset+s.sh.size]
             
             
         # Follow dependencies when initializing sections
@@ -324,7 +321,7 @@ class SHList:
     def __getitem__(self, item):
         return self.shlist[item]
     def __repr__(self):
-        rep = ["#  section      offset   size   addr     flags"]
+        rep = ["#  section         offset   size   addr     flags"]
         for i,s in enumerate(self.shlist):
             l = "%(name)-15s %(offset)08x %(size)06x %(addr)08x %(flags)x " % s.sh
             l = ("%2i " % i)+ l + s.__class__.__name__
