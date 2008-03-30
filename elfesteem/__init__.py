@@ -69,8 +69,9 @@ class ContentManager(object):
     def __get__(self, owner, x):
         if hasattr(owner, '_content'):
             return owner._content
-    def __set__(self, owner, val):
-        owner._content=val
+    def __set__(self, owner, new_content):
+        owner.resize(len(owner._content), len(new_content))
+        owner._content=new_content
         owner.parse_content()
     def __delete__(self, owner):
         self.__set__(owner, None)
@@ -104,6 +105,11 @@ class Section(object):
             return i
 
     content = ContentManager()
+    def resize(self, old, new):
+        self.sh.size += new-old
+        self.parent.resize(self, new-old)
+        if self.phparent:
+            self.phparent.resize(self, new-old)        
     def parse_content(self):
         pass
     def get_linksection(self):
@@ -125,6 +131,7 @@ class Section(object):
     
     def __init__(self, parent, sh=None):
         self.parent=parent
+        self.phparent=None
         self.sh=sh
         self._content=""
     def __repr__(self):
@@ -337,6 +344,16 @@ class SHList:
         for s in self.shlist:
             c.append(str(s.sh))
         return "".join(c)
+    def resize(self, sec, diff):
+        for s in self.shlist:
+            if s.sh.offset > sec.sh.offset:
+                s.sh.offset += diff
+        if self.parent.Ehdr.shoff > sec.sh.offset:
+            self.parent.Ehdr.shoff += diff
+        if self.parent.Ehdr.phoff > sec.sh.offset:
+            self.parent.Ehdr.phoff += diff
+        
+        
         
 
 ### Program Header List
@@ -354,9 +371,10 @@ class ProgramHeader:
                  or  self.ph.offset <= s.sh.offset < self.ph.offset+self.ph.filesz ):
                 s.phparent = self
                 self.shlist.append(s)
-        
-                
-    
+    def resize(self, sec, diff):
+        self.ph.filesz += diff
+        self.ph.memsz += diff
+        self.parent.resize(sec, diff)
 
 class PHList:
     def __init__(self, parent):
@@ -386,6 +404,14 @@ class PHList:
         for p in self.phlist:
             c.append(str(p.ph))
         return "".join(c)
+    def resize(self, sec, diff):
+        for p in self.phlist:
+            if p.ph.offset > sec.sh.offset:
+                p.ph.offset += diff
+            if p.ph.vaddr > sec.phparent.ph.vaddr+sec.sh.offset:
+                p.ph.vaddr += diff
+            if p.ph.paddr > sec.phparent.ph.paddr+sec.sh.offset:
+                p.ph.paddr += diff
                 
 
 
@@ -393,13 +419,16 @@ class PHList:
 
 class ELF(object):
     def __init__(self, elfstr):
-        self.content = elfstr
+        self._content = elfstr
+        self.parse_content()
     
     content = ContentManager()
     def parse_content(self):
         self.Ehdr = WEhdr(self, self.content)
         self.sh = SHList(self)
         self.ph = PHList(self)
+    def resize(self, old, new):
+        pass
     def __getitem__(self, item):
         return self.content[item]
 
@@ -413,7 +442,7 @@ class ELF(object):
         return str(c)
 
     def __str__(self):
-        return self.content
+        return self.build_content()
         
 
 
