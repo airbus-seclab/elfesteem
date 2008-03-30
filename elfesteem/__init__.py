@@ -2,6 +2,7 @@
 
 import struct
 import elf
+from strpatchwork import StrPatchwork
 
 class StructWrapper(object):
     class __metaclass__(type):
@@ -25,6 +26,8 @@ class StructWrapper(object):
         return getattr(self,item)
     def __repr__(self):
         return "<W-"+repr(self.cstr)[1:]
+    def __str__(self):
+        return str(self.cstr)
             
 
 
@@ -327,6 +330,11 @@ class SHList:
             l = ("%2i " % i)+ l + s.__class__.__name__
             rep.append(l)
         return "\n".join(rep)
+    def __str__(self):
+        c = []
+        for s in self.shlist:
+            c.append(str(s.sh))
+        return "".join(c)
         
 
 ### Program Header List
@@ -371,10 +379,13 @@ class PHList:
             r.append(l)
             r.append("   "+" ".join([s.sh.name for s in p.shlist]))
         return "\n".join(r)
-            
-            
-                               
-                       
+    def __str__(self):
+        c = []
+        for p in self.phlist:
+            c.append(str(p.ph))
+        return "".join(c)
+                
+
 
 # ELF object
 
@@ -389,7 +400,18 @@ class ELF(object):
         self.ph = PHList(self)
     def __getitem__(self, item):
         return self.content[item]
-        
+
+    def build_content(self):
+        c = StrPatchwork()
+        c[0] = str(self.Ehdr)
+        c[self.Ehdr.phoff] = str(self.ph)
+        for s in self.sh:
+            c[s.sh.offset] = s.content
+        c[self.Ehdr.shoff] = str(self.sh)
+        return str(c)
+
+    def __str__(self):
+        return self.content
         
 
 
@@ -398,4 +420,5 @@ if __name__ == "__main__":
     from pprint import pprint as pp
     readline.parse_and_bind("tab: complete")
 
-    z = ELF(open("/bin/ls").read())
+    e = ELF(open("/bin/ls").read())
+    o = ELF(open("/tmp/svg-main.o").read())
