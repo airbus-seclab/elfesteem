@@ -56,7 +56,7 @@ class WShdr(StructWrapper):
 class WDynamic(StructWrapper):
     wrapped = elf.Dynamic
     def get_name(self):
-        if self.type == 1:
+        if self.type == elf.DT_NEEDED:
             return self.parent.linksection.get_name(self.cstr.name)
         return self.cstr.name
 
