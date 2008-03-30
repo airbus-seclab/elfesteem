@@ -8,7 +8,7 @@ class StructWrapper(object):
     class __metaclass__(type):
         def __new__(cls, name, bases, dct):
             wrapped = dct["wrapped"]
-            if wrapped is not None:
+            if wrapped is not None: # XXX: make dct lookup look into base classes
                 for fname,v in wrapped._fields:
                     dct[fname] = property(dct.pop("get_"+fname,
                                                   lambda self,fname=fname: getattr(self.cstr,fname)),
@@ -34,7 +34,6 @@ class StructWrapper(object):
 class WEhdr(StructWrapper):
     wrapped = elf.Ehdr
     def set_shstrndx(self, val):
-        print "Alors on veut changer shstrndx par %r ?" % val
         self.cstr.shstrndx = val
 
 class WSym(StructWrapper):
@@ -44,8 +43,10 @@ class WSym(StructWrapper):
 
 class WRel(StructWrapper):
     wrapped = elf.Rel
+    def get_sym(self):
+        return self.parent.linksection.symtab[self.cstr.sym].name
 
-class WRela(StructWrapper):
+class WRela(WRel):
     wrapped = elf.Rela
 
 class WShdr(StructWrapper):
@@ -267,9 +268,8 @@ class RelTable(Section):
         while c:
             s,c = c[:sz],c[sz:]
             rel = WRel(self,s)
-            relname = self.linksection.symtab[rel.sym].name
             self.reltab.append(rel)
-            self.rel[relname] = rel
+            self.rel[rel.sym] = rel
     
 
 ### Section List
@@ -280,6 +280,8 @@ class SHList:
         self.shlist = []
         ehdr = self.parent.Ehdr
         of1 = ehdr.shoff
+        if not of1: # No SH table
+            return
         for i in range(ehdr.shnum):
             of2 = of1+ehdr.shentsize
             shstr = parent[of1:of2]
