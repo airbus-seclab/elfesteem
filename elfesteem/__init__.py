@@ -127,6 +127,9 @@ class Section(object):
         self.parent=parent
         self.sh=sh
         self._content=""
+    def __repr__(self):
+        r = "{%(name)s ofs=%(offset)#x sz=%(size)#x addr=%(addr)#010x}" % self.sh
+        return r
 
     
 class NullSection(Section):
