@@ -405,20 +405,17 @@ if __name__ == "__main__":
     ELFFILE = sys.stdin
     if len(sys.argv) > 1:
         ELFFILE = open(sys.argv[1])
-    ehdr = Ehdr._read_from(ELFFILE)
-
-    ELFFILE.seek(ehdr.shoff+ehdr.shstrndx*ehdr.shentsize)
-    shstrtab = StrTabSection._read_from(ELFFILE)
+    ehdr = Ehdr._from_file(ELFFILE)
 
     ELFFILE.seek(ehdr.phoff)
-    phdr = Phdr._read_from(ELF_FILE)
+    phdr = Phdr._from_file(ELFFILE)
     
     ELFFILE.seek(ehdr.shoff)
-    shdr = Shdr._read_from(ELF_FILE)
+    shdr = Shdr._from_file(ELFFILE)
     
     for i in range(ehdr.shnum):
-        f.seek(ehdr.shoff+i*ehdr.shentsize)
-        shdr = elf.Shdr._read_from(f)
+        ELFFILE.seek(ehdr.shoff+i*ehdr.shentsize)
+        shdr = Shdr._from_file(ELFFILE)
         print "%(name)08x %(flags)x %(addr)08x %(offset)08x" % shdr
     
         
