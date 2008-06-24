@@ -101,7 +101,7 @@ class Opthdr:
     def __repr__(self):
         o = repr(self.Opthdr)
         for c in self.Optehdr:
-            o+='\n\t'+repr(c)
+            o+='\n    '+repr(c)
         return o
 
 
@@ -127,25 +127,30 @@ class SList:
     def __repr__(self):
         rep = ["#  section         offset   size   addr     flags"]
         for i,s in enumerate(self.shlist):
-            #l = "%(name)-15s %(offset)08x %(size)06x %(addr)08x %(flags)x " % s.sh
-            #l = ("%2i " % i)+ l + s.__class__.__name__
             l = "%(name)-15s %(offset)08x %(size)06x %(addr)08x %(flags)x " % s
             l = ("%2i " % i)+ l + s.__class__.__name__
             rep.append(l)
         return "\n".join(rep)
 
+#if not num => null class terminated
 class ClassArray:
-    def __init__(self, parent, cls, of1):
+    def __init__(self, parent, cls, of1, num = None):
         self.parent = parent
         self.cls = cls
         self.list = []
         self.null_str = '\x00'*self.cls._size
+        self.num = num
         if of1 == 0:
             return
+        index = -1
         while True:
+            index+=1
             of2 = of1+self.cls._size
             cls_str = self.parent.drva[of1:of2]
-            if cls_str == self.null_str:
+            if num==None:
+                if cls_str == self.null_str:
+                    break
+            elif index==num:
                 break
             self.list.append(self.cls(cls_str))
             of1 = of2
@@ -179,7 +184,7 @@ class ImportByName:
     def __repr__(self):
         return '<%d, %s>'%(self.hint, self.name)
 
-class DllDescName:
+class DescName:
     def __init__(self, parent, of1):
         self.parent = parent
         self.of1 = of1
@@ -201,7 +206,7 @@ class DirImport:
             return
         self.impdesc = ClassArray(self.parent, pe.ImpDesc, of1)
         for i, d in enumerate(self.impdesc):
-            d.dlldescname = DllDescName(self.parent, d.name)
+            d.dlldescname = DescName(self.parent, d.name)
             d.originalfirstthunks = ClassArray(self.parent, pe.Rva, d.originalfirstthunk)
             d.firstthunks = ClassArray(self.parent, pe.Rva, d.firstthunk)
 
@@ -213,7 +218,10 @@ class DirImport:
             else:
                 raise "no thunk!!"
             for i in xrange(len(tmp_thunk)):
-                d.impbynames.append(ImportByName(self.parent, tmp_thunk[i].rva))
+                if tmp_thunk[i].rva&0x80000000 == 0:
+                    d.impbynames.append(ImportByName(self.parent, tmp_thunk[i].rva))
+                else:
+                    d.impbynames.append(tmp_thunk[i].rva&0x7fffffff)
 
     def __str__(self):
         c = []
@@ -222,24 +230,47 @@ class DirImport:
         return "".join(c)
 
     def __repr__(self):
-        rep = []
+        rep = ["Imports"]
         for i,s in enumerate(self.impdesc):
             l = "%2d %-25s %s"%(i, repr(s.dlldescname) ,repr(s))
             rep.append(l)
             for ii, f in enumerate(s.impbynames):
-                l = "\t%2d %-16s %-14s"%(ii, repr(f), repr(s.impbynames[ii]))
+                l = "    %2d %-16s"%(ii, repr(f))
                 rep.append(l)
         return "\n".join(rep)
         
-        
-        
-                               
-            
-            
-            
-        
+
+class DirExport:
+    def __init__(self, parent):
+        self.parent = parent
+        direxp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT]
+        of1 = direxp.rva
+        if not of1: # No Export
+            return
+        of2 = of1+pe.ExpDesc._size
+        self.expdesc = pe.ExpDesc(self.parent.drva[of1:of2])
+        self.dlldescname = DescName(self.parent, self.expdesc.name)
+        self.functions = ClassArray(self.parent, pe.Rva, self.expdesc.addressoffunctions, self.expdesc.numberoffunctions)
+        self.functionsnames = ClassArray(self.parent, pe.Rva, self.expdesc.addressofnames, self.expdesc.numberofnames)
+        self.functionsordinals = ClassArray(self.parent, pe.Ordinal, self.expdesc.addressofordinals, self.expdesc.numberofnames)
+        for n in self.functionsnames:
+            n.name = DescName(self.parent, n.rva)
 
 
+    def __repr__(self):
+        rep = ["Exports %d (%s) %s"%(self.expdesc.numberoffunctions, self.dlldescname, repr(self.expdesc))]
+        tmp_names = [[] for x in xrange(self.expdesc.numberoffunctions)]
+        
+        for i, n in enumerate(self.functionsnames):
+            tmp_names[self.functionsordinals[i].ordinal].append(n.name)
+
+        for i,s in enumerate(self.functions):
+            tmpn = []
+            l = "%2d %.8X %s"%(i+self.expdesc.base, s.rva ,repr(tmp_names[i]))
+            rep.append(l)
+        return "\n".join(rep)
+    
+        
 class drva:
     def __init__(self, x):
         self.parent = x
@@ -271,6 +302,7 @@ class PE(object):
         self.SList = SList(self)
 
         self.DirImport = DirImport(self)
+        self.DirExport = DirExport(self)
         
 
         print repr(self.Doshdr)
@@ -281,6 +313,8 @@ class PE(object):
         #print self.getsectionbyrva(0x1100)
         #print repr(self.drva[0x1000:0x1100])
         print repr(self.DirImport)
+        print repr(self.DirExport)
+        
 
         
 

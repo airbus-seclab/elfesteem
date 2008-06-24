@@ -82,6 +82,14 @@ class Shdr(CStruct):
                 ("flags","I") ]
 
 
+class Rva(CStruct):
+    _fields = [ ("rva","I"),
+                ]
+
+class ImportByName(CStruct):
+    _fields = [ ("ordinal","H"),                
+                ]
+
 class ImpDesc(CStruct):
     _fields = [ ("originalfirstthunk","I"),
                 ("timestamp","I"),
@@ -90,15 +98,24 @@ class ImpDesc(CStruct):
                 ("firstthunk","I")
               ]
 
+class ExpDesc(CStruct):
+    _fields = [ ("characteristics","I"),
+                ("timestamp","I"),
+                ("majorv","H"),
+                ("minorv","H"),
+                ("name","I"),
+                ("base","I"),
+                ("numberoffunctions","I"),
+                ("numberofnames","I"),
+                ("addressoffunctions","I"),
+                ("addressofnames","I"),
+                ("addressofordinals","I"),
+              ]
 
-class Rva(CStruct):
-    _fields = [ ("rva","I"),
-                ]
 
-class ImportByName(CStruct):
+class Ordinal(CStruct):
     _fields = [ ("ordinal","H"),
                 ]
-
 
 
 DIRECTORY_ENTRY_EXPORT           = 0
