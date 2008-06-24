@@ -71,17 +71,52 @@ class Optehdr(CStruct):
 
 class Shdr(CStruct):
     _fields = [ ("name","8s"),
-                ("misc","I"),
-                ("virtualaddress","I"),
-                ("sizeofrawdata","I"),
-                ("pointertorawdata","I"),
+                ("size","I"),
+                ("addr","I"),
+                ("rawsize","I"),
+                ("offset","I"),
                 ("pointertorelocations","I"),
                 ("pointertolinenumbers","I"),
                 ("numberofrelocations","H"),
                 ("numberoflinenumbers","H"),
-                ("characteristics","I") ]
+                ("flags","I") ]
 
 
+class ImpDesc(CStruct):
+    _fields = [ ("originalfirstthunk","I"),
+                ("timestamp","I"),
+                ("forwarderchain","I"),
+                ("name","I"),
+                ("firstthunk","I")
+              ]
+
+
+class Rva(CStruct):
+    _fields = [ ("rva","I"),
+                ]
+
+class ImportByName(CStruct):
+    _fields = [ ("ordinal","H"),
+                ]
+
+
+
+DIRECTORY_ENTRY_EXPORT           = 0
+DIRECTORY_ENTRY_IMPORT           = 1
+DIRECTORY_ENTRY_RESOURCE         = 2
+DIRECTORY_ENTRY_EXCEPTION        = 3
+DIRECTORY_ENTRY_SECURITY         = 4
+DIRECTORY_ENTRY_BASERELOC        = 5
+DIRECTORY_ENTRY_DEBUG            = 6
+DIRECTORY_ENTRY_COPYRIGHT        = 7
+DIRECTORY_ENTRY_GLOBALPTR        = 8
+DIRECTORY_ENTRY_TLS              = 9
+DIRECTORY_ENTRY_LOAD_CONFIG      = 10
+DIRECTORY_ENTRY_BOUND_IMPORT     = 11
+DIRECTORY_ENTRY_IAT              = 12
+DIRECTORY_ENTRY_DELAY_IMPORT     = 13
+DIRECTORY_ENTRY_COM_DESCRIPTOR   = 14
+DIRECTORY_ENTRY_RESERVED         = 15
 
 
 if __name__ == "__main__":
@@ -110,11 +145,10 @@ if __name__ == "__main__":
         
 
 
-    print "_"*80
     print hex(dhdr.lfanew+len(nthdr)+nthdr.sizeofoptionalheader)
     PEFILE.seek(dhdr.lfanew+len(nthdr)+nthdr.sizeofoptionalheader)
     for i in xrange(nthdr.numberofsections):
         #PEFILE.seek(dhdr.lfanew+len(nthdr))
         shdr = Shdr._from_file(PEFILE)
         print repr(shdr)
-        print "sig:",shdr.name,hex(len(shdr))
+        print "name:",shdr.name,hex(len(shdr))
