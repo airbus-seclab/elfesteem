@@ -138,7 +138,9 @@ class ClassArray:
         c = []
         for s in self.list:
             c.append(str(s))
-        return "".join(c)+self.null_str
+        if self.num:
+            c.append(self.null_str)
+        return "".join(c)
     def __repr__(self):
         rep = []
         for i,s in enumerate(self.list):
@@ -246,6 +248,27 @@ class DirImport(Directory):
                 else:
                     d.impbynames.append(tmp_thunk[i].rva&0x7fffffff)
 
+    def build_content(self, c):
+        dirimp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT]
+        of1 = dirimp.rva
+        if not of1: # No Import
+            return
+        c[self.parent.rva2off(of1)] = str(self.impdesc)
+        for i, d in enumerate(self.impdesc):
+            c[self.parent.rva2off(d.name)] = str(d.dlldescname)
+            c[self.parent.rva2off(d.originalfirstthunk)] = str(d.originalfirstthunks)
+            c[self.parent.rva2off(d.firstthunk)] = str(d.firstthunks)
+
+            if d.originalfirstthunk:
+                tmp_thunk = d.originalfirstthunks
+            elif d.firstthunk:
+                tmp_thunk = d.firstthunks
+            else:
+                raise "no thunk!!"
+            for i, imp in enumerate(d.impbynames):
+                if isinstance(imp, ImportByName):
+                    c[self.parent.rva2off(tmp_thunk[i].rva)] = str(imp)        
+
     def __str__(self):
         c = []
         for s in self.impdesc:
@@ -281,6 +304,20 @@ class DirExport(Directory):
         for n in self.functionsnames:
             n.name = DescName(self.parent, n.rva)
 
+
+    def build_content(self, c):
+        direxp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT]
+        of1 = direxp.rva
+        if not of1: # No Export
+            return
+        c[self.parent.rva2off(of1)] = str(self.expdesc)
+        c[self.parent.rva2off(self.expdesc.name)] = str(self.dlldescname)
+        c[self.parent.rva2off(self.expdesc.addressoffunctions)] = str(self.functions)
+        c[self.parent.rva2off(self.expdesc.addressofnames)] = str(self.functionsnames)
+        c[self.parent.rva2off(self.expdesc.addressofordinals)] = str(self.functionsordinals)
+        for n in self.functionsnames:
+            c[self.parent.rva2off(n.rva)] = str(n.name)
+            
     def __str__(self):
         return str(self.expdesc)
 
@@ -371,6 +408,9 @@ class PE(object):
     drva = property(get_drva)
     
     def build_content(self):
+
+        for s in self.SHList.shlist:
+            s.offset+=0xC00
         c = StrPatchwork()
         c[0] = str(self.Doshdr)
         c[self.Doshdr.lfanew] = str(self.NThdr)
@@ -379,6 +419,8 @@ class PE(object):
 
         for s in self.SHList.shlist:
             c[s.offset:s.offset+s.rawsize] = s.data
+        self.DirImport.build_content(c)
+        self.DirExport.build_content(c)
         """
         c[self.Ehdr.phoff] = str(self.ph)
         for s in self.sh:
