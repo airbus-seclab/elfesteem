@@ -92,8 +92,7 @@ class Opthdr:
             self.Optehdr.append(optehdr)
         
     def __str__(self):
-        c = []
-        c.append(str(self.Opthdr))
+        c = [str(self.Opthdr)]
         for s in self.Optehdr:
             c.append(str(s))
         return "".join(c)
@@ -244,6 +243,7 @@ class DirExport:
     def __init__(self, parent):
         self.parent = parent
         direxp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT]
+        self.expdesc = None
         of1 = direxp.rva
         if not of1: # No Export
             return
@@ -256,8 +256,12 @@ class DirExport:
         for n in self.functionsnames:
             n.name = DescName(self.parent, n.rva)
 
+    def __str__(self):
+        return str(self.expdesc)
 
     def __repr__(self):
+        if not self.expdesc:
+            return "<>"
         rep = ["Exports %d (%s) %s"%(self.expdesc.numberoffunctions, self.dlldescname, repr(self.expdesc))]
         tmp_names = [[] for x in xrange(self.expdesc.numberoffunctions)]
         
@@ -343,11 +347,17 @@ class PE(object):
     
     def build_content(self):
         c = StrPatchwork()
-        c[0] = str(self.Ehdr)
+        c[0] = str(self.Doshdr)
+        c[self.Doshdr.lfanew] = str(self.NThdr)
+        c[self.Doshdr.lfanew+pe.NThdr._size] = str(self.Opthdr)
+        c[self.Doshdr.lfanew+pe.NThdr._size+self.NThdr.NThdr.sizeofoptionalheader] = str(self.SList)
+
+        """
         c[self.Ehdr.phoff] = str(self.ph)
         for s in self.sh:
             c[s.sh.offset] = s.content
         c[self.Ehdr.shoff] = str(self.sh)
+        """
         return str(c)
 
     def __str__(self):
@@ -360,3 +370,4 @@ if __name__ == "__main__":
     readline.parse_and_bind("tab: complete")
 
     e = PE(open(sys.argv[1]).read())
+    open('out.bin', 'wb').write(str(e))
