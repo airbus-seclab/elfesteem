@@ -47,20 +47,10 @@ class ContentManager(object):
         owner.parse_content()
     def __delete__(self, owner):
         self.__set__(owner, None)
-        
 
-
-
-"""
-class WEhdr(StructWrapper):
-    wrapped = elf.Ehdr
-    def set_shstrndx(self, val):
-        self.cstr.shstrndx = val
-"""
 
 class WDoshdr(StructWrapper):
     wrapped = pe.Doshdr
-
 
 
 class NThdr:
@@ -114,7 +104,6 @@ class Opthdr:
         for c in self.Optehdr:
             o+='\n    '+repr(c)
         return o
-
 
 
 #if not num => null class terminated
@@ -219,10 +208,8 @@ class SHList:
         addr = (addr+(s_align-1))&~(s_align-1)
         offset = (offset+(f_align-1))&~(f_align-1)
 
-        f = {"name":name,
-             "size":size,
-             "addr":addr,
-             "rawsize":rawsize,
+        f = {"name":name, "size":size,
+             "addr":addr, "rawsize":rawsize,
              "offset": offset,
              "pointertorelocations":0,
              "pointertolinenumbers":0,
@@ -245,8 +232,6 @@ class SHList:
 
         l = (s.addr+s.size+(s_align-1))&~(s_align-1)
         self.parent.Opthdr.Opthdr.sizeofimage = l
-        
-        
 
             
 class ImportByName:
@@ -559,30 +544,11 @@ class PE(object):
     
     def build_content(self):
 
-        #XXX patch boundimport /!\
-        self.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BOUND_IMPORT].rva = 0
-        self.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BOUND_IMPORT].size = 0
-        
-
-        self.SHList.add_section(data = "AABBAA")
-        self.SHList.add_section(data = "BBAABB")
-        self.SHList.add_section(name = "myimp", rawsize = len(self.DirImport))
-        self.SHList.add_section(name = "myexp", rawsize = len(self.DirExport))
-        
-        print repr(self.SHList)
-        
-        for s in self.SHList:
-            s.offset+=0xC00
-        
         c = StrPatchwork()
         c[0] = str(self.Doshdr)
 
         for s in self.SHList:
             c[s.offset:s.offset+s.rawsize] = s.data
-
-
-        self.DirImport.set_rva(self.SHList[-2].addr)
-        self.DirExport.set_rva(self.SHList[-1].addr)
 
         c[self.Doshdr.lfanew] = str(self.NThdr)
         c[self.Doshdr.lfanew+pe.NThdr._size] = str(self.Opthdr)
@@ -591,13 +557,6 @@ class PE(object):
         self.DirImport.build_content(c)
         self.DirExport.build_content(c)
 
-
-        """
-        c[self.Ehdr.phoff] = str(self.ph)
-        for s in self.sh:
-            c[s.sh.offset] = s.content
-        c[self.Ehdr.shoff] = str(self.sh)
-        """
         return str(c)
 
     def __str__(self):
@@ -610,4 +569,20 @@ if __name__ == "__main__":
     readline.parse_and_bind("tab: complete")
 
     e = PE(open(sys.argv[1]).read())
+    ###TEST XXX###
+    #XXX patch boundimport /!\
+    e.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BOUND_IMPORT].rva = 0
+    e.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BOUND_IMPORT].size = 0
+        
+    e.SHList.add_section(name = "myimp", rawsize = len(e.DirImport))
+    e.SHList.add_section(name = "myexp", rawsize = len(e.DirExport))
+    
+    print repr(e.SHList)
+    
+    for s in e.SHList:
+        s.offset+=0xC00
+
+    e.DirImport.set_rva(e.SHList[-2].addr)
+    e.DirExport.set_rva(e.SHList[-1].addr)
+
     open('out.bin', 'wb').write(str(e))
