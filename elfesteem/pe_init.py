@@ -125,7 +125,7 @@ class ClassArray:
         self.list = []
         self.null_str = '\x00'*self.cls._size
         self.num = num
-        if of1 == 0:
+        if not of1:
             return
         index = -1
         while True:
@@ -156,6 +156,12 @@ class ClassArray:
         return self.list.__getitem__(item)
     def __len__(self):
         return len(self.list)
+
+    def append(self, a):
+        self.list.append(a)
+        if self.num!=None:
+            self.num+=1
+            
         
 class SHList:
     def __init__(self, parent):
@@ -175,7 +181,9 @@ class SHList:
             if raw_off != s.offset:
                 log.warn('unaligned raw section!')
             s.data = self.parent[raw_off:raw_off+s.rawsize]
-            
+
+    def __getitem__(self, item):
+        return self.shlist[item]
     def __str__(self):
         c = []
         for s in self.shlist:
@@ -188,6 +196,51 @@ class SHList:
             l = ("%2i " % i)+ l + s.__class__.__name__
             rep.append(l)
         return "\n".join(rep)
+
+
+    def add_section(self, name="default", data = "", **args):
+        s_align = self.parent.Opthdr.Opthdr.sectionalignment
+        s_align = max(0x1000, s_align)
+
+        f_align = self.parent.Opthdr.Opthdr.filealignment
+        f_align = max(0x200, f_align)
+        
+        addr = self.shlist[-1].addr+self.shlist[-1].size
+        s_last = self.shlist[0]
+        for s in self.shlist:
+            if s_last.offset+s_last.rawsize<s.offset+s.rawsize:
+                s_last = s
+
+        size = len(data)
+        rawsize = len(data)
+            
+        offset = s_last.offset+s_last.rawsize
+        #round addr
+        addr = (addr+(s_align-1))&~(s_align-1)
+        offset = (offset+(f_align-1))&~(f_align-1)
+
+        f = {"name":name,
+             "size":size,
+             "addr":addr,
+             "rawsize":rawsize,
+             "offset": offset,
+             "pointertorelocations":0,
+             "pointertolinenumbers":0,
+             "numberofrelocations":0,
+             "numberoflinenumbers":0,
+             "flags":0xE0000600,
+             "data":data
+             }
+        f.update(args)
+        s = pe.Shdr(**f)
+
+        self.shlist.append(s)
+        self.parent.NThdr.NThdr.numberofsections = len(self.shlist)
+
+        l = (addr+size+(s_align-1))&~(s_align-1)
+        self.parent.Opthdr.Opthdr.sizeofimage = l
+        
+        
 
             
 class ImportByName:
@@ -261,8 +314,10 @@ class DirImport(Directory):
         c[self.parent.rva2off(of1)] = str(self.impdesc)
         for i, d in enumerate(self.impdesc):
             c[self.parent.rva2off(d.name)] = str(d.dlldescname)
-            c[self.parent.rva2off(d.originalfirstthunk)] = str(d.originalfirstthunks)
-            c[self.parent.rva2off(d.firstthunk)] = str(d.firstthunks)
+            if d.originalfirstthunk:
+                c[self.parent.rva2off(d.originalfirstthunk)] = str(d.originalfirstthunks)
+            if d.firstthunk:
+                c[self.parent.rva2off(d.firstthunk)] = str(d.firstthunks)
 
             if d.originalfirstthunk:
                 tmp_thunk = d.originalfirstthunks
@@ -337,6 +392,8 @@ class DirExport(Directory):
 
         for i,s in enumerate(self.functions):
             tmpn = []
+            if not s.rva:
+                continue
             l = "%2d %.8X %s"%(i+self.expdesc.base, s.rva ,repr(tmp_names[i]))
             rep.append(l)
         return "\n".join(rep)
@@ -395,9 +452,9 @@ class PE(object):
         return self.content[item]
 
     def getsectionbyrva(self, rva):
-        if not self.SHList.shlist:
+        if not self.SHList:
             return
-        for s in self.SHList.shlist:
+        for s in self.SHList:
             if s.addr <= rva < s.addr+s.size:
                 return s
             
@@ -414,15 +471,25 @@ class PE(object):
     
     def build_content(self):
 
-        for s in self.SHList.shlist:
+        #XXX patch boundimport /!\
+        self.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BOUND_IMPORT].rva = 0
+        self.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BOUND_IMPORT].size = 0
+        
+
+        self.SHList.add_section(data = "AABBAA")
+        self.SHList.add_section(data = "BBAABB")
+        print repr(self.SHList)
+        
+        for s in self.SHList:
             s.offset+=0xC00
+        
         c = StrPatchwork()
         c[0] = str(self.Doshdr)
         c[self.Doshdr.lfanew] = str(self.NThdr)
         c[self.Doshdr.lfanew+pe.NThdr._size] = str(self.Opthdr)
         c[self.Doshdr.lfanew+pe.NThdr._size+self.NThdr.NThdr.sizeofoptionalheader] = str(self.SHList)
 
-        for s in self.SHList.shlist:
+        for s in self.SHList:
             c[s.offset:s.offset+s.rawsize] = s.data
         self.DirImport.build_content(c)
         self.DirExport.build_content(c)
