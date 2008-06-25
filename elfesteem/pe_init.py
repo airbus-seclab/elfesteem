@@ -273,6 +273,8 @@ class DescName:
         return self.name+'\x00'
     def __repr__(self):
         return '<%s>'%(self.name)
+    def __len__(self):
+        return len(self.name)+1
 
 class Directory(object):
     dirname = 'Default Dir'
@@ -321,9 +323,9 @@ class DirImport(Directory):
         of1 = dirimp.rva
         if not of1: # No Import
             return
-        c[self.parent.rva2off(of1)] = str(self.impdesc)
+        rva_orig = rva
         if rva:
-            rva+=(len(self.impdescs)+1)*pe.ImpDesc._size
+            rva+=(len(self.impdesc)+1)*pe.ImpDesc._size
         for i, d in enumerate(self.impdesc):
             if rva:
                 d.name = rva
@@ -337,12 +339,9 @@ class DirImport(Directory):
                 if rva:
                     rva+=(len(d.originalfirstthunks)+1)*pe.Rva._size
             if d.firstthunk:
-                if rva:
-                    d.firstthunk = rva
+                #XXX rva fthunk not patched => fun addr
                 c[self.parent.rva2off(d.firstthunk)] = str(d.firstthunks)
-                if rva:
-                    rva+=(len(d.firstthunks)+1)*pe.Rva._size
-
+                #XXX
             if d.originalfirstthunk:
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
@@ -356,12 +355,65 @@ class DirImport(Directory):
                     c[self.parent.rva2off(tmp_thunk[i].rva)] = str(imp)
                     if rva:
                         rva+=len(imp)
+                    
+        c[self.parent.rva2off(of1)] = str(self.impdesc)
+
 
     def __str__(self):
         c = []
         for s in self.impdesc:
             c.append(str(s))
         return "".join(c)
+
+    def __len__(self):
+        l = (len(self.impdesc)+1)*pe.ImpDesc._size
+        for i, d in enumerate(self.impdesc):
+            l+=len(d.dlldescname)
+            if d.originalfirstthunk:
+                l+=(len(d.originalfirstthunks)+1)*pe.Rva._size
+            if d.firstthunk:
+                l+=(len(d.firstthunks)+1)*pe.Rva._size
+            if d.originalfirstthunk:
+                tmp_thunk = d.originalfirstthunks
+            """
+            elif d.firstthunk:
+                tmp_thunk = d.firstthunks
+            else:
+                raise "no thunk!!"
+            """
+            
+            for i, imp in enumerate(d.impbynames):
+                if isinstance(imp, ImportByName):
+                    l+=len(imp)
+        return l
+
+    '''
+    def set_rva(self, rva):
+        self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].rva = rva
+        rva+=(len(self.impdesc)+1)*pe.ImpDesc._size
+        for i, d in enumerate(self.impdesc):
+            d.name = rva
+            rva+=len(d.dlldescname)
+            if d.originalfirstthunk:
+                d.originalfirstthunk = rva
+                rva+=(len(d.originalfirstthunks)+1)*pe.Rva._size
+            if d.firstthunk:
+                d.firstthunk = rva
+                rva+=(len(d.firstthunks)+1)*pe.Rva._size
+            if d.originalfirstthunk:
+                tmp_thunk = d.originalfirstthunks
+            """
+            elif d.firstthunk:
+                tmp_thunk = d.firstthunks
+            else:
+                raise "no thunk!!"
+            """
+            
+            for i, imp in enumerate(d.impbynames):
+                if isinstance(imp, ImportByName):
+                    l+=len(imp)
+        return l
+    '''
 
     def __repr__(self):
         rep = ["<%s>"%self.dirname]
@@ -506,7 +558,7 @@ class PE(object):
 
         self.SHList.add_section(data = "AABBAA")
         self.SHList.add_section(data = "BBAABB")
-        self.SHList.add_section(name = "myimp", rawsize = 0x4000)
+        self.SHList.add_section(name = "myimp", rawsize = len(self.DirImport))
         
         print repr(self.SHList)
         
@@ -515,14 +567,18 @@ class PE(object):
         
         c = StrPatchwork()
         c[0] = str(self.Doshdr)
+
+        for s in self.SHList:
+            c[s.offset:s.offset+s.rawsize] = s.data
+
+        self.DirImport.build_content(c, self.SHList[-1].addr)
+        self.DirExport.build_content(c)
+
+
         c[self.Doshdr.lfanew] = str(self.NThdr)
         c[self.Doshdr.lfanew+pe.NThdr._size] = str(self.Opthdr)
         c[self.Doshdr.lfanew+pe.NThdr._size+self.NThdr.NThdr.sizeofoptionalheader] = str(self.SHList)
 
-        for s in self.SHList:
-            c[s.offset:s.offset+s.rawsize] = s.data
-        self.DirImport.build_content(c)
-        self.DirExport.build_content(c)
         """
         c[self.Ehdr.phoff] = str(self.ph)
         for s in self.sh:
