@@ -92,7 +92,12 @@ class Opthdr:
         stropthdr = parent[of1:of2]
         self.Opthdr = pe.Opthdr(stropthdr)
         self.Optehdr = []
-        for i in xrange(self.Opthdr.numberofrvaandsizes):
+        numberofrva = self.Opthdr.numberofrvaandsizes
+        if self.parent.NThdr.NThdr.sizeofoptionalheader<numberofrva*pe.Optehdr._size+pe.Opthdr._size:
+            numberofrva = (self.parent.NThdr.NThdr.sizeofoptionalheader-pe.Opthdr._size)/pe.Optehdr._size
+            log.warn('bad number of rva.. using default %d'%numberofrva)
+            
+        for i in xrange(numberofrva):
             of1 = of2
             of2 += pe.Optehdr._size
             optehdr = pe.Optehdr(parent[of1:of2])
@@ -192,7 +197,7 @@ class ImportByName:
         
         ofname = self.parent.rva2off(of1+2)
         self.hint = struct.unpack('H', self.parent.drva[of1:of1+2])[0]
-        self.name = self.parent[ofname:ofname+self.parent[ofname:].find('\x00')]
+        self.name = self.parent[ofname:self.parent._content.find('\x00', ofname)]
     def __str__(self):
         return struct.pack('H', self.hint)+ self.name+'\x00'
     def __repr__(self):
@@ -204,7 +209,7 @@ class DescName:
         self.of1 = of1
         
         ofname = self.parent.rva2off(of1)
-        self.name = self.parent[ofname:ofname+self.parent[ofname:].find('\x00')]
+        self.name = self.parent[ofname:self.parent._content.find('\x00', ofname)]
     def __str__(self):
         return self.name+'\x00'
     def __repr__(self):
