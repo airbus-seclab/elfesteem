@@ -104,32 +104,6 @@ class Opthdr:
         return o
 
 
-class SList:
-    def __init__(self, parent):
-        self.parent = parent
-        dhdr = self.parent.Doshdr
-        nthdr = self.parent.NThdr.NThdr
-        of1 = dhdr.lfanew+pe.NThdr._size+nthdr.sizeofoptionalheader
-        if not of1: # No NThdr
-            return
-        self.shlist = []
-        for i in xrange(nthdr.numberofsections):
-            of2 = of1+pe.Shdr._size
-            shdrstr = parent[of1:of2]
-            self.shlist.append(pe.Shdr(shdrstr))
-            of1 = of2
-    def __str__(self):
-        c = []
-        for s in self.shlist:
-            c.append(str(s))
-        return "".join(c)
-    def __repr__(self):
-        rep = ["#  section         offset   size   addr     flags"]
-        for i,s in enumerate(self.shlist):
-            l = "%(name)-15s %(offset)08x %(size)06x %(addr)08x %(flags)x " % s
-            l = ("%2i " % i)+ l + s.__class__.__name__
-            rep.append(l)
-        return "\n".join(rep)
 
 #if not num => null class terminated
 class ClassArray:
@@ -145,7 +119,7 @@ class ClassArray:
         while True:
             index+=1
             of2 = of1+self.cls._size
-            cls_str = self.parent.drva[of1:of2]
+            cls_str = self.parent[of1:of2]
             if num==None:
                 if cls_str == self.null_str:
                     break
@@ -169,13 +143,37 @@ class ClassArray:
     def __len__(self):
         return len(self.list)
         
+class SList:
+    def __init__(self, parent):
+        self.parent = parent
+        dhdr = self.parent.Doshdr
+        nthdr = self.parent.NThdr.NThdr
+        of1 = dhdr.lfanew+pe.NThdr._size+nthdr.sizeofoptionalheader
+        if not of1: # No NThdr
+            return
+        self.shlist = ClassArray(self.parent, pe.Shdr, of1, nthdr.numberofsections)
+        for s in self.shlist:
+            print repr(s)
+    def __str__(self):
+        c = []
+        for s in self.shlist:
+            c.append(str(s))
+        return "".join(c)
+    def __repr__(self):
+        rep = ["#  section         offset   size   addr     flags"]
+        for i,s in enumerate(self.shlist):
+            l = "%(name)-15s %(offset)08x %(size)06x %(addr)08x %(flags)x " % s
+            l = ("%2i " % i)+ l + s.__class__.__name__
+            rep.append(l)
+        return "\n".join(rep)
+
             
 class ImportByName:
     def __init__(self, parent, of1):
         self.parent = parent
         self.of1 = of1
         
-        ofname = self.parent.rva2offset(of1+2)
+        ofname = self.parent.rva2off(of1+2)
         self.hint = struct.unpack('H', self.parent.drva[of1:of1+2])[0]
         self.name = self.parent[ofname:ofname+self.parent[ofname:].find('\x00')]
     def __str__(self):
@@ -188,7 +186,7 @@ class DescName:
         self.parent = parent
         self.of1 = of1
         
-        ofname = self.parent.rva2offset(of1)
+        ofname = self.parent.rva2off(of1)
         self.name = self.parent[ofname:ofname+self.parent[ofname:].find('\x00')]
     def __str__(self):
         return self.name+'\x00'
@@ -203,11 +201,11 @@ class DirImport:
         of1 = dirimp.rva
         if not of1: # No Import
             return
-        self.impdesc = ClassArray(self.parent, pe.ImpDesc, of1)
+        self.impdesc = ClassArray(self.parent, pe.ImpDesc, self.parent.rva2off(of1))
         for i, d in enumerate(self.impdesc):
             d.dlldescname = DescName(self.parent, d.name)
-            d.originalfirstthunks = ClassArray(self.parent, pe.Rva, d.originalfirstthunk)
-            d.firstthunks = ClassArray(self.parent, pe.Rva, d.firstthunk)
+            d.originalfirstthunks = ClassArray(self.parent, pe.Rva, self.parent.rva2off(d.originalfirstthunk))
+            d.firstthunks = ClassArray(self.parent, pe.Rva, self.parent.rva2off(d.firstthunk))
 
             d.impbynames = []
             if d.originalfirstthunk:
@@ -250,9 +248,9 @@ class DirExport:
         of2 = of1+pe.ExpDesc._size
         self.expdesc = pe.ExpDesc(self.parent.drva[of1:of2])
         self.dlldescname = DescName(self.parent, self.expdesc.name)
-        self.functions = ClassArray(self.parent, pe.Rva, self.expdesc.addressoffunctions, self.expdesc.numberoffunctions)
-        self.functionsnames = ClassArray(self.parent, pe.Rva, self.expdesc.addressofnames, self.expdesc.numberofnames)
-        self.functionsordinals = ClassArray(self.parent, pe.Ordinal, self.expdesc.addressofordinals, self.expdesc.numberofnames)
+        self.functions = ClassArray(self.parent, pe.Rva, self.parent.rva2off(self.expdesc.addressoffunctions), self.expdesc.numberoffunctions)
+        self.functionsnames = ClassArray(self.parent, pe.Rva, self.parent.rva2off(self.expdesc.addressofnames), self.expdesc.numberofnames)
+        self.functionsordinals = ClassArray(self.parent, pe.Ordinal, self.parent.rva2off(self.expdesc.addressofordinals), self.expdesc.numberofnames)
         for n in self.functionsnames:
             n.name = DescName(self.parent, n.rva)
 
@@ -281,8 +279,8 @@ class drva:
     def __getitem__(self, item):
         if not type(item) is slice:
             return None
-        start = self.parent.rva2offset(item.start)
-        stop = self.parent.rva2offset(item.stop)
+        start = self.parent.rva2off(item.start)
+        stop = self.parent.rva2off(item.stop)
         step = item.step
         if not start or not stop:
             return
@@ -334,7 +332,7 @@ class PE(object):
             if s.addr <= rva < s.addr+s.size:
                 return s
             
-    def rva2offset(self, rva):
+    def rva2off(self, rva):
         s = self.getsectionbyrva(rva)
         if not s:
             return
