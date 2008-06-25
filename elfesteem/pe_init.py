@@ -387,7 +387,7 @@ class DirImport(Directory):
                     l+=len(imp)
         return l
 
-    '''
+    
     def set_rva(self, rva):
         self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].rva = rva
         rva+=(len(self.impdesc)+1)*pe.ImpDesc._size
@@ -397,23 +397,21 @@ class DirImport(Directory):
             if d.originalfirstthunk:
                 d.originalfirstthunk = rva
                 rva+=(len(d.originalfirstthunks)+1)*pe.Rva._size
-            if d.firstthunk:
-                d.firstthunk = rva
-                rva+=(len(d.firstthunks)+1)*pe.Rva._size
+            #XXX rva fthunk not patched => fun addr
+            #if d.firstthunk:
+            #    d.firstthunk = rva
+            #    rva+=(len(d.firstthunks)+1)*pe.Rva._size
             if d.originalfirstthunk:
                 tmp_thunk = d.originalfirstthunks
-            """
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
             else:
                 raise "no thunk!!"
-            """
             
             for i, imp in enumerate(d.impbynames):
                 if isinstance(imp, ImportByName):
-                    l+=len(imp)
-        return l
-    '''
+                    tmp_thunk[i].rva = rva
+                    rva+=len(imp)
 
     def __repr__(self):
         rep = ["<%s>"%self.dirname]
@@ -571,7 +569,10 @@ class PE(object):
         for s in self.SHList:
             c[s.offset:s.offset+s.rawsize] = s.data
 
-        self.DirImport.build_content(c, self.SHList[-1].addr)
+
+        self.DirImport.set_rva(self.SHList[-1].addr)
+        
+        self.DirImport.build_content(c)
         self.DirExport.build_content(c)
 
 
