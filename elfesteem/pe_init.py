@@ -237,6 +237,8 @@ class SHList:
         if s.rawsize > len(data):
             s.data = s.data+'\x00'*(s.rawsize-len(data))
             s.size = s.rawsize
+            
+        s.size = max(s_align, s.size)
 
         self.shlist.append(s)
         self.parent.NThdr.NThdr.numberofsections = len(self.shlist)
@@ -424,7 +426,7 @@ class DirExport(Directory):
     def build_content(self, c):
         direxp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT]
         of1 = direxp.rva
-        if not of1: # No Export
+        if not self.expdesc: # No Export
             return
         c[self.parent.rva2off(of1)] = str(self.expdesc)
         c[self.parent.rva2off(self.expdesc.name)] = str(self.dlldescname)
@@ -433,7 +435,37 @@ class DirExport(Directory):
         c[self.parent.rva2off(self.expdesc.addressofordinals)] = str(self.functionsordinals)
         for n in self.functionsnames:
             c[self.parent.rva2off(n.rva)] = str(n.name)
-            
+
+    def set_rva(self, rva):
+        if not self.expdesc:
+            return
+        self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT].rva = rva
+        rva+=pe.ExpDesc._size
+        self.expdesc.name = rva
+        rva+=len(self.dlldescname)
+        self.expdesc.addressoffunctions = rva
+        rva+=len(self.functions)*pe.Rva._size
+        self.expdesc.addressofnames = rva
+        rva+=len(self.functionsnames)*pe.Rva._size
+        self.expdesc.addressofordinals = rva
+        rva+=len(self.functionsordinals)*pe.Ordinal._size
+        for n in self.functionsnames:
+            n.rva = rva
+            rva+=len(n.name)
+
+    def __len__(self):
+        l = 0
+        if not self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT].rva:
+            return l
+        l+=pe.ExpDesc._size
+        l+=len(self.dlldescname)
+        l+=len(self.functions)*pe.Rva._size
+        l+=len(self.functionsnames)*pe.Rva._size
+        l+=len(self.functionsordinals)*pe.Ordinal._size
+        for n in self.functionsnames:
+            l+=len(n.name)
+        return l
+    
     def __str__(self):
         return str(self.expdesc)
 
@@ -535,6 +567,7 @@ class PE(object):
         self.SHList.add_section(data = "AABBAA")
         self.SHList.add_section(data = "BBAABB")
         self.SHList.add_section(name = "myimp", rawsize = len(self.DirImport))
+        self.SHList.add_section(name = "myexp", rawsize = len(self.DirExport))
         
         print repr(self.SHList)
         
@@ -548,7 +581,8 @@ class PE(object):
             c[s.offset:s.offset+s.rawsize] = s.data
 
 
-        self.DirImport.set_rva(self.SHList[-1].addr)
+        self.DirImport.set_rva(self.SHList[-2].addr)
+        self.DirExport.set_rva(self.SHList[-1].addr)
 
         c[self.Doshdr.lfanew] = str(self.NThdr)
         c[self.Doshdr.lfanew+pe.NThdr._size] = str(self.Opthdr)
