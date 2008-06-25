@@ -3,6 +3,13 @@
 import struct
 import pe
 from strpatchwork import StrPatchwork
+import logging
+log = logging.getLogger("peparse")
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
+log.addHandler(console_handler)
+log.setLevel(logging.WARN)
+
 
 class StructWrapper(object):
     class __metaclass__(type):
@@ -143,17 +150,25 @@ class ClassArray:
     def __len__(self):
         return len(self.list)
         
-class SList:
+class SHList:
     def __init__(self, parent):
         self.parent = parent
         dhdr = self.parent.Doshdr
         nthdr = self.parent.NThdr.NThdr
         of1 = dhdr.lfanew+pe.NThdr._size+nthdr.sizeofoptionalheader
-        if not of1: # No NThdr
+        if not of1: # No shlist
             return
         self.shlist = ClassArray(self.parent, pe.Shdr, of1, nthdr.numberofsections)
+        filealignment = self.parent.Opthdr.Opthdr.filealignment
         for s in self.shlist:
-            print repr(s)
+            if filealignment ==0:
+                raw_off = s.offset
+            else:
+                raw_off = filealignment*(s.offset/filealignment)
+            if raw_off != s.offset:
+                log.warn('unaligned raw section!')
+            s.data = self.parent[raw_off:raw_off+s.rawsize]
+            
     def __str__(self):
         c = []
         for s in self.shlist:
@@ -301,7 +316,7 @@ class PE(object):
         self.Doshdr = WDoshdr(self, self.content)
         self.NThdr = NThdr(self)
         self.Opthdr = Opthdr(self)
-        self.SList = SList(self)
+        self.SHList = SHList(self)
 
         self.DirImport = DirImport(self)
         self.DirExport = DirExport(self)
@@ -310,7 +325,7 @@ class PE(object):
         print repr(self.Doshdr)
         print repr(self.NThdr)
         print repr(self.Opthdr)
-        print repr(self.SList)
+        print repr(self.SHList)
 
         #print self.getsectionbyrva(0x1100)
         #print repr(self.drva[0x1000:0x1100])
@@ -326,9 +341,9 @@ class PE(object):
         return self.content[item]
 
     def getsectionbyrva(self, rva):
-        if not self.SList.shlist:
+        if not self.SHList.shlist:
             return
-        for s in self.SList.shlist:
+        for s in self.SHList.shlist:
             if s.addr <= rva < s.addr+s.size:
                 return s
             
@@ -348,7 +363,7 @@ class PE(object):
         c[0] = str(self.Doshdr)
         c[self.Doshdr.lfanew] = str(self.NThdr)
         c[self.Doshdr.lfanew+pe.NThdr._size] = str(self.Opthdr)
-        c[self.Doshdr.lfanew+pe.NThdr._size+self.NThdr.NThdr.sizeofoptionalheader] = str(self.SList)
+        c[self.Doshdr.lfanew+pe.NThdr._size+self.NThdr.NThdr.sizeofoptionalheader] = str(self.SHList)
 
         """
         c[self.Ehdr.phoff] = str(self.ph)
