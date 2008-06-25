@@ -208,8 +208,19 @@ class DescName:
     def __repr__(self):
         return '<%s>'%(self.name)
 
+class Directory(object):
+    dirname = 'Default Dir'
+    def parse_content(self):
+        pass
+    def build_content(self, c):
+        pass
+    def __str__(self):
+        return ""
+    def __repr__(self):
+        return "<%s>"%self.dirname
         
-class DirImport:
+class DirImport(Directory):
+    dirname = 'Directory Import'
     def __init__(self, parent):
         self.parent = parent
         dirimp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT]
@@ -242,7 +253,7 @@ class DirImport:
         return "".join(c)
 
     def __repr__(self):
-        rep = ["Imports"]
+        rep = ["<%s>"%self.dirname]
         for i,s in enumerate(self.impdesc):
             l = "%2d %-25s %s"%(i, repr(s.dlldescname) ,repr(s))
             rep.append(l)
@@ -252,7 +263,8 @@ class DirImport:
         return "\n".join(rep)
         
 
-class DirExport:
+class DirExport(Directory):
+    dirname = 'Directory Export'
     def __init__(self, parent):
         self.parent = parent
         direxp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT]
@@ -274,8 +286,8 @@ class DirExport:
 
     def __repr__(self):
         if not self.expdesc:
-            return "<>"
-        rep = ["Exports %d (%s) %s"%(self.expdesc.numberoffunctions, self.dlldescname, repr(self.expdesc))]
+            return Directory.__repr__(self)
+        rep = ["<%s %d (%s) %s>"%(self.dirname, self.expdesc.numberoffunctions, self.dlldescname, repr(self.expdesc))]
         tmp_names = [[] for x in xrange(self.expdesc.numberoffunctions)]
         
         for i, n in enumerate(self.functionsnames):
@@ -365,6 +377,8 @@ class PE(object):
         c[self.Doshdr.lfanew+pe.NThdr._size] = str(self.Opthdr)
         c[self.Doshdr.lfanew+pe.NThdr._size+self.NThdr.NThdr.sizeofoptionalheader] = str(self.SHList)
 
+        for s in self.SHList.shlist:
+            c[s.offset:s.offset+s.rawsize] = s.data
         """
         c[self.Ehdr.phoff] = str(self.ph)
         for s in self.sh:
