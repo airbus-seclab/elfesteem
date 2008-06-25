@@ -315,33 +315,18 @@ class DirImport(Directory):
                     d.impbynames.append(tmp_thunk[i].rva&0x7fffffff)
 
     
-    def build_content(self, c, rva=None):
-        #if rva, replace all directory structs to new rva
-        if rva:
-            self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].rva = rva
+    def build_content(self, c):
         dirimp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT]
         of1 = dirimp.rva
         if not of1: # No Import
             return
-        rva_orig = rva
-        if rva:
-            rva+=(len(self.impdesc)+1)*pe.ImpDesc._size
+        c[self.parent.rva2off(of1)] = str(self.impdesc)
         for i, d in enumerate(self.impdesc):
-            if rva:
-                d.name = rva
             c[self.parent.rva2off(d.name)] = str(d.dlldescname)
-            if rva:
-                rva+=len(d.dlldescname)
             if d.originalfirstthunk:
-                if rva:
-                    d.originalfirstthunk = rva
                 c[self.parent.rva2off(d.originalfirstthunk)] = str(d.originalfirstthunks)
-                if rva:
-                    rva+=(len(d.originalfirstthunks)+1)*pe.Rva._size
             if d.firstthunk:
-                #XXX rva fthunk not patched => fun addr
                 c[self.parent.rva2off(d.firstthunk)] = str(d.firstthunks)
-                #XXX
             if d.originalfirstthunk:
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
@@ -350,15 +335,8 @@ class DirImport(Directory):
                 raise "no thunk!!"
             for i, imp in enumerate(d.impbynames):
                 if isinstance(imp, ImportByName):
-                    if rva:
-                        tmp_thunk[i].rva = rva
                     c[self.parent.rva2off(tmp_thunk[i].rva)] = str(imp)
-                    if rva:
-                        rva+=len(imp)
                     
-        c[self.parent.rva2off(of1)] = str(self.impdesc)
-
-
     def __str__(self):
         c = []
         for s in self.impdesc:
@@ -571,14 +549,14 @@ class PE(object):
 
 
         self.DirImport.set_rva(self.SHList[-1].addr)
-        
-        self.DirImport.build_content(c)
-        self.DirExport.build_content(c)
-
 
         c[self.Doshdr.lfanew] = str(self.NThdr)
         c[self.Doshdr.lfanew+pe.NThdr._size] = str(self.Opthdr)
         c[self.Doshdr.lfanew+pe.NThdr._size+self.NThdr.NThdr.sizeofoptionalheader] = str(self.SHList)
+
+        self.DirImport.build_content(c)
+        self.DirExport.build_content(c)
+
 
         """
         c[self.Ehdr.phoff] = str(self.ph)
