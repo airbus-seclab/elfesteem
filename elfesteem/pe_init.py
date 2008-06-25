@@ -234,10 +234,14 @@ class SHList:
         f.update(args)
         s = pe.Shdr(**f)
 
+        if s.rawsize > len(data):
+            s.data = s.data+'\x00'*(s.rawsize-len(data))
+            s.size = s.rawsize
+
         self.shlist.append(s)
         self.parent.NThdr.NThdr.numberofsections = len(self.shlist)
 
-        l = (addr+size+(s_align-1))&~(s_align-1)
+        l = (s.addr+s.size+(s_align-1))&~(s_align-1)
         self.parent.Opthdr.Opthdr.sizeofimage = l
         
         
@@ -255,6 +259,8 @@ class ImportByName:
         return struct.pack('H', self.hint)+ self.name+'\x00'
     def __repr__(self):
         return '<%d, %s>'%(self.hint, self.name)
+    def __len__(self):
+        return 2+len(self.name)+1
 
 class DescName:
     def __init__(self, parent, of1):
@@ -306,18 +312,36 @@ class DirImport(Directory):
                 else:
                     d.impbynames.append(tmp_thunk[i].rva&0x7fffffff)
 
-    def build_content(self, c):
+    
+    def build_content(self, c, rva=None):
+        #if rva, replace all directory structs to new rva
+        if rva:
+            self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].rva = rva
         dirimp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT]
         of1 = dirimp.rva
         if not of1: # No Import
             return
         c[self.parent.rva2off(of1)] = str(self.impdesc)
+        if rva:
+            rva+=(len(self.impdescs)+1)*pe.ImpDesc._size
         for i, d in enumerate(self.impdesc):
+            if rva:
+                d.name = rva
             c[self.parent.rva2off(d.name)] = str(d.dlldescname)
+            if rva:
+                rva+=len(d.dlldescname)
             if d.originalfirstthunk:
+                if rva:
+                    d.originalfirstthunk = rva
                 c[self.parent.rva2off(d.originalfirstthunk)] = str(d.originalfirstthunks)
+                if rva:
+                    rva+=(len(d.originalfirstthunks)+1)*pe.Rva._size
             if d.firstthunk:
+                if rva:
+                    d.firstthunk = rva
                 c[self.parent.rva2off(d.firstthunk)] = str(d.firstthunks)
+                if rva:
+                    rva+=(len(d.firstthunks)+1)*pe.Rva._size
 
             if d.originalfirstthunk:
                 tmp_thunk = d.originalfirstthunks
@@ -327,7 +351,11 @@ class DirImport(Directory):
                 raise "no thunk!!"
             for i, imp in enumerate(d.impbynames):
                 if isinstance(imp, ImportByName):
-                    c[self.parent.rva2off(tmp_thunk[i].rva)] = str(imp)        
+                    if rva:
+                        tmp_thunk[i].rva = rva
+                    c[self.parent.rva2off(tmp_thunk[i].rva)] = str(imp)
+                    if rva:
+                        rva+=len(imp)
 
     def __str__(self):
         c = []
@@ -478,6 +506,8 @@ class PE(object):
 
         self.SHList.add_section(data = "AABBAA")
         self.SHList.add_section(data = "BBAABB")
+        self.SHList.add_section(name = "myimp", rawsize = 0x4000)
+        
         print repr(self.SHList)
         
         for s in self.SHList:
