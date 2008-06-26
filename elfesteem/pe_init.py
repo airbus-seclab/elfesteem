@@ -128,11 +128,17 @@ class ClassArray:
                 break
             self.list.append(self.cls(cls_str))
             of1 = of2
+    @classmethod            
+    def from_cls(cls, parent, clst, num = None):
+        cls = cls(parent, clst, None, num)
+        cls.list = []
+        return cls
+    
     def __str__(self):
         c = []
         for s in self.list:
             c.append(str(s))
-        if self.num:
+        if self.num==None:
             c.append(self.null_str)
         return "".join(c)
     def __repr__(self):
@@ -235,10 +241,13 @@ class SHList:
 
             
 class ImportByName:
-    def __init__(self, parent, of1):
+    def __init__(self, parent, of1 = None):
         self.parent = parent
         self.of1 = of1
-        
+        self.hint = 0
+        self.name = None
+        if not of1:
+            return
         ofname = self.parent.rva2off(of1+2)
         self.hint = struct.unpack('H', self.parent.drva[of1:of1+2])[0]
         self.name = self.parent[ofname:self.parent._content.find('\x00', ofname)]
@@ -250,10 +259,12 @@ class ImportByName:
         return 2+len(self.name)+1
 
 class DescName:
-    def __init__(self, parent, of1):
+    def __init__(self, parent, of1 = None):
         self.parent = parent
         self.of1 = of1
-        
+        self.name = None
+        if not of1:
+            return
         ofname = self.parent.rva2off(of1)
         self.name = self.parent[ofname:self.parent._content.find('\x00', ofname)]
     def __str__(self):
@@ -377,6 +388,48 @@ class DirImport(Directory):
                 if isinstance(imp, ImportByName):
                     tmp_thunk[i].rva = rva
                     rva+=len(imp)
+
+    def add_dlldesc(self, new_dll):
+        new_impdesc = []
+        of1 = None
+        for nd, fcts in new_dll:
+            d = pe.ImpDesc()
+            d.__dict__.update(nd)
+            if d.firstthunk!=None:
+                of1 = d.firstthunk
+            elif of1 == None:
+                raise "set fthunk"
+            else:
+                d.firstthunk = of1
+            d.dlldescname = DescName(self.parent)
+            d.dlldescname.name = d.name
+            d.originalfirstthunk = True
+            d.originalfirstthunks = ClassArray.from_cls(self.parent, pe.Rva())
+            d.firstthunks = ClassArray.from_cls(self.parent, pe.Rva())
+            impbynames = []
+            for nf in fcts:
+                f = pe.Rva()
+                if nf[0]:
+                    f.rva = 0x80000000+nf[0]
+                else:
+                    f.rva = True
+                    ibn = ImportByName(self.parent)
+                    ibn.name = nf[1]
+                    impbynames.append(ibn)
+                d.originalfirstthunks.append(f)
+                d.firstthunks.append(f)
+                of1+=4
+            #for null thunk
+            of1+=4
+            d.impbynames = impbynames
+            new_impdesc.append(d)
+        if not self.impdesc:
+            #(parent, cls_tab, num = None):
+            self.impdesc = ClassArray.from_cls(self.parent, pe.ImpDesc())
+            self.impdesc.list = new_impdesc
+        else:
+            for d in new_impdesc:
+                self.impdesc.append(d)
 
     def __repr__(self):
         rep = ["<%s>"%self.dirname]
@@ -607,17 +660,39 @@ if __name__ == "__main__":
     e.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BOUND_IMPORT].rva = 0
     e.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BOUND_IMPORT].size = 0
         
+    e.SHList.add_section(name = "test", rawsize = 0x1000)
     e.SHList.add_section(name = "myimp", rawsize = len(e.DirImport))
     e.SHList.add_section(name = "myexp", rawsize = len(e.DirExport))
-    e.SHList.add_section(name = "test", data = "111")
+
+
+    new_dll = [({"name":"kernel32.dll",
+                 "firstthunk":e.SHList[-3].addr},
+                [(None, "CreateFileA"),
+                 (None, "SetFilePointer"),
+                 (None, "WriteFile"),
+                 (None, "CloseHandle"),
+                 ]
+                ),
+               ({"name":"USER32.dll",
+                 "firstthunk":None},
+                [(None, "SetDlgItemInt"),
+                 (None, "GetMenu"),
+                 (None, "HideCaret"),
+                 ]
+                )
+               
+               ]
+
+    e.DirImport.add_dlldesc(new_dll)
+
     
     print repr(e.SHList)
     
     for s in e.SHList:
         s.offset+=0xC00
 
-    e.DirImport.set_rva(e.SHList[-3].addr)
-    e.DirExport.set_rva(e.SHList[-2].addr)
+    e.DirImport.set_rva(e.SHList[-2].addr)
+    e.DirExport.set_rva(e.SHList[-1].addr)
 
     e_str = str(e)
     

@@ -86,9 +86,6 @@ class Rva(CStruct):
     _fields = [ ("rva","I"),
                 ]
 
-class ImportByName(CStruct):
-    _fields = [ ("ordinal","H"),                
-                ]
 
 class ImpDesc(CStruct):
     _fields = [ ("originalfirstthunk","I"),
