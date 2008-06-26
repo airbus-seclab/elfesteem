@@ -417,7 +417,10 @@ class DirImport(Directory):
                     ibn.name = nf[1]
                     impbynames.append(ibn)
                 d.originalfirstthunks.append(f)
-                d.firstthunks.append(f)
+
+                ff = pe.Rva()
+                ff.rva = 0xDEADBEEF #default func addr
+                d.firstthunks.append(ff)
                 of1+=4
             #for null thunk
             of1+=4
