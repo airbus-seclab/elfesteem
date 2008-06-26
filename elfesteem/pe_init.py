@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-import struct
+import struct, array
 import pe
 from strpatchwork import StrPatchwork
 import logging
@@ -541,7 +541,34 @@ class PE(object):
         return self._drva
 
     drva = property(get_drva)
-    
+
+
+    def patch_crc(self, c, olds):
+        s = 0L
+        data = c[:]
+        l = len(data)
+        if len(c)%2:
+            end = struct.unpack('B', data[-1])[0]
+            data = data[:-1]
+        if (len(c)&~0x1)%4:
+            s+=struct.unpack('H', data[:2])[0]
+            data = data[2:]
+        
+        data = array.array('I', data)
+        s = reduce(lambda x,y:x+y, data, s)
+        s-=olds
+        while s>0xFFFFFFFF:
+            s = (s>>32)+(s&0xFFFFFFFF)
+            
+        while s>0xFFFF:
+            s = (s&0xFFFF)+((s>>16)&0xFFFF)
+        if len(c)%2:
+            s+=end
+        s+=l
+        return s
+        
+        
+        
     def build_content(self):
 
         c = StrPatchwork()
@@ -557,6 +584,12 @@ class PE(object):
         self.DirImport.build_content(c)
         self.DirExport.build_content(c)
 
+        
+        s = str(c)
+        if (self.Doshdr.lfanew+pe.NThdr._size)%4:
+            log.warn("non aligned nthdr, bad crc calculation")
+        crcs = self.patch_crc(s, self.Opthdr.Opthdr.CheckSum)
+        c[self.Doshdr.lfanew+pe.NThdr._size+64] = struct.pack('I', crcs)
         return str(c)
 
     def __str__(self):
@@ -576,13 +609,18 @@ if __name__ == "__main__":
         
     e.SHList.add_section(name = "myimp", rawsize = len(e.DirImport))
     e.SHList.add_section(name = "myexp", rawsize = len(e.DirExport))
+    e.SHList.add_section(name = "test", data = "111")
     
     print repr(e.SHList)
     
     for s in e.SHList:
         s.offset+=0xC00
 
-    e.DirImport.set_rva(e.SHList[-2].addr)
-    e.DirExport.set_rva(e.SHList[-1].addr)
+    e.DirImport.set_rva(e.SHList[-3].addr)
+    e.DirExport.set_rva(e.SHList[-2].addr)
 
-    open('out.bin', 'wb').write(str(e))
+    e_str = str(e)
+    
+    
+
+    open('out.bin', 'wb').write(e_str)
