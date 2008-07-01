@@ -663,13 +663,11 @@ if __name__ == "__main__":
     e.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BOUND_IMPORT].rva = 0
     e.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BOUND_IMPORT].size = 0
         
-    e.SHList.add_section(name = "test", rawsize = 0x1000)
-    e.SHList.add_section(name = "myimp", rawsize = len(e.DirImport))
-    e.SHList.add_section(name = "myexp", rawsize = len(e.DirExport))
 
+    e.SHList.add_section(name = "test", rawsize = 0x1000)
 
     new_dll = [({"name":"kernel32.dll",
-                 "firstthunk":e.SHList[-3].addr},
+                 "firstthunk":e.SHList[-1].addr},
                 [(None, "CreateFileA"),
                  (None, "SetFilePointer"),
                  (None, "WriteFile"),
@@ -688,7 +686,10 @@ if __name__ == "__main__":
 
     e.DirImport.add_dlldesc(new_dll)
 
-    
+
+    e.SHList.add_section(name = "myimp", rawsize = len(e.DirImport))
+    e.SHList.add_section(name = "myexp", rawsize = len(e.DirExport))
+
     print repr(e.SHList)
     
     for s in e.SHList:
