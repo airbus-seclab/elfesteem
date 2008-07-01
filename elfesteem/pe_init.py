@@ -284,7 +284,22 @@ class Directory(object):
         return ""
     def __repr__(self):
         return "<%s>"%self.dirname
-        
+
+class Reloc:
+    _size = 2
+    def __init__(self, s):
+        self.s = s
+        if not s:
+            return
+        rel = struct.unpack('H', s)[0]
+        self.rel = (rel>>12, rel&0xfff)
+    def __str__(self):
+        return struct.pack('H', (self.rel[0]<<12) | self.rel[1])
+    def __repr__(self):
+        return '<%d %d>'%(self.rel[0], self.rel[1])
+    def __len__(self):
+        return self._size
+
 class DirImport(Directory):
     dirname = 'Directory Import'
     def __init__(self, parent):
@@ -526,8 +541,65 @@ class DirExport(Directory):
             l = "%2d %.8X %s"%(i+self.expdesc.base, s.rva ,repr(tmp_names[i]))
             rep.append(l)
         return "\n".join(rep)
-    
+
+class DirReloc(Directory):
+    dirname = 'Directory Relocation'
+    def __init__(self, parent):
+        self.parent = parent
+        dirrel = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC]
+        self.reldesc = None
+        of1 = dirrel.rva
+        if not of1: # No Reloc
+            return
+        ofend = of1+dirrel.size
+        self.reldesc = []
+        while of1 < ofend:
+            of2=of1+pe.Rel._size
+            reldesc = pe.Rel(self.parent.drva[of1:of2])
+            reldesc.rels = ClassArray(self.parent, Reloc, self.parent.rva2off(of2), (reldesc.size-pe.Rel._size)/Reloc._size)
+            self.reldesc.append(reldesc)
+            of1+=reldesc.size
+
+    def set_rva(self, rva):
+        if not self.reldesc:
+            return
+        self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC].rva = rva
+
+    def build_content(self, c):
+        dirrel = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC]
+        of1 = dirrel.rva
+        if not self.reldesc: # No Reloc
+            return
+        c[self.parent.rva2off(of1)] = str(self)
+
+    def __len__(self):
+        l = 0
+        for n in self.reldesc:
+            l+=n.size
+        return l
         
+    def __str__(self):
+        rep = []
+        for n in self.reldesc:
+            rep.append(str(n))
+            rep.append(str(n.rels))
+        return "".join(rep)
+
+    def __repr__(self):
+        if not self.reldesc:
+            return Directory.__repr__(self)
+        rep = ["<%s>"%(self.dirname )]
+        for i, n in enumerate(self.reldesc):
+            l = "%2d %s"%(i, repr(n) )
+            rep.append(l)
+            for ii, m in enumerate(n.rels):
+                l = "\t%2d %s"%(ii, repr(m) )
+                rep.append(l)
+        return "\n".join(rep)
+
+
+    
+
 class drva:
     def __init__(self, x):
         self.parent = x
@@ -560,7 +632,7 @@ class PE(object):
 
         self.DirImport = DirImport(self)
         self.DirExport = DirExport(self)
-        
+        self.DirReloc = DirReloc(self)
 
         print repr(self.Doshdr)
         print repr(self.NThdr)
@@ -571,6 +643,7 @@ class PE(object):
         #print repr(self.drva[0x1000:0x1100])
         print repr(self.DirImport)
         print repr(self.DirExport)
+        print repr(self.DirReloc)
         
 
         
@@ -639,6 +712,7 @@ class PE(object):
 
         self.DirImport.build_content(c)
         self.DirExport.build_content(c)
+        self.DirReloc.build_content(c)
 
         
         s = str(c)
@@ -689,14 +763,16 @@ if __name__ == "__main__":
 
     e.SHList.add_section(name = "myimp", rawsize = len(e.DirImport))
     e.SHList.add_section(name = "myexp", rawsize = len(e.DirExport))
+    e.SHList.add_section(name = "myrel", rawsize = len(e.DirReloc))
 
     print repr(e.SHList)
     
     for s in e.SHList:
         s.offset+=0xC00
 
-    e.DirImport.set_rva(e.SHList[-2].addr)
-    e.DirExport.set_rva(e.SHList[-1].addr)
+    e.DirImport.set_rva(e.SHList[-3].addr)
+    e.DirExport.set_rva(e.SHList[-2].addr)
+    e.DirReloc.set_rva(e.SHList[-1].addr)
 
     e_str = str(e)
     

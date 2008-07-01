@@ -114,6 +114,12 @@ class Ordinal(CStruct):
     _fields = [ ("ordinal","H"),
                 ]
 
+class Rel(CStruct):
+    _fields = [ ("rva","I"),
+                ("size","I")
+                ]
+
+
 
 DIRECTORY_ENTRY_EXPORT           = 0
 DIRECTORY_ENTRY_IMPORT           = 1
