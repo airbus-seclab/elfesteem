@@ -120,6 +120,21 @@ class Rel(CStruct):
                 ]
 
 
+class ResDesc(CStruct):
+    _fields = [ ("characteristics","I"),
+                ("timestamp","I"),
+                ("majorv","H"),
+                ("minorv","H"),
+                ("numberofnamedentries","H"),
+                ("numberofidentries","H")
+              ]
+
+class ResEntry(CStruct):
+    _fields = [ ("name","I"),
+                ("offset2data","I")
+                ]
+
+
 
 DIRECTORY_ENTRY_EXPORT           = 0
 DIRECTORY_ENTRY_IMPORT           = 1

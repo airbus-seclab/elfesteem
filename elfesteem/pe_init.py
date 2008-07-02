@@ -306,6 +306,53 @@ class Reloc:
     def __len__(self):
         return self._size
 
+
+class SUnicode:
+    def __init__(self, parent, of1):
+        self.parent = parent
+        self.of1 = of1
+        self.s = None
+        self.size = 0
+        print hex(of1)
+        if not of1:
+            return
+        of2 = of1+2
+        self.size = struct.unpack('H', self.parent.drva[of1:of2])[0]
+        self.s = self.parent.drva[of2:of2+self.size*2]
+    def __str__(self):
+        return struct.pack('H', self.size)+self.s
+    def __repr__(self):
+        if not self.s:
+            return "<>"
+        s = self.s[0:-1:2]
+        return "<%d %s>"%(self.size, s)
+    def __len__(self):
+        return self.size
+        
+class ResEntry:
+    _size = 2
+    def __init__(self, parent, of1):
+        self.parent = parent
+        self.of1 = of1
+        if not of1:
+            return
+        self.id, self.name = None, None
+        name, offsettodata = struct.unpack('LL', self.parent.drva[of1:of1+8])
+        if name & 0x80000000:
+            self.name = SUnicode(parent, name & 0x7FFFFFFF + self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva) #XXX res rva??
+        else:
+            self.id = name
+        print self.name
+        fds
+    def __str__(self):
+        return struct.pack('H', (self.rel[0]<<12) | self.rel[1])
+    def __repr__(self):
+        return '<%d %d>'%(self.rel[0], self.rel[1])
+    def __len__(self):
+        return self._size
+
+
+
 class DirImport(Directory):
     dirname = 'Directory Import'
     def __init__(self, parent):
@@ -600,6 +647,8 @@ class DirReloc(Directory):
         c[self.parent.rva2off(of1)] = str(self)
 
     def __len__(self):
+        if not self.reldesc:
+            return 0
         l = 0
         for n in self.reldesc:
             l+=n.size
@@ -619,13 +668,40 @@ class DirReloc(Directory):
         for i, n in enumerate(self.reldesc):
             l = "%2d %s"%(i, repr(n) )
             rep.append(l)
+            """
+            #display too many lines...
             for ii, m in enumerate(n.rels):
                 l = "\t%2d %s"%(ii, repr(m) )
                 rep.append(l)
+            """
+            l = "\t%2d rels..."%(len(n.rels))
+            rep.append(l)
+            
         return "\n".join(rep)
 
 
-    
+class DirRes(Directory):
+    dirname = 'Directory Resource'
+    def __init__(self, parent):
+        self.parent = parent
+        dirres = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE]
+        self.resdesc = None
+        of1 = dirres.rva
+        if not of1: # No Resources
+            return
+        of2 = of1+pe.ResDesc._size
+        self.resdesc = pe.ResDesc(self.parent.drva[of1:of2])
+        print repr(self.resdesc)
+
+        nbr = self.resdesc.numberofnamedentries + self.resdesc.numberofidentries
+        self.resdesc.resentries = ClassArray(self.parent, pe.ResEntry, self.parent.rva2off(of2), nbr)
+        for e in self.resdesc.resentries:
+            if e.name & 0x80000000:
+                e.name_s = SUnicode(parent, (e.name & 0x7FFFFFFF) + self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva) #XXX res rva??
+            else:
+                e.name_s = None
+        print repr(self.resdesc.resentries)
+        raise "not impl"
 
 class drva:
     def __init__(self, x):
@@ -660,6 +736,7 @@ class PE(object):
         self.DirImport = DirImport(self)
         self.DirExport = DirExport(self)
         self.DirReloc = DirReloc(self)
+        self.DirRes = DirRes(self)
 
         print repr(self.Doshdr)
         print repr(self.NThdr)
@@ -798,18 +875,10 @@ if __name__ == "__main__":
     s_myrel = e.SHList.add_section(name = "myrel", rawsize = len(e.DirReloc))
 
     
-    print repr(e.DirExport)
-    print repr(e.DirExport.functions)
-    print hex(s_myexp.size)
-
-    e.DirExport.functions[0].rva = s_myexp.addr+off1
-    
-    print repr(e.DirExport.functions)
-    
+    if e.DirExport.expdesc:
+        e.DirExport.functions[0].rva = s_myexp.addr+off1
     
 
-
-    print repr(e.SHList)
     
     for s in e.SHList:
         s.offset+=0xC00
