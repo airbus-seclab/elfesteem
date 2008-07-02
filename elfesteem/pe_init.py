@@ -106,6 +106,28 @@ class Opthdr:
         return o
 
 
+
+class WShdr(StructWrapper):
+    wrapped = pe.Shdr
+    _size = pe.Shdr._size
+
+class WImpDesc(StructWrapper):
+    wrapped = pe.ImpDesc
+    _size = pe.ImpDesc._size
+
+class WRva(StructWrapper):
+    wrapped = pe.Rva
+    _size = pe.Rva._size
+
+class WOrdinal(StructWrapper):
+    wrapped = pe.Ordinal
+    _size = pe.Ordinal._size
+
+class WResEntry(StructWrapper):
+    wrapped = pe.ResEntry
+    _size = pe.ResEntry._size
+
+
 #if not num => null class terminated
 class ClassArray:
     def __init__(self, parent, cls, of1, num = None):
@@ -126,7 +148,7 @@ class ClassArray:
                     break
             elif index==num:
                 break
-            self.list.append(self.cls(cls_str))
+            self.list.append(self.cls(parent, cls_str))
             of1 = of2
     @classmethod            
     def from_cls(cls, parent, clst, num = None):
@@ -166,7 +188,7 @@ class SHList:
         of1 = dhdr.lfanew+pe.NThdr._size+nthdr.sizeofoptionalheader
         if not of1: # No shlist
             return
-        self.shlist = ClassArray(self.parent, pe.Shdr, of1, nthdr.numberofsections)
+        self.shlist = ClassArray(self.parent, WShdr, of1, nthdr.numberofsections)
         filealignment = self.parent.Opthdr.Opthdr.filealignment
         for s in self.shlist:
             if filealignment ==0:
@@ -293,7 +315,8 @@ class Directory(object):
 
 class Reloc:
     _size = 2
-    def __init__(self, s):
+    def __init__(self, parent, s):
+        self.parent = parent
         self.s = s
         if not s:
             return
@@ -361,11 +384,11 @@ class DirImport(Directory):
         of1 = dirimp.rva
         if not of1: # No Import
             return
-        self.impdesc = ClassArray(self.parent, pe.ImpDesc, self.parent.rva2off(of1))
+        self.impdesc = ClassArray(self.parent, WImpDesc, self.parent.rva2off(of1))
         for i, d in enumerate(self.impdesc):
             d.dlldescname = DescName(self.parent, d.name)
-            d.originalfirstthunks = ClassArray(self.parent, pe.Rva, self.parent.rva2off(d.originalfirstthunk))
-            d.firstthunks = ClassArray(self.parent, pe.Rva, self.parent.rva2off(d.firstthunk))
+            d.originalfirstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(d.originalfirstthunk))
+            d.firstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(d.firstthunk))
 
             d.impbynames = []
             if d.originalfirstthunk:
@@ -472,8 +495,8 @@ class DirImport(Directory):
             d.dlldescname = DescName(self.parent)
             d.dlldescname.name = d.name
             d.originalfirstthunk = True
-            d.originalfirstthunks = ClassArray.from_cls(self.parent, pe.Rva())
-            d.firstthunks = ClassArray.from_cls(self.parent, pe.Rva())
+            d.originalfirstthunks = ClassArray.from_cls(self.parent, WRva(self.parent))
+            d.firstthunks = ClassArray.from_cls(self.parent, WRva(self.parent))
             impbynames = []
             for nf in fcts:
                 f = pe.Rva()
@@ -496,7 +519,7 @@ class DirImport(Directory):
             new_impdesc.append(d)
         if not self.impdesc:
             #(parent, cls_tab, num = None):
-            self.impdesc = ClassArray.from_cls(self.parent, pe.ImpDesc())
+            self.impdesc = ClassArray.from_cls(self.parent, WImpDesc(self.parent))
             self.impdesc.list = new_impdesc
         else:
             for d in new_impdesc:
@@ -525,9 +548,9 @@ class DirExport(Directory):
         of2 = of1+pe.ExpDesc._size
         self.expdesc = pe.ExpDesc(self.parent.drva[of1:of2])
         self.dlldescname = DescName(self.parent, self.expdesc.name)
-        self.functions = ClassArray(self.parent, pe.Rva, self.parent.rva2off(self.expdesc.addressoffunctions), self.expdesc.numberoffunctions)
-        self.functionsnames = ClassArray(self.parent, pe.Rva, self.parent.rva2off(self.expdesc.addressofnames), self.expdesc.numberofnames)
-        self.functionsordinals = ClassArray(self.parent, pe.Ordinal, self.parent.rva2off(self.expdesc.addressofordinals), self.expdesc.numberofnames)
+        self.functions = ClassArray(self.parent, WRva, self.parent.rva2off(self.expdesc.addressoffunctions), self.expdesc.numberoffunctions)
+        self.functionsnames = ClassArray(self.parent, WRva, self.parent.rva2off(self.expdesc.addressofnames), self.expdesc.numberofnames)
+        self.functionsordinals = ClassArray(self.parent, WOrdinal, self.parent.rva2off(self.expdesc.addressofordinals), self.expdesc.numberofnames)
         for n in self.functionsnames:
             n.name = DescName(self.parent, n.rva)
 
@@ -622,7 +645,7 @@ class DirReloc(Directory):
     def add_reloc(self, rels, tpye = 3, patchrel = True):
         dirrel = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC]
         o_init = rels[0]&0xFFFF000
-        offsets = ClassArray(self.parent, Reloc(), num=0)
+        offsets = ClassArray(self.parent, Reloc(parent), num=0)
         for o in rels:
             if (o&0xFFFF000) !=o_init:
                 raise "relocs must be in same range"
@@ -694,7 +717,7 @@ class DirRes(Directory):
         print repr(self.resdesc)
 
         nbr = self.resdesc.numberofnamedentries + self.resdesc.numberofidentries
-        self.resdesc.resentries = ClassArray(self.parent, pe.ResEntry, self.parent.rva2off(of2), nbr)
+        self.resdesc.resentries = ClassArray(self.parent, WResEntry, self.parent.rva2off(of2), nbr)
         for e in self.resdesc.resentries:
             if e.name & 0x80000000:
                 e.name_s = SUnicode(parent, (e.name & 0x7FFFFFFF) + self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva) #XXX res rva??
