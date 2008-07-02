@@ -243,6 +243,7 @@ class SHList:
 
         l = (s.addr+s.size+(s_align-1))&~(s_align-1)
         self.parent.Opthdr.Opthdr.sizeofimage = l
+        return s
 
             
 class ImportByName:
@@ -764,12 +765,12 @@ if __name__ == "__main__":
     e.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BOUND_IMPORT].size = 0
         
 
-    e.SHList.add_section(name = "redir", rawsize = 0x1000)
-    e.SHList.add_section(name = "test", rawsize = 0x1000)
-    e.SHList.add_section(name = "rel", rawsize = 0x1000)
+    s_redir = e.SHList.add_section(name = "redir", rawsize = 0x1000)
+    s_test = e.SHList.add_section(name = "test", rawsize = 0x1000)
+    s_rel = e.SHList.add_section(name = "rel", rawsize = 0x1000)
 
     new_dll = [({"name":"kernel32.dll",
-                 "firstthunk":e.SHList[-2].addr},
+                 "firstthunk":s_test.addr},
                 [(None, "CreateFileA"),
                  (None, "SetFilePointer"),
                  (None, "WriteFile"),
@@ -789,22 +790,19 @@ if __name__ == "__main__":
 
     expdata = StrPatchwork()
     off1 = len(e.DirExport)
-    expdata[off1] = "kernel32.Beep\x00"
-    off2 = off1+0x10
-    expdata[off2] = "kernel32.Beep\x00"
+    expdata[off1] = "dll_vc.titi\x00"
     
     
-    e.SHList.add_section(name = "myimp", rawsize = len(e.DirImport))
-    e.SHList.add_section(name = "myexp", data = str(expdata))
-    e.SHList.add_section(name = "myrel", rawsize = len(e.DirReloc))
+    s_myimp = e.SHList.add_section(name = "myimp", rawsize = len(e.DirImport))
+    s_myexp = e.SHList.add_section(name = "myexp", data = str(expdata))
+    s_myrel = e.SHList.add_section(name = "myrel", rawsize = len(e.DirReloc))
 
     
     print repr(e.DirExport)
     print repr(e.DirExport.functions)
-    print hex(e.SHList[-2].size)
+    print hex(s_myexp.size)
 
-    e.DirExport.functions[1].rva = e.SHList[-2].addr+off1
-    e.DirExport.functions[2].rva = e.SHList[-2].addr+off2
+    e.DirExport.functions[0].rva = s_myexp.addr+off1
     
     print repr(e.DirExport.functions)
     
@@ -816,9 +814,9 @@ if __name__ == "__main__":
     for s in e.SHList:
         s.offset+=0xC00
 
-    e.DirImport.set_rva(e.SHList[-3].addr)
-    e.DirExport.set_rva(e.SHList[-2].addr)
-    e.DirReloc.set_rva(e.SHList[-1].addr)
+    e.DirImport.set_rva(s_myimp.addr)
+    e.DirExport.set_rva(s_myexp.addr)
+    e.DirReloc.set_rva(s_myrel.addr)
 
     e_str = str(e)
     
