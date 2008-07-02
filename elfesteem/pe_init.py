@@ -175,7 +175,8 @@ class SHList:
                 raw_off = filealignment*(s.offset/filealignment)
             if raw_off != s.offset:
                 log.warn('unaligned raw section!')
-            s.data = self.parent[raw_off:raw_off+s.rawsize]
+            s.data = StrPatchwork()
+            s.data[0] = self.parent[raw_off:raw_off+s.rawsize]
 
     def __getitem__(self, item):
         return self.shlist[item]
@@ -231,6 +232,10 @@ class SHList:
             s.data = s.data+'\x00'*(s.rawsize-len(data))
             s.size = s.rawsize
             
+        c = StrPatchwork()
+        c[0] = s.data
+        s.data = c
+    
         s.size = max(s_align, s.size)
 
         self.shlist.append(s)
@@ -557,6 +562,7 @@ class DirReloc(Directory):
             of2=of1+pe.Rel._size
             reldesc = pe.Rel(self.parent.drva[of1:of2])
             reldesc.rels = ClassArray(self.parent, Reloc, self.parent.rva2off(of2), (reldesc.size-pe.Rel._size)/Reloc._size)
+            reldesc.patchrel = False
             self.reldesc.append(reldesc)
             of1+=reldesc.size
 
@@ -565,8 +571,28 @@ class DirReloc(Directory):
             return
         self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC].rva = rva
 
+    def add_reloc(self, rels, tpye = 3, patchrel = True):
+        dirrel = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC]
+        o_init = rels[0]&0xFFFF000
+        offsets = ClassArray(self.parent, Reloc(), num=0)
+        for o in rels:
+            if (o&0xFFFF000) !=o_init:
+                raise "relocs must be in same range"
+            r = Reloc()
+            r.rel = (type, x-o_init)
+            offsets.append(r)
+
+        reldesc = pe.Rel()
+        reldesc.rva = o_init
+        reldesc.size = len(rels)*2+8
+        reldesc.rels = offsets
+        reldesc.patchrel = patchrel
+        self.reldesc.append(reldesc)
+        dirrel.size+=reldesc.size
+  
     def build_content(self, c):
         dirrel = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC]
+        dirrel.size  = len(self)
         of1 = dirrel.rva
         if not self.reldesc: # No Reloc
             return
@@ -704,7 +730,7 @@ class PE(object):
         c[0] = str(self.Doshdr)
 
         for s in self.SHList:
-            c[s.offset:s.offset+s.rawsize] = s.data
+            c[s.offset:s.offset+s.rawsize] = str(s.data)
 
         c[self.Doshdr.lfanew] = str(self.NThdr)
         c[self.Doshdr.lfanew+pe.NThdr._size] = str(self.Opthdr)
@@ -738,10 +764,12 @@ if __name__ == "__main__":
     e.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BOUND_IMPORT].size = 0
         
 
+    e.SHList.add_section(name = "redir", rawsize = 0x1000)
     e.SHList.add_section(name = "test", rawsize = 0x1000)
+    e.SHList.add_section(name = "rel", rawsize = 0x1000)
 
     new_dll = [({"name":"kernel32.dll",
-                 "firstthunk":e.SHList[-1].addr},
+                 "firstthunk":e.SHList[-2].addr},
                 [(None, "CreateFileA"),
                  (None, "SetFilePointer"),
                  (None, "WriteFile"),
@@ -757,13 +785,31 @@ if __name__ == "__main__":
                 )
                
                ]
-
     e.DirImport.add_dlldesc(new_dll)
 
-
+    expdata = StrPatchwork()
+    off1 = len(e.DirExport)
+    expdata[off1] = "kernel32.Beep\x00"
+    off2 = off1+0x10
+    expdata[off2] = "kernel32.Beep\x00"
+    
+    
     e.SHList.add_section(name = "myimp", rawsize = len(e.DirImport))
-    e.SHList.add_section(name = "myexp", rawsize = len(e.DirExport))
+    e.SHList.add_section(name = "myexp", data = str(expdata))
     e.SHList.add_section(name = "myrel", rawsize = len(e.DirReloc))
+
+    
+    print repr(e.DirExport)
+    print repr(e.DirExport.functions)
+    print hex(e.SHList[-2].size)
+
+    e.DirExport.functions[1].rva = e.SHList[-2].addr+off1
+    e.DirExport.functions[2].rva = e.SHList[-2].addr+off2
+    
+    print repr(e.DirExport.functions)
+    
+    
+
 
     print repr(e.SHList)
     
