@@ -810,6 +810,8 @@ class DirRes(Directory):
                 if not of1:
                     e.offsettodata = rva
                     rva+=pe.ResDataEntry._size
+                    #XXX menu rsrc must be even aligned?
+                    if rva%2:rva+=1
                     e.data.offsettodata = rva
                     rva+=e.data.size
                     continue
@@ -872,34 +874,10 @@ class DirRes(Directory):
                 of1 = e.offsettosubdir
                 if not of1:
                     l+=pe.ResDataEntry._size
+                    #XXX because rva may be even rounded
+                    l+=1
                     l+=e.data.size
                     continue
-        """
-        l = 0
-        if not self.resdesc:
-            return l
-        dir_todo = {self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva:self.resdesc}
-        dir_done = {}
-        while dir_todo:
-            of1, my_dir = dir_todo.popitem()
-            dir_done[of1] = my_dir
-            l+=my_dir._size
-            l+=len(my_dir.resentries)*ResEntry._size
-            for e in my_dir.resentries:
-                if e.name_s:
-                    l+=len(e.name_s)
-
-                of1 = e.offsettosubdir
-                if not of1:
-                    l+=pe.ResDataEntry._size
-                    l+=e.data.size
-                    continue
-                if of1 in dir_done:
-                    log.warn('warning recusif subdir')
-                    fdds
-                    continue
-                dir_todo[of1] = e.subdir
-        """
         return l
 
     def __repr__(self):
