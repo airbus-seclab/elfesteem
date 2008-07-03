@@ -386,7 +386,7 @@ class ResEntry:
         if self.name_s:
             nameid = "%s"%str(self.name_s)
         else:
-            if self.name in pe.RT:
+            if self.name in pe.RT and not self.offsettosubdir:
                 nameid = "ID %s"%pe.RT[self.name]
             else:
                 nameid = "ID %d"%self.name
@@ -884,23 +884,29 @@ class DirRes(Directory):
         if not self.resdesc:
             return Directory.__repr__(self)
         rep = ["<%s>"%(self.dirname )]
-
-        dir_todo = {self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva:self.resdesc}
-        dir_done = {}
+        dir_todo = [self.resdesc]
+        out = []
+        index = -1
         while dir_todo:
-            of1, my_dir = dir_todo.popitem()
-            dir_done[of1] = my_dir
-            rep.append(repr(my_dir))
-            for e in my_dir.resentries:
-                rep.append("\t"+repr(e))
-                of1 = e.offsettosubdir
-                if not of1:
-                    continue
-                if of1 in dir_done:
-                    log.warn('warning recusif subdir')
-                    fdds
-                    continue
-                dir_todo[of1] = e.subdir
+            a = dir_todo.pop(0)
+            if isinstance(a, int):
+                index+=a
+            elif isinstance(a, pe.ResDesc):
+                #out.append((index, repr(a)))
+                dir_todo=[1]+a.resentries.list+[-1]+dir_todo
+            elif isinstance(a, ResEntry):
+                if a.offsettosubdir:
+                    out.append((index, repr(a)))
+                    dir_todo = [a.subdir]+dir_todo
+                else:
+                    out.append((index, repr(a)))
+            else:
+                raise "zarb"
+        print '_'*80
+        rep = []
+        for i, c in out:
+            rep.append(' '*4*i+c)
+        
                 
         return "\n".join(rep)
         
@@ -1091,8 +1097,7 @@ if __name__ == "__main__":
     if e.DirExport.expdesc:
         e.DirExport.functions[0].rva = s_myexp.addr+off1
     
-
-    
+                    
     for s in e.SHList:
         s.offset+=0xC00
 
