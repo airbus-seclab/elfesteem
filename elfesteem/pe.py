@@ -134,6 +134,13 @@ class ResEntry(CStruct):
                 ("offset2data","I")
                 ]
 
+class ResDataEntry(CStruct):
+    _fields = [ ("offset2data","I"),
+                ("size","I"),
+                ("codepage","I"),
+                ("reserved","I"),                
+                ]
+
 
 
 DIRECTORY_ENTRY_EXPORT           = 0
@@ -152,6 +159,55 @@ DIRECTORY_ENTRY_IAT              = 12
 DIRECTORY_ENTRY_DELAY_IMPORT     = 13
 DIRECTORY_ENTRY_COM_DESCRIPTOR   = 14
 DIRECTORY_ENTRY_RESERVED         = 15
+
+
+RT_CURSOR                        = 1
+RT_BITMAP                        = 2
+RT_ICON                          = 3
+RT_MENU                          = 4
+RT_DIALOG                        = 5
+RT_STRING                        = 6
+RT_FONTDIR                       = 7
+RT_FONT                          = 8
+RT_ACCELERATOR                   = 9
+RT_RCDATA                        = 10
+RT_MESSAGETABLE                  = 11
+RT_GROUP_CURSOR                  = 12
+RT_GROUP_ICON                    = 14
+RT_VERSION                       = 16
+RT_DLGINCLUDE                    = 17
+RT_PLUGPLAY                      = 19
+RT_VXD                           = 20
+RT_ANICURSOR                     = 21
+RT_ANIICON                       = 22
+RT_HTML                          = 23
+RT_MANIFEST                      = 24
+
+
+RT = {
+    RT_CURSOR       :"RT_CURSOR",
+    RT_BITMAP       :"RT_BITMAP",
+    RT_ICON         :"RT_ICON",
+    RT_MENU         :"RT_MENU",
+    RT_DIALOG       :"RT_DIALOG",
+    RT_STRING       :"RT_STRING",
+    RT_FONTDIR      :"RT_FONTDIR",
+    RT_FONT         :"RT_FONT",
+    RT_ACCELERATOR  :"RT_ACCELERATOR",
+    RT_RCDATA       :"RT_RCDATA",
+    RT_MESSAGETABLE :"RT_MESSAGETABLE",
+    RT_GROUP_CURSOR :"RT_GROUP_CURSOR",
+    RT_GROUP_ICON   :"RT_GROUP_ICON",
+    RT_VERSION      :"RT_VERSION",
+    RT_DLGINCLUDE   :"RT_DLGINCLUDE",
+    RT_PLUGPLAY     :"RT_PLUGPLAY",
+    RT_VXD          :"RT_VXD",
+    RT_ANICURSOR    :"RT_ANICURSOR",
+    RT_ANIICON      :"RT_ANIICON",
+    RT_HTML         :"RT_HTML",
+    RT_MANIFEST     :"RT_MANIFEST",
+    }
+
 
 
 if __name__ == "__main__":

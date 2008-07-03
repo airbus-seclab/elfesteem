@@ -353,24 +353,47 @@ class SUnicode:
         return self.size
         
 class ResEntry:
-    _size = 2
-    def __init__(self, parent, of1):
+    _size = 8
+    def __init__(self, parent, s):
         self.parent = parent
-        self.of1 = of1
-        if not of1:
+        self.s = s
+        if not s:
             return
         self.id, self.name = None, None
-        name, offsettodata = struct.unpack('LL', self.parent.drva[of1:of1+8])
+        name, offsettodata = struct.unpack('LL', s)
+        self.name = name
+        self.name_s = None
+        self.offsettodata = offsettodata
+        self.offsettosubdir = None
         if name & 0x80000000:
-            self.name = SUnicode(parent, name & 0x7FFFFFFF + self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva) #XXX res rva??
-        else:
-            self.id = name
-        print self.name
-        fds
+            self.name_s = SUnicode(parent, (name & 0x7FFFFFFF) + self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva) #XXX res rva??
+        if offsettodata & 0x80000000:
+            self.offsettosubdir = (offsettodata & 0x7FFFFFFF) + self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva #XXX res rva??
+            self.offsettodata = (offsettodata & 0x7FFFFFFF) + self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva #XXX res rva??
+                
+        #self.offsettodata = offsettodata
     def __str__(self):
-        return struct.pack('H', (self.rel[0]<<12) | self.rel[1])
+        name = self.name
+        offsettodata = self.offsettodata - self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva
+        if self.name_s:
+            name|=0x80000000
+        if self.offsettosubdir:
+            offsettodata|=0x80000000
+        return struct.unpack('LL', name, offsettodata)
+        
     def __repr__(self):
-        return '<%d %d>'%(self.rel[0], self.rel[1])
+        if self.name_s:
+            nameid = "%s"%str(self.name_s)
+        else:
+            if self.name in pe.RT:
+                nameid = "ID %s"%pe.RT[self.name]
+            else:
+                nameid = "ID %d"%self.name
+        if self.offsettosubdir:
+            offsettodata = "subdir: %d"%self.offsettosubdir
+        else:
+            offsettodata = "data: %d"%self.offsettodata
+        return "<%s %s>"%(nameid, offsettodata)
     def __len__(self):
         return self._size
 
@@ -717,14 +740,58 @@ class DirRes(Directory):
         print repr(self.resdesc)
 
         nbr = self.resdesc.numberofnamedentries + self.resdesc.numberofidentries
-        self.resdesc.resentries = ClassArray(self.parent, WResEntry, self.parent.rva2off(of2), nbr)
-        for e in self.resdesc.resentries:
-            if e.name & 0x80000000:
-                e.name_s = SUnicode(parent, (e.name & 0x7FFFFFFF) + self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva) #XXX res rva??
-            else:
-                e.name_s = None
+        self.resdesc.resentries = ClassArray(self.parent, ResEntry, self.parent.rva2off(of2), nbr)
+        dir_todo = {of1:self.resdesc}
+        dir_done = {}
+        
+        while dir_todo:
+            of1, my_dir = dir_todo.popitem()
+            dir_done[of1] = my_dir
+            for e in my_dir.resentries:
+                of1 = e.offsettosubdir
+                if not of1:
+                    continue
+                if of1 in dir_done:
+                    log.warn('warning recusif subdir')
+                    fdds
+                    continue
+                of2 = of1+pe.ResDesc._size
+                subdir = pe.ResDesc(self.parent.drva[of1:of2])
+                nbr = subdir.numberofnamedentries + subdir.numberofidentries
+                subdir.resentries = ClassArray(self.parent, ResEntry, self.parent.rva2off(of2), nbr)
+                #print hex(of1)
+                e.subdir = subdir
+                dir_todo[of1] = subdir
+                #print repr(subdir), "j"
+                
+                
+
         print repr(self.resdesc.resentries)
-        raise "not impl"
+
+    def __repr__(self):
+        if not self.resdesc:
+            return Directory.__repr__(self)
+        rep = ["<%s>"%(self.dirname )]
+
+        dir_todo = {self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva:self.resdesc}
+        dir_done = {}
+        while dir_todo:
+            of1, my_dir = dir_todo.popitem()
+            dir_done[of1] = my_dir
+            rep.append(repr(my_dir))
+            for e in my_dir.resentries:
+                rep.append("\t"+repr(e))
+                of1 = e.offsettosubdir
+                if not of1:
+                    continue
+                if of1 in dir_done:
+                    log.warn('warning recusif subdir')
+                    fdds
+                    continue
+                dir_todo[of1] = e.subdir
+                
+        return "\n".join(rep)
+        
 
 class drva:
     def __init__(self, x):
@@ -771,6 +838,7 @@ class PE(object):
         print repr(self.DirImport)
         print repr(self.DirExport)
         print repr(self.DirReloc)
+        print repr(self.DirRes)
         
 
         
