@@ -135,7 +135,7 @@ class ResEntry(CStruct):
                 ]
 
 class ResDataEntry(CStruct):
-    _fields = [ ("offset2data","I"),
+    _fields = [ ("offsettodata","I"),
                 ("size","I"),
                 ("codepage","I"),
                 ("reserved","I"),                
