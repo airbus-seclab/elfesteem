@@ -172,6 +172,11 @@ class ClassArray:
         return "\n".join(rep)
     def __getitem__(self, item):
         return self.list.__getitem__(item)
+    def insert(self, index, o):
+        print o, index
+        self.list.insert(index, o)
+        if self.num!=None:
+            self.num+=1
     def __len__(self):
         return len(self.list)
 
@@ -481,6 +486,7 @@ class DirImport(Directory):
     
     def set_rva(self, rva):
         self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].rva = rva
+        self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].size= len(self)
         rva+=(len(self.impdesc)+1)*pe.ImpDesc._size
         for i, d in enumerate(self.impdesc):
             d.name = rva
@@ -597,6 +603,7 @@ class DirExport(Directory):
         if not self.expdesc:
             return
         self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT].rva = rva
+        self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT].size= len(self)
         rva+=pe.ExpDesc._size
         self.expdesc.name = rva
         rva+=len(self.dlldescname)
@@ -610,6 +617,35 @@ class DirExport(Directory):
             n.rva = rva
             rva+=len(n.name)
 
+    def add_name(self, name, ordinal):
+        if not self.expdesc:
+            return
+        l = len(self.functionsnames)
+        names = [n.name.name for n in self.functionsnames]
+        names_s = names[:]
+        names_s.sort()
+        if names_s != names:
+            log.warn('tab names was not sorted may bug')
+        names.append(name)
+        names.sort()
+        index = names.index(name)
+        
+        descname = DescName(self.parent)
+        descname.name = name
+
+        wname = WRva(self.parent)
+        wname.name = descname
+
+        wordinal = WOrdinal(self.parent)
+        wordinal.ordinal = ordinal
+        
+        self.functionsnames.insert(index, wname)
+        self.functionsordinals.insert(index, wordinal)
+
+        print repr(self)
+        self.expdesc.numberofnames+=1        
+        
+        
     def __len__(self):
         l = 0
         if not self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT].rva:
@@ -666,6 +702,8 @@ class DirReloc(Directory):
         if not self.reldesc:
             return
         self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC].rva = rva
+        self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC].size= len(self)
+        
 
     def add_reloc(self, rels, tpye = 3, patchrel = True):
         dirrel = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC]
@@ -1082,21 +1120,36 @@ if __name__ == "__main__":
                 )
                
                ]
-    e.DirImport.add_dlldesc(new_dll)
+    #e.DirImport.add_dlldesc(new_dll)
 
-    expdata = StrPatchwork()
+    
+    #expdata = StrPatchwork()
+    """
     off1 = len(e.DirExport)
     expdata[off1] = "dll_vc.titi\x00"
+    """
     
     
+    #if e.DirExport.expdesc:
+    #    e.DirExport.functions[0].rva = s_myexp.addr+off1
+
+    
+    e.DirExport.add_name('??1PCDFusionLibraryPerf@@QAE@XZ', 1)
+    e.DirExport.add_name('??0PCDFusionLibraryPerf@@QAE@X', 2)
+    e.DirExport.add_name('??0PCDFusionLibraryPerf@@QAE@XZ', 2)
+    e.DirExport.add_name("?InitializePerformanceData@PCDFusionLibraryPerf@@QAEXPADK@Z", 2)
+
+    e.DirExport.add_name("PCDFusionPerfRowsetCacheBytesAdjustCnt", 2)
+    e.DirExport.add_name("?SQLObjectAdjustCnt@PCDFusionLibraryPerf@@QAEKK@Z", 2)
+
+
+
     s_myimp = e.SHList.add_section(name = "myimp", rawsize = len(e.DirImport))
-    s_myexp = e.SHList.add_section(name = "myexp", data = str(expdata))
+    s_myexp = e.SHList.add_section(name = "myexp", rawsize = len(e.DirExport))#data = str(expdata))
     s_myrel = e.SHList.add_section(name = "myrel", rawsize = len(e.DirReloc))
     s_myres = e.SHList.add_section(name = "myres", rawsize = len(e.DirRes))
 
     
-    #if e.DirExport.expdesc:
-    #    e.DirExport.functions[0].rva = s_myexp.addr+off1
     
                     
     for s in e.SHList:
