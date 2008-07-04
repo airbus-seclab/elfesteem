@@ -589,6 +589,7 @@ class DirExport(Directory):
         c[self.parent.rva2off(self.expdesc.addressoffunctions)] = str(self.functions)
         c[self.parent.rva2off(self.expdesc.addressofnames)] = str(self.functionsnames)
         c[self.parent.rva2off(self.expdesc.addressofordinals)] = str(self.functionsordinals)
+        #XXX BUG names must be alphanumeric ordered
         for n in self.functionsnames:
             c[self.parent.rva2off(n.rva)] = str(n.name)
 
