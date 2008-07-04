@@ -384,9 +384,9 @@ class ResEntry:
         
     def __repr__(self):
         if self.name_s:
-            nameid = "%s"%str(self.name_s)
+            nameid = "%s"%repr(self.name_s)
         else:
-            if self.name in pe.RT and not self.offsettosubdir:
+            if self.name in pe.RT:# and not self.offsettosubdir:
                 nameid = "ID %s"%pe.RT[self.name]
             else:
                 nameid = "ID %d"%self.name
@@ -1094,8 +1094,8 @@ if __name__ == "__main__":
     s_myres = e.SHList.add_section(name = "myres", rawsize = len(e.DirRes))
 
     
-    if e.DirExport.expdesc:
-        e.DirExport.functions[0].rva = s_myexp.addr+off1
+    #if e.DirExport.expdesc:
+    #    e.DirExport.functions[0].rva = s_myexp.addr+off1
     
                     
     for s in e.SHList:
