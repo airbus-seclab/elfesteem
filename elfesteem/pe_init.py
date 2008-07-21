@@ -173,7 +173,6 @@ class ClassArray:
     def __getitem__(self, item):
         return self.list.__getitem__(item)
     def insert(self, index, o):
-        print o, index
         self.list.insert(index, o)
         if self.num!=None:
             self.num+=1
@@ -250,7 +249,7 @@ class SHList:
              "pointertolinenumbers":0,
              "numberofrelocations":0,
              "numberoflinenumbers":0,
-             "flags":0xE0000600,
+             "flags":0xE0000020,
              "data":data
              }
         f.update(args)
@@ -484,9 +483,12 @@ class DirImport(Directory):
         return l
 
     
-    def set_rva(self, rva):
+    def set_rva(self, rva, size = None):
         self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].rva = rva
-        self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].size= len(self)
+        if not size:
+            self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].size= len(self)
+        else:
+            self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].size= size
         rva+=(len(self.impdesc)+1)*pe.ImpDesc._size
         for i, d in enumerate(self.impdesc):
             d.name = rva
@@ -595,15 +597,23 @@ class DirExport(Directory):
         c[self.parent.rva2off(self.expdesc.addressoffunctions)] = str(self.functions)
         c[self.parent.rva2off(self.expdesc.addressofnames)] = str(self.functionsnames)
         c[self.parent.rva2off(self.expdesc.addressofordinals)] = str(self.functionsordinals)
-        #XXX BUG names must be alphanumeric ordered
         for n in self.functionsnames:
             c[self.parent.rva2off(n.rva)] = str(n.name)
 
-    def set_rva(self, rva):
+        #XXX BUG names must be alphanumeric ordered
+        names = [n.name for n in self.functionsnames]
+        names_ = names[:]
+        if names != names_:
+            log.warn("unsorted export names, may bug")
+            
+    def set_rva(self, rva, size = None):
         if not self.expdesc:
             return
         self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT].rva = rva
-        self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT].size= len(self)
+        if not size:
+            self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT].size= len(self)
+        else:
+            self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT].size= size
         rva+=pe.ExpDesc._size
         self.expdesc.name = rva
         rva+=len(self.dlldescname)
@@ -642,7 +652,6 @@ class DirExport(Directory):
         self.functionsnames.insert(index, wname)
         self.functionsordinals.insert(index, wordinal)
 
-        print repr(self)
         self.expdesc.numberofnames+=1        
         
         
@@ -698,11 +707,14 @@ class DirReloc(Directory):
             self.reldesc.append(reldesc)
             of1+=reldesc.size
 
-    def set_rva(self, rva):
+    def set_rva(self, rva, size = None):
         if not self.reldesc:
             return
         self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC].rva = rva
-        self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC].size= len(self)
+        if not size:
+            self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC].size= len(self)
+        else:
+            self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC].size= size
         
 
     def add_reloc(self, rels, tpye = 3, patchrel = True):
@@ -814,11 +826,14 @@ class DirRes(Directory):
                 
                 
 
-    def set_rva(self, rva):
+    def set_rva(self, rva, size = None):
         if not self.resdesc:
             return
         self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva = rva
-        self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].size = len(self)
+        if not size:
+            self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].size = len(self)
+        else:
+            self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].size = size
         dir_todo = [self.resdesc]
         dir_done = {}
         while dir_todo:
@@ -941,7 +956,6 @@ class DirRes(Directory):
                     out.append((index, repr(a)))
             else:
                 raise "zarb"
-        print '_'*80
         rep = []
         for i, c in out:
             rep.append(' '*4*i+c)
@@ -1004,7 +1018,6 @@ class PE(object):
         print repr(self.DirExport)
         print repr(self.DirReloc)
         print repr(self.DirRes)
-        print len(self.DirRes)
 
         
 
@@ -1120,18 +1133,12 @@ if __name__ == "__main__":
                 )
                
                ]
-    #e.DirImport.add_dlldesc(new_dll)
+    e.DirImport.add_dlldesc(new_dll)
 
     
-    #expdata = StrPatchwork()
-    """
-    off1 = len(e.DirExport)
-    expdata[off1] = "dll_vc.titi\x00"
-    """
     
     
-    #if e.DirExport.expdesc:
-    #    e.DirExport.functions[0].rva = s_myexp.addr+off1
+    
 
     
     e.DirExport.add_name('??1PCDFusionLibraryPerf@@QAE@XZ', 1)
@@ -1142,21 +1149,39 @@ if __name__ == "__main__":
     e.DirExport.add_name("PCDFusionPerfRowsetCacheBytesAdjustCnt", 2)
     e.DirExport.add_name("?SQLObjectAdjustCnt@PCDFusionLibraryPerf@@QAEKK@Z", 2)
 
+    e.DirExport.add_name('CPCDSecurityToken', 0x38)
+
+
+    expdata = StrPatchwork()
+    off1 = len(e.DirExport)
+    expdata[off1] = "kernel32.Beep\x00"
 
 
     s_myimp = e.SHList.add_section(name = "myimp", rawsize = len(e.DirImport))
-    s_myexp = e.SHList.add_section(name = "myexp", rawsize = len(e.DirExport))#data = str(expdata))
+    s_myexp = e.SHList.add_section(name = ".rdata", data = str(expdata), flags=0x40000040)
     s_myrel = e.SHList.add_section(name = "myrel", rawsize = len(e.DirReloc))
     s_myres = e.SHList.add_section(name = "myres", rawsize = len(e.DirRes))
 
-    
+
+    #if e.DirExport.expdesc:
+    #    e.DirExport.functions[0].rva = s_myexp.addr+off1
+        
+        
+    e.DirExport.functions[0x38].rva = s_myexp.addr+off1
+    #e.DirExport.functions[0x39].rva = s_myexp.addr+off1
+
+
+    #e.DirExport.functions[0x6a].rva = s_myexp.addr+off1
+    #e.DirExport.functions[0x6b].rva = s_myexp.addr+off1
+    #e.DirExport.functions[0xb7].rva = s_myexp.addr+off1
+
     
                     
     for s in e.SHList:
         s.offset+=0xC00
 
     e.DirImport.set_rva(s_myimp.addr)
-    e.DirExport.set_rva(s_myexp.addr)
+    e.DirExport.set_rva(s_myexp.addr, len(expdata))
     e.DirReloc.set_rva(s_myrel.addr)
     e.DirRes.set_rva(s_myres.addr)
 
