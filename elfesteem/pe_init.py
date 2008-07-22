@@ -52,13 +52,13 @@ class ContentManager(object):
 class WDoshdr(StructWrapper):
     wrapped = pe.Doshdr
 
-
 class NThdr:
     def __init__(self, parent):
         self.parent = parent
         dhdr = self.parent.Doshdr
         of1 = dhdr.lfanew
         if not of1: # No NThdr
+            self.NThdr = pe.NThdr()
             return
         of2 = of1+pe.NThdr._size
         strnthdr = parent[of1:of2]
@@ -70,40 +70,34 @@ class NThdr:
     def __repr__(self):
         return repr(self.NThdr)
 
+class WOptehdr(StructWrapper):
+    wrapped = pe.Optehdr
+    _size = pe.Optehdr._size
+
 
 class Opthdr:
     def __init__(self, parent):
         self.parent = parent
         dhdr = self.parent.Doshdr
-        of1 = dhdr.lfanew+pe.NThdr._size
-        if not of1: # No NThdr 
+        if not dhdr.lfanew: # No NThdr 
+            self.Opthdr = pe.Opthdr()
+            self.Optehdr = ClassArray(self.parent, WOptehdr, None, 16)
             return
+        of1 = dhdr.lfanew+pe.NThdr._size
         of2 = of1+pe.Opthdr._size
         stropthdr = parent[of1:of2]
         self.Opthdr = pe.Opthdr(stropthdr)
-        self.Optehdr = []
         numberofrva = self.Opthdr.numberofrvaandsizes
         if self.parent.NThdr.NThdr.sizeofoptionalheader<numberofrva*pe.Optehdr._size+pe.Opthdr._size:
             numberofrva = (self.parent.NThdr.NThdr.sizeofoptionalheader-pe.Opthdr._size)/pe.Optehdr._size
             log.warn('bad number of rva.. using default %d'%numberofrva)
-            
-        for i in xrange(numberofrva):
-            of1 = of2
-            of2 += pe.Optehdr._size
-            optehdr = pe.Optehdr(parent[of1:of2])
-            self.Optehdr.append(optehdr)
-        
+
+        self.Optehdr = ClassArray(self.parent, WOptehdr, of2, numberofrva)
     def __str__(self):
-        c = [str(self.Opthdr)]
-        for s in self.Optehdr:
-            c.append(str(s))
-        return "".join(c)
+        return str(self.Opthdr)+str(self.Optehdr)
 
     def __repr__(self):
-        o = repr(self.Opthdr)
-        for c in self.Optehdr:
-            o+='\n    '+repr(c)
-        return o
+        return repr(self.Optehdr)
 
 
 
@@ -128,7 +122,6 @@ class WResEntry(StructWrapper):
     _size = pe.ResEntry._size
 
 
-
 #if not num => null class terminated
 class ClassArray:
     def __init__(self, parent, cls, of1, num = None):
@@ -138,6 +131,8 @@ class ClassArray:
         self.null_str = '\x00'*self.cls._size
         self.num = num
         if not of1:
+            if num!=None:
+                self.list = [self.cls(parent, self.null_str) for x in xrange(num)]
             return
         index = -1
         while True:
@@ -189,10 +184,11 @@ class SHList:
     def __init__(self, parent):
         self.parent = parent
         dhdr = self.parent.Doshdr
+        if not dhdr.lfanew: # No shlist
+            self.shlist = ClassArray(self.parent, WShdr, None, 0)
+            return
         nthdr = self.parent.NThdr.NThdr
         of1 = dhdr.lfanew+pe.NThdr._size+nthdr.sizeofoptionalheader
-        if not of1: # No shlist
-            return
         self.shlist = ClassArray(self.parent, WShdr, of1, nthdr.numberofsections)
         filealignment = self.parent.Opthdr.Opthdr.filealignment
         for s in self.shlist:
@@ -227,17 +223,20 @@ class SHList:
 
         f_align = self.parent.Opthdr.Opthdr.filealignment
         f_align = max(0x200, f_align)
-        
-        addr = self.shlist[-1].addr+self.shlist[-1].size
-        s_last = self.shlist[0]
-        for s in self.shlist:
-            if s_last.offset+s_last.rawsize<s.offset+s.rawsize:
-                s_last = s
-
         size = len(data)
         rawsize = len(data)
-            
-        offset = s_last.offset+s_last.rawsize
+        if len(self.shlist):
+            addr = self.shlist[-1].addr+self.shlist[-1].size
+            s_last = self.shlist[0]
+            for s in self.shlist:
+                if s_last.offset+s_last.rawsize<s.offset+s.rawsize:
+                    s_last = s
+    
+                
+            offset = s_last.offset+s_last.rawsize
+        else:
+            offset = self.parent.Doshdr.lfanew+pe.NThdr._size+self.parent.NThdr.NThdr.sizeofoptionalheader
+            addr = 0x2000
         #round addr
         addr = (addr+(s_align-1))&~(s_align-1)
         offset = (offset+(f_align-1))&~(f_align-1)
@@ -411,6 +410,7 @@ class DirImport(Directory):
         dirimp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT]
         of1 = dirimp.rva
         if not of1: # No Import
+            self.impdesc = ClassArray(self.parent, WImpDesc, None)
             return
         self.impdesc = ClassArray(self.parent, WImpDesc, self.parent.rva2off(of1))
         for i, d in enumerate(self.impdesc):
@@ -990,10 +990,52 @@ class drva:
 # PE object
 
 class PE(object):
-    def __init__(self, pestr):
+    def __init__(self, pestr = None):
         self._drva = drva(self)
         self._content = pestr
-        self.parse_content()
+        if pestr == None:
+            self.Doshdr = pe.Doshdr()
+            self.NThdr = NThdr(self)
+            self.Opthdr = Opthdr(self)
+            self.SHList = SHList(self)
+    
+            self.DirImport = DirImport(self)
+            self.DirExport = DirExport(self)
+            self.DirReloc = DirReloc(self)
+            self.DirRes = DirRes(self)
+
+            print repr(self.Opthdr)
+            self.Doshdr.magic = 0x5a4d
+            self.Doshdr.lfanew = 0x200
+
+            self.Opthdr.Opthdr.magic = 0x10b
+            self.Opthdr.Opthdr.majorlinkerversion = 0x7
+            self.Opthdr.Opthdr.minorlinkerversion = 0x0
+            self.Opthdr.Opthdr.filealignment = 0x1000
+            self.Opthdr.Opthdr.sectionalignment = 0x1000
+            self.Opthdr.Opthdr.majoroperatingsystemversion = 0x5
+            self.Opthdr.Opthdr.minoroperatingsystemversion = 0x1
+            self.Opthdr.Opthdr.MajorImageVersion = 0x5
+            self.Opthdr.Opthdr.MinorImageVersion = 0x1
+            self.Opthdr.Opthdr.majorsubsystemversion = 0x4
+            self.Opthdr.Opthdr.minorsubsystemversion = 0x0
+            self.Opthdr.Opthdr.subsystem = 0x2
+            self.Opthdr.Opthdr.dllcharacteristics = 0x8000
+
+            self.Opthdr.Opthdr.ImageBase = 0x400000
+            self.Opthdr.Opthdr.sizeofheaders = 0x400
+            
+
+
+            self.NThdr.NThdr.signature = 0x4550
+            self.NThdr.NThdr.machine = 0x14c
+            self.NThdr.NThdr.sizeofoptionalheader = 0xe0
+            self.NThdr.NThdr.characteristics = 0x10f
+            
+            
+
+        else:
+            self.parse_content()
     
     content = ContentManager()
     def parse_content(self):
@@ -1156,3 +1198,35 @@ if __name__ == "__main__":
     
 
     open('out.bin', 'wb').write(e_str)
+
+    print 'yup'
+    e_ = PE()
+    mysh = "\xc3"
+    s_text = e_.SHList.add_section(name = "text", addr = 0x1000, rawsize = 0x1000, data = mysh)
+    e_.Opthdr.Opthdr.AddressOfEntryPoint = s_text.addr
+    #"""
+    new_dll = [({"name":"kernel32.dll",
+                 "firstthunk":s_text.addr+0x100},
+                [(None, "CreateFileA"),
+                 (None, "SetFilePointer"),
+                 (None, "WriteFile"),
+                 (None, "CloseHandle"),
+                 ]
+                )
+               ,
+               ({"name":"USER32.dll",
+                 "firstthunk":None},
+                [(None, "SetDlgItemInt"),
+                 (None, "GetMenu"),
+                 (None, "HideCaret"),
+                 ]
+                )
+               ]
+    e_.DirImport.add_dlldesc(new_dll)
+    
+    s_myimp = e_.SHList.add_section(name = "myimp", rawsize = 0x1000)    
+    e_.DirImport.set_rva(s_myimp.addr)
+    #e_.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].size = 0x100
+    #"""
+    open('uu.bin', 'wb').write(str(e_))
+    
