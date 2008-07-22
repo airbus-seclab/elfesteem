@@ -1012,13 +1012,10 @@ class PE(object):
         print repr(self.Opthdr)
         print repr(self.SHList)
 
-        #print self.getsectionbyrva(0x1100)
-        #print repr(self.drva[0x1000:0x1100])
         print repr(self.DirImport)
         print repr(self.DirExport)
         print repr(self.DirReloc)
         print repr(self.DirRes)
-
         
 
     def resize(self, old, new):
@@ -1140,48 +1137,17 @@ if __name__ == "__main__":
     
     
 
-    
-    e.DirExport.add_name('??1PCDFusionLibraryPerf@@QAE@XZ', 1)
-    e.DirExport.add_name('??0PCDFusionLibraryPerf@@QAE@X', 2)
-    e.DirExport.add_name('??0PCDFusionLibraryPerf@@QAE@XZ', 2)
-    e.DirExport.add_name("?InitializePerformanceData@PCDFusionLibraryPerf@@QAEXPADK@Z", 2)
-
-    e.DirExport.add_name("PCDFusionPerfRowsetCacheBytesAdjustCnt", 2)
-    e.DirExport.add_name("?SQLObjectAdjustCnt@PCDFusionLibraryPerf@@QAEKK@Z", 2)
-
-    e.DirExport.add_name('CPCDSecurityToken', 0x38)
-
-
-    expdata = StrPatchwork()
-    off1 = len(e.DirExport)
-    expdata[off1] = "kernel32.Beep\x00"
-
-
     s_myimp = e.SHList.add_section(name = "myimp", rawsize = len(e.DirImport))
-    s_myexp = e.SHList.add_section(name = ".rdata", data = str(expdata), flags=0x40000040)
+    s_myexp = e.SHList.add_section(name = "myexp", rawsize = len(e.DirExport))
     s_myrel = e.SHList.add_section(name = "myrel", rawsize = len(e.DirReloc))
     s_myres = e.SHList.add_section(name = "myres", rawsize = len(e.DirRes))
-
-
-    #if e.DirExport.expdesc:
-    #    e.DirExport.functions[0].rva = s_myexp.addr+off1
-        
-        
-    e.DirExport.functions[0x38].rva = s_myexp.addr+off1
-    #e.DirExport.functions[0x39].rva = s_myexp.addr+off1
-
-
-    #e.DirExport.functions[0x6a].rva = s_myexp.addr+off1
-    #e.DirExport.functions[0x6b].rva = s_myexp.addr+off1
-    #e.DirExport.functions[0xb7].rva = s_myexp.addr+off1
-
     
                     
     for s in e.SHList:
         s.offset+=0xC00
 
     e.DirImport.set_rva(s_myimp.addr)
-    e.DirExport.set_rva(s_myexp.addr, len(expdata))
+    e.DirExport.set_rva(s_myexp.addr)
     e.DirReloc.set_rva(s_myrel.addr)
     e.DirRes.set_rva(s_myres.addr)
 
