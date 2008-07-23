@@ -1024,6 +1024,8 @@ class PE(object):
 
             self.Opthdr.Opthdr.ImageBase = 0x400000
             self.Opthdr.Opthdr.sizeofheaders = 0x400
+            self.Opthdr.Opthdr.numberofrvaandsizes = 0x10
+            
             
 
 
