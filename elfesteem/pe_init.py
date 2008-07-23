@@ -167,6 +167,11 @@ class ClassArray:
         return "\n".join(rep)
     def __getitem__(self, item):
         return self.list.__getitem__(item)
+    def __delitem__(self, item):
+        self.list.__delitem__(item)
+        if self.num!=None:
+            self.num = len(self.list)
+            
     def insert(self, index, o):
         self.list.insert(index, o)
         if self.num!=None:
@@ -735,7 +740,20 @@ class DirReloc(Directory):
         reldesc.patchrel = patchrel
         self.reldesc.append(reldesc)
         dirrel.size+=reldesc.size
-  
+
+    def del_reloc(self, taboffset):
+        for rel in self.reldesc:
+            of1 = rel.rva
+            i = 0
+            while i < len(rel.rels):
+                r = rel.rels[i]
+                if r.rel[0] != 0 and r.rel[1]+of1 in taboffset:
+                    print 'del reloc', hex(r.rel[1]+of1)
+                    del rel.rels[i]
+                    rel.size-=Reloc._size
+                else:
+                    i+=1
+
     def build_content(self, c):
         dirrel = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC]
         dirrel.size  = len(self)
@@ -1176,11 +1194,6 @@ if __name__ == "__main__":
                ]
     e.DirImport.add_dlldesc(new_dll)
 
-    
-    
-    
-    
-
     s_myimp = e.SHList.add_section(name = "myimp", rawsize = len(e.DirImport))
     s_myexp = e.SHList.add_section(name = "myexp", rawsize = len(e.DirExport))
     s_myrel = e.SHList.add_section(name = "myrel", rawsize = len(e.DirReloc))
@@ -1198,37 +1211,4 @@ if __name__ == "__main__":
     e_str = str(e)
     
     
-
     open('out.bin', 'wb').write(e_str)
-
-    print 'yup'
-    e_ = PE()
-    mysh = "\xc3"
-    s_text = e_.SHList.add_section(name = "text", addr = 0x1000, rawsize = 0x1000, data = mysh)
-    e_.Opthdr.Opthdr.AddressOfEntryPoint = s_text.addr
-    #"""
-    new_dll = [({"name":"kernel32.dll",
-                 "firstthunk":s_text.addr+0x100},
-                [(None, "CreateFileA"),
-                 (None, "SetFilePointer"),
-                 (None, "WriteFile"),
-                 (None, "CloseHandle"),
-                 ]
-                )
-               ,
-               ({"name":"USER32.dll",
-                 "firstthunk":None},
-                [(None, "SetDlgItemInt"),
-                 (None, "GetMenu"),
-                 (None, "HideCaret"),
-                 ]
-                )
-               ]
-    e_.DirImport.add_dlldesc(new_dll)
-    
-    s_myimp = e_.SHList.add_section(name = "myimp", rawsize = 0x1000)    
-    e_.DirImport.set_rva(s_myimp.addr)
-    #e_.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].size = 0x100
-    #"""
-    open('uu.bin', 'wb').write(str(e_))
-    
