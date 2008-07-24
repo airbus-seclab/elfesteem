@@ -221,7 +221,6 @@ class SHList:
             rep.append(l)
         return "\n".join(rep)
 
-
     def add_section(self, name="default", data = "", **args):
         s_align = self.parent.Opthdr.Opthdr.sectionalignment
         s_align = max(0x1000, s_align)
@@ -324,7 +323,7 @@ class Directory(object):
 
 class Reloc:
     _size = 2
-    def __init__(self, parent, s):
+    def __init__(self, parent, s = None):
         self.parent = parent
         self.s = s
         if not s:
@@ -722,15 +721,16 @@ class DirReloc(Directory):
             self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC].size= size
         
 
-    def add_reloc(self, rels, tpye = 3, patchrel = True):
+    def add_reloc(self, rels, rtype = 3, patchrel = True):
         dirrel = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC]
-        o_init = rels[0]&0xFFFF000
-        offsets = ClassArray(self.parent, Reloc(parent), num=0)
+        o_init = rels[0]&0xFFFFF000
+        offsets = ClassArray(self.parent, Reloc, None, num=0)
         for o in rels:
-            if (o&0xFFFF000) !=o_init:
+            if (o&0xFFFFF000) !=o_init:
                 raise "relocs must be in same range"
-            r = Reloc()
-            r.rel = (type, x-o_init)
+            r = Reloc(self.parent)
+            r.rel = (rtype, o-o_init)
+            print repr(r.rel)
             offsets.append(r)
 
         reldesc = pe.Rel()
@@ -738,10 +738,14 @@ class DirReloc(Directory):
         reldesc.size = len(rels)*2+8
         reldesc.rels = offsets
         reldesc.patchrel = patchrel
+        if not self.reldesc:
+            self.reldesc = []
         self.reldesc.append(reldesc)
         dirrel.size+=reldesc.size
 
     def del_reloc(self, taboffset):
+        if not self.reldesc:
+            return
         for rel in self.reldesc:
             of1 = rel.rva
             i = 0
@@ -1005,11 +1009,39 @@ class drva:
         return self.parent.__getitem__(n_item)
     
 
+class virt:
+    def __init__(self, x):
+        self.parent = x
+    def __getitem__(self, item):
+        if not type(item) is slice:
+            return None
+        start = item.start-self.parent.Opthdr.Opthdr.ImageBase
+        s = self.parent.getsectionbyrva(start)
+        if not s:
+            fds
+            return
+        start = start - s.addr
+        stop = item.stop-self.parent.Opthdr.Opthdr.ImageBase-s.addr
+        if stop >s.size:
+            fdsfds
+        step = item.step
+        if not start or not stop:
+            return
+        n_item = slice(start, stop, step)
+        return s.data.__getitem__(n_item)
+        
+    def __len__(self):
+        s = self.parent.SHList[-1]
+        l = s.addr+s.size+self.parent.Opthdr.Opthdr.ImageBase
+        return l
+
 # PE object
 
 class PE(object):
     def __init__(self, pestr = None):
         self._drva = drva(self)
+        self._virt = virt(self)
+        
         self._content = pestr
         if pestr == None:
             self.Doshdr = pe.Doshdr()
@@ -1091,6 +1123,15 @@ class PE(object):
         for s in self.SHList:
             if s.addr <= rva < s.addr+s.size:
                 return s
+    def getsectionbyname(self, name):
+        if not self.SHList:
+            return
+        for s in self.SHList:
+            if s.name.strip('\x00') ==  name:
+                print repr(s)
+                return s
+        return None
+            
             
     def rva2off(self, rva):
         s = self.getsectionbyrva(rva)
@@ -1098,10 +1139,23 @@ class PE(object):
             return
         return rva-s.addr+s.offset
 
+    def virt2rva(self, virt):
+        if virt == None:
+            return None
+        return virt - self.Opthdr.Opthdr.ImageBase
+
+    def virt2off(self, virt):
+        return self.virt2rva(self.rva2off(virt))
+
     def get_drva(self):
         return self._drva
 
     drva = property(get_drva)
+
+    def get_virt(self):
+        return self._virt
+
+    virt = property(get_virt)
 
 
     def patch_crc(self, c, olds):
