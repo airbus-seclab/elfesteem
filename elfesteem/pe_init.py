@@ -538,11 +538,12 @@ class DirImport(Directory):
                 f = pe.Rva()
                 if nf[0]:
                     f.rva = 0x80000000+nf[0]
+                    ibn = None
                 else:
                     f.rva = True
                     ibn = ImportByName(self.parent)
                     ibn.name = nf[1]
-                    impbynames.append(ibn)
+                impbynames.append(ibn)
                 d.originalfirstthunks.append(f)
 
                 ff = pe.Rva()
@@ -1128,7 +1129,6 @@ class PE(object):
             return
         for s in self.SHList:
             if s.name.strip('\x00') ==  name:
-                print repr(s)
                 return s
         return None
             
@@ -1145,7 +1145,7 @@ class PE(object):
         return virt - self.Opthdr.Opthdr.ImageBase
 
     def virt2off(self, virt):
-        return self.virt2rva(self.rva2off(virt))
+        return self.rva2off(self.virt2rva(virt))
 
     def get_drva(self):
         return self._drva
