@@ -52,26 +52,45 @@ class ContentManager(object):
 class WDoshdr(StructWrapper):
     wrapped = pe.Doshdr
 
+class WNTsig(StructWrapper):
+    wrapped = pe.NTsig
+
 class WCoffhdr(StructWrapper):
     wrapped = pe.Coffhdr
 
-class NThdr:
-    def __init__(self, parent):
+class NTsig:
+    def __init__(self, parent, of1 = None):
         self.parent = parent
-        dhdr = self.parent.Doshdr
-        of1 = dhdr.lfanew
-        if not of1: # No NThdr
-            self.NThdr = pe.NThdr()
+        if of1 == None: # No Coffhdr
+            self.NTsig = pe.NTsig()
             return
-        of2 = of1+pe.NThdr._size
-        strnthdr = parent[of1:of2]
-        self.NThdr = pe.NThdr(strnthdr)
+        of2 = of1+pe.NTsig._size
+        strntsig = parent[of1:of2]
+        self.NTsig = pe.NTsig(strntsig)
 
     def __str__(self):
-        return str(self.NThdr)
+        return str(self.NTsig)
     
     def __repr__(self):
-        return repr(self.NThdr)
+        return repr(self.NTsig)
+
+
+
+class Coffhdr:
+    def __init__(self, parent, of1 = None):
+        self.parent = parent
+        if of1 == None: # No Coffhdr
+            self.Coffhdr = pe.Coffhdr()
+            return
+        of2 = of1+pe.Coffhdr._size
+        strcoffhdr = parent[of1:of2]
+        self.Coffhdr = pe.Coffhdr(strcoffhdr)
+
+    def __str__(self):
+        return str(self.Coffhdr)
+    
+    def __repr__(self):
+        return repr(self.Coffhdr)
 
 class WOptehdr(StructWrapper):
     wrapped = pe.Optehdr
@@ -79,20 +98,18 @@ class WOptehdr(StructWrapper):
 
 
 class Opthdr:
-    def __init__(self, parent):
+    def __init__(self, parent, of1 = None):
         self.parent = parent
-        dhdr = self.parent.Doshdr
-        if not dhdr.lfanew: # No NThdr 
+        if of1 == None or self.parent.Coffhdr.Coffhdr.sizeofoptionalheader == 0: # No Coffhdr
             self.Opthdr = pe.Opthdr()
             self.Optehdr = ClassArray(self.parent, WOptehdr, None, 16)
             return
-        of1 = dhdr.lfanew+pe.NThdr._size
         of2 = of1+pe.Opthdr._size
         stropthdr = parent[of1:of2]
         self.Opthdr = pe.Opthdr(stropthdr)
         numberofrva = self.Opthdr.numberofrvaandsizes
-        if self.parent.NThdr.NThdr.sizeofoptionalheader<numberofrva*pe.Optehdr._size+pe.Opthdr._size:
-            numberofrva = (self.parent.NThdr.NThdr.sizeofoptionalheader-pe.Opthdr._size)/pe.Optehdr._size
+        if self.parent.Coffhdr.Coffhdr.sizeofoptionalheader<numberofrva*pe.Optehdr._size+pe.Opthdr._size:
+            #numberofrva = (self.parent.Coffhdr.Coffhdr.sizeofoptionalheader-pe.Opthdr._size)/pe.Optehdr._size
             log.warn('bad number of rva.. using default %d'%numberofrva)
 
         self.Optehdr = ClassArray(self.parent, WOptehdr, of2, numberofrva)
@@ -100,7 +117,7 @@ class Opthdr:
         return str(self.Opthdr)+str(self.Optehdr)
 
     def __repr__(self):
-        return repr(self.Optehdr)
+        return "<Opthdr>\n"+repr(self.Optehdr)
 
 
 
@@ -189,15 +206,13 @@ class ClassArray:
             
         
 class SHList:
-    def __init__(self, parent):
+    def __init__(self, parent, of1 = None):
         self.parent = parent
-        dhdr = self.parent.Doshdr
-        if not dhdr.lfanew: # No shlist
+        if of1 == None: # No shlist
             self.shlist = ClassArray(self.parent, WShdr, None, 0)
             return
-        nthdr = self.parent.NThdr.NThdr
-        of1 = dhdr.lfanew+pe.NThdr._size+nthdr.sizeofoptionalheader
-        self.shlist = ClassArray(self.parent, WShdr, of1, nthdr.numberofsections)
+        coffhdr = self.parent.Coffhdr.Coffhdr
+        self.shlist = ClassArray(self.parent, WShdr, of1, coffhdr.numberofsections)
         filealignment = self.parent.Opthdr.Opthdr.filealignment
         for s in self.shlist:
             if filealignment ==0:
@@ -242,7 +257,7 @@ class SHList:
                 
             offset = s_last.offset+s_last.rawsize
         else:
-            offset = self.parent.Doshdr.lfanew+pe.NThdr._size+self.parent.NThdr.NThdr.sizeofoptionalheader
+            offset = self.parent.Doshdr.lfanew+pe.NTsig._size+pe.Coffhdr._size+self.parent.Coffhdr.Coffhdr.sizeofoptionalheader
             addr = 0x2000
         #round addr
         addr = (addr+(s_align-1))&~(s_align-1)
@@ -272,7 +287,7 @@ class SHList:
         s.size = max(s_align, s.size)
 
         self.shlist.append(s)
-        self.parent.NThdr.NThdr.numberofsections = len(self.shlist)
+        self.parent.Coffhdr.Coffhdr.numberofsections = len(self.shlist)
 
         l = (s.addr+s.size+(s_align-1))&~(s_align-1)
         self.parent.Opthdr.Opthdr.sizeofimage = l
@@ -1051,7 +1066,8 @@ class PE(object):
         self._content = pestr
         if pestr == None:
             self.Doshdr = pe.Doshdr()
-            self.NThdr = NThdr(self)
+            self.NTsig = pe.NTsig()
+            self.Coffhdr = Coffhdr(self)
             self.Opthdr = Opthdr(self)
             self.SHList = SHList(self)
     
@@ -1085,10 +1101,10 @@ class PE(object):
             
 
 
-            self.NThdr.NThdr.signature = 0x4550
-            self.NThdr.NThdr.machine = 0x14c
-            self.NThdr.NThdr.sizeofoptionalheader = 0xe0
-            self.NThdr.NThdr.characteristics = 0x10f
+            self.NTsig.signature = 0x4550
+            self.Coffhdr.Coffhdr.machine = 0x14c
+            self.Coffhdr.Coffhdr.sizeofoptionalheader = 0xe0
+            self.Coffhdr.Coffhdr.characteristics = 0x10f
             
             
 
@@ -1098,9 +1114,10 @@ class PE(object):
     content = ContentManager()
     def parse_content(self):
         self.Doshdr = WDoshdr(self, self.content)
-        self.NThdr = NThdr(self)
-        self.Opthdr = Opthdr(self)
-        self.SHList = SHList(self)
+        self.NTsig = NTsig(self, self.Doshdr.lfanew)
+        self.Coffhdr = Coffhdr(self, self.Doshdr.lfanew+pe.NTsig._size)
+        self.Opthdr = Opthdr(self, self.Doshdr.lfanew+pe.NTsig._size+pe.Coffhdr._size)
+        self.SHList = SHList(self, self.Doshdr.lfanew+pe.NTsig._size+pe.Coffhdr._size+self.Coffhdr.Coffhdr.sizeofoptionalheader)
 
         self.DirImport = DirImport(self)
         self.DirExport = DirExport(self)
@@ -1108,7 +1125,7 @@ class PE(object):
         self.DirRes = DirRes(self)
 
         print repr(self.Doshdr)
-        print repr(self.NThdr)
+        print repr(self.Coffhdr)
         print repr(self.Opthdr)
         print repr(self.SHList)
 
@@ -1197,9 +1214,10 @@ class PE(object):
         for s in self.SHList:
             c[s.offset:s.offset+s.rawsize] = str(s.data)
 
-        c[self.Doshdr.lfanew] = str(self.NThdr)
-        c[self.Doshdr.lfanew+pe.NThdr._size] = str(self.Opthdr)
-        c[self.Doshdr.lfanew+pe.NThdr._size+self.NThdr.NThdr.sizeofoptionalheader] = str(self.SHList)
+        c[self.Doshdr.lfanew] = str(self.NTsig)
+        c[self.Doshdr.lfanew+pe.NTsig._size] = str(self.Coffhdr)
+        c[self.Doshdr.lfanew+pe.NTsig._size+pe.Coffhdr._size] = str(self.Opthdr)
+        c[self.Doshdr.lfanew+pe.NTsig._size+pe.Coffhdr._size+self.Coffhdr.Coffhdr.sizeofoptionalheader] = str(self.SHList)
 
         self.DirImport.build_content(c)
         self.DirExport.build_content(c)
@@ -1208,10 +1226,10 @@ class PE(object):
 
         
         s = str(c)
-        if (self.Doshdr.lfanew+pe.NThdr._size)%4:
-            log.warn("non aligned nthdr, bad crc calculation")
+        if (self.Doshdr.lfanew+pe.NTsig._size+pe.Coffhdr._size)%4:
+            log.warn("non aligned coffhdr, bad crc calculation")
         crcs = self.patch_crc(s, self.Opthdr.Opthdr.CheckSum)
-        c[self.Doshdr.lfanew+pe.NThdr._size+64] = struct.pack('I', crcs)
+        c[self.Doshdr.lfanew+pe.NTsig._size+pe.Coffhdr._size+64] = struct.pack('I', crcs)
         return str(c)
 
     def __str__(self):
@@ -1219,8 +1237,9 @@ class PE(object):
 
 class Coff(PE):
     def parse_content(self):
-        self.NThdr = WCoffhdr(self)
-        self.SHList = SHList(self)
+        self.Coffhdr = Coffhdr(self, 0)
+        self.Opthdr = Opthdr(self, pe.Coffhdr._size)
+        self.SHList = SHList(self, pe.Coffhdr._size+self.Coffhdr.Coffhdr.sizeofoptionalheader)
 
     
 
@@ -1279,3 +1298,9 @@ if __name__ == "__main__":
     
     open('out.bin', 'wb').write(e_str)
     o = Coff(open('main.o').read())
+    print repr(o.Coffhdr)
+    print repr(o.Opthdr)
+    print repr(o.SHList)
+    print 'numsymb', hex(o.Coffhdr.Coffhdr.numberofsymbols)
+    print 'offset', hex(o.Coffhdr.Coffhdr.pointertosymboltable)
+    

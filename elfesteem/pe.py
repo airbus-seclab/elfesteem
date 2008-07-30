@@ -23,15 +23,9 @@ class Doshdr(CStruct):
                 ("res2","20s"),
                 ("lfanew","I") ]
 
-class NThdr(CStruct):
+class NTsig(CStruct):
     _fields = [ ("signature","I"),
-                ("machine","H"),
-                ("numberofsections","H"),
-                ("timedatestamp","I"),
-                ("pointertosymboltable","I"),
-                ("numberofsymbols","I"),
-                ("sizeofoptionalheader","H"),
-                ("characteristics","H") ]
+                ]
 
 class Coffhdr(CStruct):
     _fields = [ ("machine","H"),
@@ -150,6 +144,12 @@ class ResDataEntry(CStruct):
                 ("reserved","I"),                
                 ]
 
+
+class Symb(CStruct):
+    _fields = [ ("name","8s"),
+                ("res1","I"),
+                ("res2","I"),
+                ("res3","H")]
 
 
 DIRECTORY_ENTRY_EXPORT           = 0
