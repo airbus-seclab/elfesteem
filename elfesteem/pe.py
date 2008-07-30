@@ -32,7 +32,16 @@ class NThdr(CStruct):
                 ("numberofsymbols","I"),
                 ("sizeofoptionalheader","H"),
                 ("characteristics","H") ]
-               
+
+class Coffhdr(CStruct):
+    _fields = [ ("machine","H"),
+                ("numberofsections","H"),
+                ("timedatestamp","I"),
+                ("pointertosymboltable","I"),
+                ("numberofsymbols","I"),
+                ("sizeofoptionalheader","H"),
+                ("characteristics","H") ]
+
 class Opthdr(CStruct):
     _fields = [ ("magic","H"),
                 ("majorlinkerversion","B"),

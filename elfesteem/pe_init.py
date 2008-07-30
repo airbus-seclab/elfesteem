@@ -52,6 +52,9 @@ class ContentManager(object):
 class WDoshdr(StructWrapper):
     wrapped = pe.Doshdr
 
+class WCoffhdr(StructWrapper):
+    wrapped = pe.Coffhdr
+
 class NThdr:
     def __init__(self, parent):
         self.parent = parent
@@ -536,13 +539,15 @@ class DirImport(Directory):
             impbynames = []
             for nf in fcts:
                 f = pe.Rva()
-                if nf[0]:
-                    f.rva = 0x80000000+nf[0]
+                if type(nf) in [int, long]:
+                    f.rva = 0x80000000+nf
                     ibn = None
-                else:
+                elif type(nf) in [str]:
                     f.rva = True
                     ibn = ImportByName(self.parent)
-                    ibn.name = nf[1]
+                    ibn.name = nf
+                else:
+                    raise 'unknown func type %s'%str(nf)
                 impbynames.append(ibn)
                 d.originalfirstthunks.append(f)
 
@@ -1212,6 +1217,13 @@ class PE(object):
     def __str__(self):
         return self.build_content()
 
+class Coff(PE):
+    def parse_content(self):
+        self.NThdr = WCoffhdr(self)
+        self.SHList = SHList(self)
+
+    
+
 
 if __name__ == "__main__":
     import rlcompleter,readline,pdb, sys
@@ -1231,17 +1243,17 @@ if __name__ == "__main__":
 
     new_dll = [({"name":"kernel32.dll",
                  "firstthunk":s_test.addr},
-                [(None, "CreateFileA"),
-                 (None, "SetFilePointer"),
-                 (None, "WriteFile"),
-                 (None, "CloseHandle"),
+                ["CreateFileA",
+                 "SetFilePointer",
+                 "WriteFile",
+                 "CloseHandle",
                  ]
                 ),
                ({"name":"USER32.dll",
                  "firstthunk":None},
-                [(None, "SetDlgItemInt"),
-                 (None, "GetMenu"),
-                 (None, "HideCaret"),
+                ["SetDlgItemInt",
+                 "GetMenu",
+                 "HideCaret",
                  ]
                 )
                
@@ -1266,3 +1278,4 @@ if __name__ == "__main__":
     
     
     open('out.bin', 'wb').write(e_str)
+    o = Coff(open('main.o').read())
