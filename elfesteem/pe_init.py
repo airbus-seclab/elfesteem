@@ -1071,7 +1071,7 @@ class virt:
 
     def __setitem__(self, item, data):
         s, n_item = self.item2virtitem(item)
-        if not n_item:
+        if n_item == None:
             return
         return s.data.__setitem__(n_item, data)
 
