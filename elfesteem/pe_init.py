@@ -96,6 +96,10 @@ class WOptehdr(StructWrapper):
     wrapped = pe.Optehdr
     _size = pe.Optehdr._size
 
+class WSymb(StructWrapper):
+    wrapped = pe.Symb
+    _size = pe.Symb._size
+
 
 class Opthdr:
     def __init__(self, parent, of1 = None):
@@ -232,9 +236,10 @@ class SHList:
             c.append(str(s))
         return "".join(c)
     def __repr__(self):
-        rep = ["#  section         offset   size   addr     flags"]
+        rep = ["#  section         offset   size   addr     flags   rawsize  "]
         for i,s in enumerate(self.shlist):
-            l = "%(name)-15s %(offset)08x %(size)06x %(addr)08x %(flags)x " % s
+            l = "%-15s"%s.name.strip('\x00')
+            l+="%(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x  %(pointertorelocations)08x  %(pointertolinenumbers)08x  %(numberofrelocations)08x " % s
             l = ("%2i " % i)+ l + s.__class__.__name__
             rep.append(l)
         return "\n".join(rep)
@@ -1005,7 +1010,7 @@ class DirRes(Directory):
         
                 
         return "\n".join(rep)
-        
+
 
 class drva:
     def __init__(self, x):
@@ -1124,6 +1129,8 @@ class PE(object):
         self.DirReloc = DirReloc(self)
         self.DirRes = DirRes(self)
 
+        self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
+
         print repr(self.Doshdr)
         print repr(self.Coffhdr)
         print repr(self.Opthdr)
@@ -1241,7 +1248,8 @@ class Coff(PE):
         self.Opthdr = Opthdr(self, pe.Coffhdr._size)
         self.SHList = SHList(self, pe.Coffhdr._size+self.Coffhdr.Coffhdr.sizeofoptionalheader)
 
-    
+        self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
+
 
 
 if __name__ == "__main__":
@@ -1297,10 +1305,11 @@ if __name__ == "__main__":
     
     
     open('out.bin', 'wb').write(e_str)
-    o = Coff(open('main.o').read())
+    o = Coff(open('main.obj').read())
     print repr(o.Coffhdr)
     print repr(o.Opthdr)
     print repr(o.SHList)
     print 'numsymb', hex(o.Coffhdr.Coffhdr.numberofsymbols)
     print 'offset', hex(o.Coffhdr.Coffhdr.pointertosymboltable)
     
+    print repr(o.Symbols)
