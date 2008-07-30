@@ -1038,24 +1038,43 @@ class drva:
 class virt:
     def __init__(self, x):
         self.parent = x
-    def __getitem__(self, item):
+
+    def item2virtitem(self, item):
+        if type(item) in [int, long]:
+            rva = item-self.parent.Opthdr.Opthdr.ImageBase
+            s = self.parent.getsectionbyrva(rva)
+            start = rva-s.addr
+            return s, start
         if not type(item) is slice:
             return None
         start = item.start-self.parent.Opthdr.Opthdr.ImageBase
         s = self.parent.getsectionbyrva(start)
         if not s:
-            fds
+            log.warn('unknown virt address!')
             return
         start = start - s.addr
         stop = item.stop-self.parent.Opthdr.Opthdr.ImageBase-s.addr
         if stop >s.size:
             fdsfds
         step = item.step
-        if not start or not stop:
+        if start==None or stop==None:
+            ffff
             return
         n_item = slice(start, stop, step)
-        return s.data.__getitem__(n_item)
+        return s, n_item
         
+    def __getitem__(self, item):
+        s, n_item = self.item2virtitem(item)
+        if not n_item:
+            return
+        return s.data.__getitem__(n_item)
+
+    def __setitem__(self, item, data):
+        s, n_item = self.item2virtitem(item)
+        if not n_item:
+            return
+        return s.data.__setitem__(n_item, data)
+
     def __len__(self):
         s = self.parent.SHList[-1]
         l = s.addr+s.size+self.parent.Opthdr.Opthdr.ImageBase
@@ -1081,7 +1100,6 @@ class PE(object):
             self.DirReloc = DirReloc(self)
             self.DirRes = DirRes(self)
 
-            print repr(self.Opthdr)
             self.Doshdr.magic = 0x5a4d
             self.Doshdr.lfanew = 0x200
 
@@ -1183,7 +1201,7 @@ class PE(object):
 
     def get_virt(self):
         return self._virt
-
+    
     virt = property(get_virt)
 
 
