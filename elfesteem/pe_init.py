@@ -625,8 +625,10 @@ class DirExport(Directory):
         c[self.parent.rva2off(of1)] = str(self.expdesc)
         c[self.parent.rva2off(self.expdesc.name)] = str(self.dlldescname)
         c[self.parent.rva2off(self.expdesc.addressoffunctions)] = str(self.functions)
-        c[self.parent.rva2off(self.expdesc.addressofnames)] = str(self.functionsnames)
-        c[self.parent.rva2off(self.expdesc.addressofordinals)] = str(self.functionsordinals)
+        if self.expdesc.addressofnames!=0:
+            c[self.parent.rva2off(self.expdesc.addressofnames)] = str(self.functionsnames)
+        if self.expdesc.addressofordinals!=0:
+            c[self.parent.rva2off(self.expdesc.addressofordinals)] = str(self.functionsordinals)
         for n in self.functionsnames:
             c[self.parent.rva2off(n.rva)] = str(n.name)
 
@@ -1040,13 +1042,15 @@ class virt:
         self.parent = x
 
     def item2virtitem(self, item):
-        if type(item) in [int, long]:
+        if not type(item) is slice:#integer
             rva = item-self.parent.Opthdr.Opthdr.ImageBase
             s = self.parent.getsectionbyrva(rva)
+            if not s:
+                return None, None
             start = rva-s.addr
             return s, start
-        if not type(item) is slice:
-            return None
+        #if not type(item) is slice:
+        #    return None
         start = item.start-self.parent.Opthdr.Opthdr.ImageBase
         s = self.parent.getsectionbyrva(start)
         if not s:
@@ -1171,6 +1175,14 @@ class PE(object):
         for s in self.SHList:
             if s.addr <= rva < s.addr+s.size:
                 return s
+
+    def getsectionbyoff(self, off):
+        if not self.SHList:
+            return
+        for s in self.SHList:
+            if s.offset <= off < s.offset+s.rawsize:
+                return s
+            
     def getsectionbyname(self, name):
         if not self.SHList:
             return
@@ -1186,13 +1198,27 @@ class PE(object):
             return
         return rva-s.addr+s.offset
 
+    def off2rva(self, off):
+        s = self.getsectionbyoff(off)
+        if not s:
+            return
+        return off-s.offset+s.addr
+
     def virt2rva(self, virt):
         if virt == None:
-            return None
+            return
         return virt - self.Opthdr.Opthdr.ImageBase
+
+    def rva2virt(self, rva):
+        if rva == None:
+            return
+        return rva + self.Opthdr.Opthdr.ImageBase
 
     def virt2off(self, virt):
         return self.rva2off(self.virt2rva(virt))
+
+    def off2virt(self, off):
+        return self.rva2virt(self.off2rva(off))
 
     def get_drva(self):
         return self._drva
