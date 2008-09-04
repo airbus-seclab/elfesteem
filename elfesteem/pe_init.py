@@ -477,10 +477,38 @@ class DirImport(Directory):
                 tmp_thunk = d.firstthunks
             else:
                 raise "no thunk!!"
-            for i, imp in enumerate(d.impbynames):
+            for j, imp in enumerate(d.impbynames):
                 if isinstance(imp, ImportByName):
-                    c[self.parent.rva2off(tmp_thunk[i].rva)] = str(imp)
-                    
+                    c[self.parent.rva2off(tmp_thunk[j].rva)] = str(imp)
+
+    def get_funcrva(self, f):
+        for i, d in enumerate(self.impdesc):
+            if d.originalfirstthunk:
+                tmp_thunk = d.originalfirstthunks
+            elif d.firstthunk:
+                tmp_thunk = d.firstthunks
+            else:
+                raise "no thunk!!"
+            
+            if type(f) is str:
+                for j, imp in enumerate(d.impbynames):
+                    if isinstance(imp, ImportByName):
+                        if f == imp.name:
+                            return d.firstthunk+j*4
+            elif type(f) in (int, long):
+                for j, imp in enumerate(d.impbynames):
+                    if not isinstance(imp, ImportByName):
+                        if tmp_thunk[j].rva&0x7FFFFFFF == f:
+                            return d.firstthunk+j*4
+            else:
+                raise ValueError('unknown func tpye %s'%str(f))
+                            
+    def get_funcvirt(self, f):
+        rva = self.get_funcrva(f)
+        if rva==None:
+            return
+        return self.parent.rva2virt(rva)
+        
     def __str__(self):
         c = []
         for s in self.impdesc:
