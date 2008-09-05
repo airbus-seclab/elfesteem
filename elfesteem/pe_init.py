@@ -687,7 +687,17 @@ class DirExport(Directory):
             n.rva = rva
             rva+=len(n.name)
 
-    def add_name(self, name, ordinal):
+
+    def create(self, name = 'default.dll'):
+        self.expdesc = pe.ExpDesc()
+        self.dlldescname = DescName(self.parent)
+        self.dlldescname.name = name
+        self.functions = ClassArray(self.parent, WRva, None, 0)
+        self.functionsnames = ClassArray(self.parent, WRva, None, 0)
+        self.functionsordinals = ClassArray(self.parent, WOrdinal, None, 0)
+        self.expdesc.base = 1
+
+    def add_name(self, name, rva = 0xdeadc0fe, ordinal = None):
         if not self.expdesc:
             return
         l = len(self.functionsnames)
@@ -706,18 +716,27 @@ class DirExport(Directory):
         wname = WRva(self.parent)
         wname.name = descname
 
-        wordinal = WOrdinal(self.parent)
-        wordinal.ordinal = ordinal
+        woffset = WRva(self.parent)
+        woffset.rva = rva
         
+        wordinal = WOrdinal(self.parent)
+        
+        if ordinal==None:
+            wordinal.ordinal = index
+        else:
+            wordinal.ordinal = ordinal
+        
+        self.functions.insert(index, woffset)
         self.functionsnames.insert(index, wname)
         self.functionsordinals.insert(index, wordinal)
 
-        self.expdesc.numberofnames+=1        
+        self.expdesc.numberofnames+=1
+        self.expdesc.numberoffunctions+=1
         
         
     def __len__(self):
         l = 0
-        if not self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT].rva:
+        if not self.expdesc:
             return l
         l+=pe.ExpDesc._size
         l+=len(self.dlldescname)
