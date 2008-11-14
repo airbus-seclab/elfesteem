@@ -1145,7 +1145,6 @@ class PE(object):
             self.Coffhdr = Coffhdr(self)
             self.Opthdr = Opthdr(self)
             self.SHList = SHList(self)
-    
             self.DirImport = DirImport(self)
             self.DirExport = DirExport(self)
             self.DirReloc = DirReloc(self)
@@ -1198,7 +1197,7 @@ class PE(object):
         self.DirReloc = DirReloc(self)
         self.DirRes = DirRes(self)
 
-        self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
+        #self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
 
         print repr(self.Doshdr)
         print repr(self.Coffhdr)
