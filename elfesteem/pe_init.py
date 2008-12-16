@@ -1106,11 +1106,10 @@ class virt:
         start = start - s.addr
         stop = item.stop-self.parent.Opthdr.Opthdr.ImageBase-s.addr
         if stop >s.size:
-            fdsfds
+            raise ValueError('lack data %d, %d'%(stop, s.size))
         step = item.step
         if start==None or stop==None:
-            ffff
-            return
+            raise ValueError('strange limits %s, %s'%(stop, s.size))
         n_item = slice(start, stop, step)
         return s, n_item
         

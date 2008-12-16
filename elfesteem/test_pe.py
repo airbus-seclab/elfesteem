@@ -1,3 +1,4 @@
+<<<<<<< /home/serpilliere/projet/elfesteem/elfesteem/test_pe.py
 #! /usr/bin/env python
 
 import pe
@@ -13,19 +14,12 @@ s_text = e_.SHList.add_section(name = "text", addr = 0x1000, rawsize = 0x1000, d
 e_.Opthdr.Opthdr.AddressOfEntryPoint = s_text.addr
 new_dll = [({"name":"kernel32.dll",
              "firstthunk":s_text.addr+0x100},
-            [("CreateFileA"),
-             ("SetFilePointer"),
-             ("WriteFile"),
-             ("CloseHandle"),
-             ]
+            ["CreateFileA", "SetFilePointer", "WriteFile", "CloseHandle"]
             )
            ,
            ({"name":"USER32.dll",
              "firstthunk":None},
-            [("SetDlgItemInt"),
-             ("GetMenu"),
-             ("HideCaret"),
-             ]
+            ["SetDlgItemInt", "GetMenu", "HideCaret"]
             )
            ]
 e_.DirImport.add_dlldesc(new_dll)
