@@ -1,4 +1,3 @@
-<<<<<<< /home/serpilliere/projet/elfesteem/elfesteem/test_pe.py
 #! /usr/bin/env python
 
 import pe
