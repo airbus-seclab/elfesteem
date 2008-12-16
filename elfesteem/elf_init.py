@@ -415,12 +415,70 @@ class PHList:
                 
 
 
+class virt:
+    def __init__(self, x):
+        self.parent = x
+
+    def item2virtitem(self, item):
+        if not type(item) is slice:#integer
+            ad = item
+            s = self.parent.getsectionbyvad(ad)
+            if not s:
+                return None, None
+            start = ad-s.sh.addr
+            return s, start
+        #if not type(item) is slice:
+        #    return None
+        start = item.start
+        s = self.parent.getsectionbyvad(start)
+        if not s:
+            log.warn('unknown virt address!')
+            return
+        start = start - s.sh.addr
+        stop = item.stop-s.sh.addr
+        if stop >s.sh.size:
+            raise ValueError('lack data %d, %d'%(stop, s.size))
+        step = item.step
+        if start==None or stop==None:
+            raise ValueError('strange limits %s, %s'%(stop, s.size))
+        n_item = slice(start, stop, step)
+        return s, n_item
+        
+    def __getitem__(self, item):
+        s, n_item = self.item2virtitem(item)
+        if n_item==None:
+            return
+        return s.content.__getitem__(n_item)
+
+    def __setitem__(self, item, data):
+        s, n_item = self.item2virtitem(item)
+        if n_item == None:
+            return
+        return s.content.__setitem__(n_item, data)
+
+    def __len__(self):
+        m = self.parent.sh.shlist[0]
+        for s in self.parent.sh.shlist:
+            if s.sh.addr+s.sh.size> m.sh.addr+m.sh.size:
+                m = s
+        l = m.sh.addr+m.sh.size
+        return l
+
+
 # ELF object
 
 class ELF(object):
     def __init__(self, elfstr):
         self._content = elfstr
         self.parse_content()
+
+        self._virt = virt(self)
+
+    def get_virt(self):
+        return self._virt
+    
+    virt = property(get_virt)
+
     
     content = ContentManager()
     def parse_content(self):
@@ -444,6 +502,10 @@ class ELF(object):
     def __str__(self):
         return self.build_content()
         
+    def getsectionbyvad(self, ad):
+        for s in self.sh:
+            if s.sh.addr <= ad < s.sh.addr+s.sh.size:
+                return s
 
 
 if __name__ == "__main__":
@@ -452,4 +514,5 @@ if __name__ == "__main__":
     readline.parse_and_bind("tab: complete")
 
     e = ELF(open("/bin/ls").read())
-    o = ELF(open("/tmp/svg-main.o").read())
+    print repr(e)
+    #o = ELF(open("/tmp/svg-main.o").read())

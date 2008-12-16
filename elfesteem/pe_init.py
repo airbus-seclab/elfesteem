@@ -1106,11 +1106,10 @@ class virt:
         start = start - s.addr
         stop = item.stop-self.parent.Opthdr.Opthdr.ImageBase-s.addr
         if stop >s.size:
-            fdsfds
+            raise ValueError('lack data %d, %d'%(stop, s.size))
         step = item.step
         if start==None or stop==None:
-            ffff
-            return
+            raise ValueError('strange limits %s, %s'%(stop, s.size))
         n_item = slice(start, stop, step)
         return s, n_item
         
@@ -1145,7 +1144,6 @@ class PE(object):
             self.Coffhdr = Coffhdr(self)
             self.Opthdr = Opthdr(self)
             self.SHList = SHList(self)
-    
             self.DirImport = DirImport(self)
             self.DirExport = DirExport(self)
             self.DirReloc = DirReloc(self)
@@ -1198,7 +1196,7 @@ class PE(object):
         self.DirReloc = DirReloc(self)
         self.DirRes = DirRes(self)
 
-        self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
+        #self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
 
         print repr(self.Doshdr)
         print repr(self.Coffhdr)
