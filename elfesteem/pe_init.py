@@ -1128,7 +1128,7 @@ class virt:
     def __len__(self):
         s = self.parent.SHList[-1]
         l = s.addr+s.size+self.parent.Opthdr.Opthdr.ImageBase
-        return l
+        return int(l)
 
 # PE object
 
@@ -1198,15 +1198,15 @@ class PE(object):
 
         #self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
 
-        print repr(self.Doshdr)
-        print repr(self.Coffhdr)
-        print repr(self.Opthdr)
+        #print repr(self.Doshdr)
+        #print repr(self.Coffhdr)
+        #print repr(self.Opthdr)
         print repr(self.SHList)
 
-        print repr(self.DirImport)
-        print repr(self.DirExport)
-        print repr(self.DirReloc)
-        print repr(self.DirRes)
+        #print repr(self.DirImport)
+        #print repr(self.DirExport)
+        #print repr(self.DirReloc)
+        #print repr(self.DirRes)
         
 
     def resize(self, old, new):
