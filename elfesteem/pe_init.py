@@ -298,6 +298,28 @@ class SHList:
         self.parent.Opthdr.Opthdr.sizeofimage = l
         return s
 
+
+
+    def align_sections(self, f_align = None, s_align = None):
+        if f_align == None:
+            f_align = self.parent.Opthdr.Opthdr.filealignment
+            f_align = max(0x200, f_align)
+        if s_align == None:
+            s_align = self.parent.Opthdr.Opthdr.sectionalignment
+            s_align = max(0x1000, s_align)
+
+        if not self.shlist:
+            return
+
+        addr = self.shlist[0].offset
+        
+        for s in self.shlist:
+            raw_off = f_align*((addr+f_align-1)/f_align)
+            s.offset = raw_off
+            s.rawsize = len(s.data)
+            
+            addr = raw_off+s.rawsize
+            
             
 class ImportByName:
     def __init__(self, parent, of1 = None):
