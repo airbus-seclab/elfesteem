@@ -230,6 +230,8 @@ class SHList:
 
     def __getitem__(self, item):
         return self.shlist[item]
+    def __len__(self):
+        return len(self.shlist)
     def __str__(self):
         c = []
         for s in self.shlist:
@@ -788,6 +790,23 @@ class DirExport(Directory):
             l = "%2d %.8X %s"%(i+self.expdesc.base, s.rva ,repr(tmp_names[i]))
             rep.append(l)
         return "\n".join(rep)
+
+    def get_funcrva(self, f_str):
+        if not self.expdesc:
+            return None
+        for i, f in enumerate(self.functionsnames):
+            if f_str != f.name.name:
+                continue
+            o = self.functionsordinals[i].ordinal
+            rva = self.functions[o].rva
+            return rva
+        return None
+
+    def get_funcvirt(self, f):
+        rva = self.get_funcrva(f)
+        if rva==None:
+            return
+        return self.parent.rva2virt(rva)
 
 class DirReloc(Directory):
     dirname = 'Directory Relocation'
