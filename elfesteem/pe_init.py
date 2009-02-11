@@ -846,7 +846,7 @@ class DirReloc(Directory):
                 raise "relocs must be in same range"
             r = Reloc(self.parent)
             r.rel = (rtype, o-o_init)
-            print repr(r.rel)
+            #print repr(r.rel)
             offsets.append(r)
 
         reldesc = pe.Rel()
@@ -1206,6 +1206,13 @@ class PE(object):
             self.Opthdr.Opthdr.minorsubsystemversion = 0x0
             self.Opthdr.Opthdr.subsystem = 0x2
             self.Opthdr.Opthdr.dllcharacteristics = 0x8000
+
+            #for createthread 
+            self.Opthdr.Opthdr.sizeofstackreserve = 0x200000
+            self.Opthdr.Opthdr.sizeofstackcommit = 0x1000
+            self.Opthdr.Opthdr.sizeofheapreserve = 0x100000
+            self.Opthdr.Opthdr.sizeofheapcommit = 0x1000
+            
 
             self.Opthdr.Opthdr.ImageBase = 0x400000
             self.Opthdr.Opthdr.sizeofheaders = 0x400
