@@ -721,7 +721,7 @@ class DirExport(Directory):
         self.f_nameordinals = ClassArray(self.parent, WOrdinal, None, 0)
         self.expdesc.base = 1
 
-    def add_name(self, name, rva = 0xdeadc0fe, ordinal = None):
+    def add_name(self, name, rva = 0xdeadc0fe):
         if not self.expdesc:
             return
         l = len(self.f_names)
@@ -745,14 +745,17 @@ class DirExport(Directory):
         
         wordinal = WOrdinal(self.parent)
         
-        if ordinal==None:
-            wordinal.ordinal = index
-        else:
-            wordinal.ordinal = ordinal
-        
-        self.f_address.insert(index, woffset)
+
+
+        #func is append to list
+        wordinal.ordinal = len(self.f_address)
+    
+        self.f_address.append(woffset)
+        #self.f_names.insert(index, wname)
+        #self.f_nameordinals.insert(index, wordinal)
         self.f_names.insert(index, wname)
         self.f_nameordinals.insert(index, wordinal)
+
 
         self.expdesc.numberofnames+=1
         self.expdesc.numberoffunctions+=1
