@@ -662,10 +662,10 @@ class DirExport(Directory):
         of2 = of1+pe.ExpDesc._size
         self.expdesc = pe.ExpDesc(self.parent.drva[of1:of2])
         self.dlldescname = DescName(self.parent, self.expdesc.name)
-        self.functions = ClassArray(self.parent, WRva, self.parent.rva2off(self.expdesc.addressoffunctions), self.expdesc.numberoffunctions)
-        self.functionsnames = ClassArray(self.parent, WRva, self.parent.rva2off(self.expdesc.addressofnames), self.expdesc.numberofnames)
-        self.functionsordinals = ClassArray(self.parent, WOrdinal, self.parent.rva2off(self.expdesc.addressofordinals), self.expdesc.numberofnames)
-        for n in self.functionsnames:
+        self.f_address = ClassArray(self.parent, WRva, self.parent.rva2off(self.expdesc.addressoffunctions), self.expdesc.numberoffunctions)
+        self.f_names = ClassArray(self.parent, WRva, self.parent.rva2off(self.expdesc.addressofnames), self.expdesc.numberofnames)
+        self.f_nameordinals = ClassArray(self.parent, WOrdinal, self.parent.rva2off(self.expdesc.addressofordinals), self.expdesc.numberofnames)
+        for n in self.f_names:
             n.name = DescName(self.parent, n.rva)
 
 
@@ -676,16 +676,16 @@ class DirExport(Directory):
             return
         c[self.parent.rva2off(of1)] = str(self.expdesc)
         c[self.parent.rva2off(self.expdesc.name)] = str(self.dlldescname)
-        c[self.parent.rva2off(self.expdesc.addressoffunctions)] = str(self.functions)
+        c[self.parent.rva2off(self.expdesc.addressoffunctions)] = str(self.f_address)
         if self.expdesc.addressofnames!=0:
-            c[self.parent.rva2off(self.expdesc.addressofnames)] = str(self.functionsnames)
+            c[self.parent.rva2off(self.expdesc.addressofnames)] = str(self.f_names)
         if self.expdesc.addressofordinals!=0:
-            c[self.parent.rva2off(self.expdesc.addressofordinals)] = str(self.functionsordinals)
-        for n in self.functionsnames:
+            c[self.parent.rva2off(self.expdesc.addressofordinals)] = str(self.f_nameordinals)
+        for n in self.f_names:
             c[self.parent.rva2off(n.rva)] = str(n.name)
 
         #XXX BUG names must be alphanumeric ordered
-        names = [n.name for n in self.functionsnames]
+        names = [n.name for n in self.f_names]
         names_ = names[:]
         if names != names_:
             log.warn("unsorted export names, may bug")
@@ -702,12 +702,12 @@ class DirExport(Directory):
         self.expdesc.name = rva
         rva+=len(self.dlldescname)
         self.expdesc.addressoffunctions = rva
-        rva+=len(self.functions)*pe.Rva._size
+        rva+=len(self.f_address)*pe.Rva._size
         self.expdesc.addressofnames = rva
-        rva+=len(self.functionsnames)*pe.Rva._size
+        rva+=len(self.f_names)*pe.Rva._size
         self.expdesc.addressofordinals = rva
-        rva+=len(self.functionsordinals)*pe.Ordinal._size
-        for n in self.functionsnames:
+        rva+=len(self.f_nameordinals)*pe.Ordinal._size
+        for n in self.f_names:
             n.rva = rva
             rva+=len(n.name)
 
@@ -716,16 +716,16 @@ class DirExport(Directory):
         self.expdesc = pe.ExpDesc()
         self.dlldescname = DescName(self.parent)
         self.dlldescname.name = name
-        self.functions = ClassArray(self.parent, WRva, None, 0)
-        self.functionsnames = ClassArray(self.parent, WRva, None, 0)
-        self.functionsordinals = ClassArray(self.parent, WOrdinal, None, 0)
+        self.f_address = ClassArray(self.parent, WRva, None, 0)
+        self.f_names = ClassArray(self.parent, WRva, None, 0)
+        self.f_nameordinals = ClassArray(self.parent, WOrdinal, None, 0)
         self.expdesc.base = 1
 
     def add_name(self, name, rva = 0xdeadc0fe, ordinal = None):
         if not self.expdesc:
             return
-        l = len(self.functionsnames)
-        names = [n.name.name for n in self.functionsnames]
+        l = len(self.f_names)
+        names = [n.name.name for n in self.f_names]
         names_s = names[:]
         names_s.sort()
         if names_s != names:
@@ -750,9 +750,9 @@ class DirExport(Directory):
         else:
             wordinal.ordinal = ordinal
         
-        self.functions.insert(index, woffset)
-        self.functionsnames.insert(index, wname)
-        self.functionsordinals.insert(index, wordinal)
+        self.f_address.insert(index, woffset)
+        self.f_names.insert(index, wname)
+        self.f_nameordinals.insert(index, wordinal)
 
         self.expdesc.numberofnames+=1
         self.expdesc.numberoffunctions+=1
@@ -764,10 +764,10 @@ class DirExport(Directory):
             return l
         l+=pe.ExpDesc._size
         l+=len(self.dlldescname)
-        l+=len(self.functions)*pe.Rva._size
-        l+=len(self.functionsnames)*pe.Rva._size
-        l+=len(self.functionsordinals)*pe.Ordinal._size
-        for n in self.functionsnames:
+        l+=len(self.f_address)*pe.Rva._size
+        l+=len(self.f_names)*pe.Rva._size
+        l+=len(self.f_nameordinals)*pe.Ordinal._size
+        for n in self.f_names:
             l+=len(n.name)
         return l
     
@@ -780,10 +780,10 @@ class DirExport(Directory):
         rep = ["<%s %d (%s) %s>"%(self.dirname, self.expdesc.numberoffunctions, self.dlldescname, repr(self.expdesc))]
         tmp_names = [[] for x in xrange(self.expdesc.numberoffunctions)]
         
-        for i, n in enumerate(self.functionsnames):
-            tmp_names[self.functionsordinals[i].ordinal].append(n.name)
+        for i, n in enumerate(self.f_names):
+            tmp_names[self.f_nameordinals[i].ordinal].append(n.name)
 
-        for i,s in enumerate(self.functions):
+        for i,s in enumerate(self.f_address):
             tmpn = []
             if not s.rva:
                 continue
@@ -794,11 +794,11 @@ class DirExport(Directory):
     def get_funcrva(self, f_str):
         if not self.expdesc:
             return None
-        for i, f in enumerate(self.functionsnames):
+        for i, f in enumerate(self.f_names):
             if f_str != f.name.name:
                 continue
-            o = self.functionsordinals[i].ordinal
-            rva = self.functions[o].rva
+            o = self.f_nameordinals[i].ordinal
+            rva = self.f_address[o].rva
             return rva
         return None
 
