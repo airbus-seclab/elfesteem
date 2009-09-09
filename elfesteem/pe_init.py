@@ -241,8 +241,8 @@ class SHList:
         rep = ["#  section         offset   size   addr     flags   rawsize  "]
         for i,s in enumerate(self.shlist):
             l = "%-15s"%s.name.strip('\x00')
-            l+="%(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x  %(pointertorelocations)08x  %(pointertolinenumbers)08x  %(numberofrelocations)08x " % s
-            l = ("%2i " % i)+ l + s.__class__.__name__
+            l+="%(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x" % s
+            l = ("%2i " % i)+ l
             rep.append(l)
         return "\n".join(rep)
 
@@ -458,6 +458,9 @@ class DirImport(Directory):
     dirname = 'Directory Import'
     def __init__(self, parent):
         self.parent = parent
+        if not len(self.parent.Opthdr.Optehdr):
+            self.impdesc = ClassArray(self.parent, WImpDesc, None)
+            return
         dirimp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT]
         of1 = dirimp.rva
         if not of1: # No Import
@@ -654,6 +657,8 @@ class DirExport(Directory):
     dirname = 'Directory Export'
     def __init__(self, parent):
         self.parent = parent
+        if not len(self.parent.Opthdr.Optehdr):
+            return
         direxp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT]
         self.expdesc = None
         of1 = direxp.rva
@@ -815,6 +820,8 @@ class DirReloc(Directory):
     dirname = 'Directory Relocation'
     def __init__(self, parent):
         self.parent = parent
+        if not len(self.parent.Opthdr.Optehdr):
+            return
         dirrel = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC]
         self.reldesc = None
         of1 = dirrel.rva
@@ -852,15 +859,21 @@ class DirReloc(Directory):
             #print repr(r.rel)
             offsets.append(r)
 
+        while len(offsets) &3:
+            r = Reloc(self.parent)
+            r.rel = (0, 0)
+            offsets.append(r)
+
         reldesc = pe.Rel()
         reldesc.rva = o_init
-        reldesc.size = len(rels)*2+8
+        reldesc.size = (len(offsets)*2+8) 
         reldesc.rels = offsets
         reldesc.patchrel = patchrel
         if not self.reldesc:
             self.reldesc = []
         self.reldesc.append(reldesc)
         dirrel.size+=reldesc.size
+        
 
     def del_reloc(self, taboffset):
         if not self.reldesc:
@@ -923,6 +936,8 @@ class DirRes(Directory):
     dirname = 'Directory Resource'
     def __init__(self, parent):
         self.parent = parent
+        if not len(self.parent.Opthdr.Optehdr):
+            return
         dirres = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE]
         self.resdesc = None
         of1 = dirres.rva
@@ -1235,13 +1250,19 @@ class PE(object):
             self.parse_content()
     
     content = ContentManager()
+
+    def isPE(self):
+        return self.NTsig.NTsig.signature == 0x4550
+    
     def parse_content(self):
         self.Doshdr = WDoshdr(self, self.content)
         self.NTsig = NTsig(self, self.Doshdr.lfanew)
+        if self.NTsig.NTsig.signature != 0x4550:
+            return
         self.Coffhdr = Coffhdr(self, self.Doshdr.lfanew+pe.NTsig._size)
         self.Opthdr = Opthdr(self, self.Doshdr.lfanew+pe.NTsig._size+pe.Coffhdr._size)
         self.SHList = SHList(self, self.Doshdr.lfanew+pe.NTsig._size+pe.Coffhdr._size+self.Coffhdr.Coffhdr.sizeofoptionalheader)
-
+        
         self.DirImport = DirImport(self)
         self.DirExport = DirExport(self)
         self.DirReloc = DirReloc(self)
