@@ -45,3 +45,5 @@ class StrPatchwork:
         return self
         
         
+    def find(self, pattern, offset = 0):
+        return str(self).find(pattern, offset)

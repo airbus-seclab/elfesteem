@@ -1154,40 +1154,92 @@ class virt:
             if not s:
                 return None, None
             start = rva-s.addr
-            return s, start
+            return [(s, start)]
         #if not type(item) is slice:
         #    return None
-        start = item.start-self.parent.Opthdr.Opthdr.ImageBase
-        s = self.parent.getsectionbyrva(start)
-        if not s:
-            log.warn('unknown virt address!')
-            return
-        start = start - s.addr
-        stop = item.stop-self.parent.Opthdr.Opthdr.ImageBase-s.addr
-        if stop >s.size:
-            raise ValueError('lack data %d, %d'%(stop, s.size))
-        step = item.step
+        start = item.start - self.parent.Opthdr.Opthdr.ImageBase
+        stop  = item.stop - self.parent.Opthdr.Opthdr.ImageBase
+        step  = item.step
+
         if start==None or stop==None:
             raise ValueError('strange limits %s, %s'%(stop, s.size))
-        n_item = slice(start, stop, step)
-        return s, n_item
+
+
+        total_len = stop - start
+
+        virt_item = []
+        while total_len:
+            
+            s = self.parent.getsectionbyrva(start)
+            s_max = max(s.size, s.rawsize)                        
+            #print repr(s)
+            #print 'virtitem', hex(start), hex(stop), hex(total_len), hex(s_max)
+
+            if not s:
+                log.warn('unknown virt address!')
+                return
+
+
+            s_start = start - s.addr
+            s_stop = stop - s.addr
+
+            if s_stop - s_start >s_max:
+                #raise ValueError('lack data %d, %d'%(stop, s_max))
+                s_stop = s_start + s_max
+                
+
+            s_len = s_stop - s_start
+            
+            total_len -= s_len
+            start += s_len
+                
+            n_item = slice(s_start, s_stop, step)
+            virt_item.append((s, n_item))
+        return virt_item
         
     def __getitem__(self, item):
-        s, n_item = self.item2virtitem(item)
-        if not n_item:
+        virt_item = self.item2virtitem(item)
+        if not virt_item:
             return
-        return s.data.__getitem__(n_item)
+        data_out = ""
+        for s, n_item in virt_item:
+            data_out += s.data.__getitem__(n_item)
+        return data_out
 
     def __setitem__(self, item, data):
-        s, n_item = self.item2virtitem(item)
-        if n_item == None:
+        if not type(item) is slice:
+            item = slice(item, item+len(data), 1)
+            
+        virt_item = self.item2virtitem(item)
+        if not virt_item:
             return
-        return s.data.__setitem__(n_item, data)
+        for s, n_item in virt_item:
+            s.data.__setitem__(n_item, data.__getitem__(n_item))
+            
+        return #s.data.__setitem__(n_item, data)
 
     def __len__(self):
         s = self.parent.SHList[-1]
         l = s.addr+s.size+self.parent.Opthdr.Opthdr.ImageBase
         return int(l)
+
+    def find(self, pattern, offset = 0):
+        offset = self.parent.virt2rva(offset)
+
+        sections = []
+        for s in self.parent.SHList:
+            s_max = max(s.size, s.rawsize)
+            if offset < s.addr + s_max or offset > s.addr:
+                sections.append(s)
+        if not sections:
+            return -1
+        offset -= sections[0].addr
+        for s in sections:
+            ret = s.data.find(pattern, offset)
+            if ret != -1:
+                return self.parent.rva2virt(s.addr + ret)
+            offset = 0
+        return -1
 
 # PE object
 
@@ -1290,7 +1342,8 @@ class PE(object):
         if not self.SHList:
             return
         for s in self.SHList:
-            if s.addr <= rva < s.addr+s.size:
+            s_max = max(s.size, s.rawsize)
+            if s.addr <= rva < s.addr+s_max:
                 return s
 
     def getsectionbyoff(self, off):
