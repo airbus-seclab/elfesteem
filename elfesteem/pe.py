@@ -112,6 +112,16 @@ class ExpDesc(CStruct):
                 ("addressofordinals","I"),
               ]
 
+class DelayDesc(CStruct):
+    _fields = [ ("attrs","I"),
+                ("name","I"),
+                ("hmod","I"),
+                ("firstthunk","I"),
+                ("originalfirstthunk","I"),
+                ("boundiat","I"),
+                ("unloadiat","I"),
+                ("timestamp","I"),
+              ]
 
 class Ordinal(CStruct):
     _fields = [ ("ordinal","H"),
