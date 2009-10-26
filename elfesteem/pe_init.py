@@ -1354,40 +1354,100 @@ class virt:
             if not s:
                 return None, None
             start = rva-s.addr
-            return s, start
+            return [(s, start)]
         #if not type(item) is slice:
         #    return None
-        start = item.start-self.parent.Opthdr.Opthdr.ImageBase
-        s = self.parent.getsectionbyrva(start)
-        if not s:
-            log.warn('unknown virt address!')
-            return
-        start = start - s.addr
-        stop = item.stop-self.parent.Opthdr.Opthdr.ImageBase-s.addr
-        if stop >s.size:
-            raise ValueError('lack data %d, %d'%(stop, s.size))
-        step = item.step
-        if start==None or stop==None:
-            raise ValueError('strange limits %s, %s'%(stop, s.size))
-        n_item = slice(start, stop, step)
-        return s, n_item
+        start = item.start - self.parent.Opthdr.Opthdr.ImageBase
+        stop  = item.stop - self.parent.Opthdr.Opthdr.ImageBase
+        step  = item.step
+
+
+
+        total_len = stop - start
+
+        virt_item = []
+        while total_len:
+            
+            s = self.parent.getsectionbyrva(start)
+            s_max = max(s.size, s.rawsize)                        
+            #print repr(s)
+            #print "%(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x" % s
+            #print 'virtitem', hex(start), hex(stop), hex(total_len), hex(s_max)
+
+            if not s:
+                log.warn('unknown virt address!')
+                return
+
+
+            s_start = start - s.addr
+            s_stop = stop - s.addr
+            #print hex(s_stop), hex(s_start)
+            if s_stop >s_max:
+                #print 'yy'
+                #raise ValueError('lack data %d, %d'%(stop, s_max))
+                s_stop = s_max
+
+            #print hex(s_start), hex(s_stop)
+                
+            s_len = s_stop - s_start
+            
+            total_len -= s_len
+            start += s_len
+                
+            n_item = slice(s_start, s_stop, step)
+            virt_item.append((s, n_item))
         
+        return virt_item
+         
     def __getitem__(self, item):
-        s, n_item = self.item2virtitem(item)
-        if not n_item:
-            return
-        return s.data.__getitem__(n_item)
-
+        virt_item = self.item2virtitem(item)
+        if not virt_item:
+             return
+        data_out = ""
+        for s, n_item in virt_item:
+            data_out += s.data.__getitem__(n_item)
+        return data_out
+ 
     def __setitem__(self, item, data):
-        s, n_item = self.item2virtitem(item)
-        if n_item == None:
-            return
-        return s.data.__setitem__(n_item, data)
-
+        if not type(item) is slice:
+            item = slice(item, item+len(data), None)
+            
+        virt_item = self.item2virtitem(item)
+        if not virt_item:
+             return
+        off = 0
+        for s, n_item in virt_item:
+            i = slice(n_item.start+off, n_item.stop+off, n_item.step)
+            s.data.__setitem__(n_item, data.__getitem__(i))
+            off = i.stop
+            
+        return #s.data.__setitem__(n_item, data)
+ 
     def __len__(self):
-        s = self.parent.SHList[-1]
-        l = s.addr+s.size+self.parent.Opthdr.Opthdr.ImageBase
-        return int(l)
+         s = self.parent.SHList[-1]
+         l = s.addr+s.size+self.parent.Opthdr.Opthdr.ImageBase
+         return int(l)
+ 
+    def find(self, pattern, offset = 0):
+        offset = self.parent.virt2rva(offset)
+
+        sections = []
+        for s in self.parent.SHList:
+            s_max = max(s.size, s.rawsize)
+            if offset > s.addr + s_max:#or offset > s.addr:
+                continue
+            
+            sections.append(s)
+        if not sections:
+            return -1
+        offset -= sections[0].addr
+        for s in sections:
+            ret = s.data.find(pattern, offset)
+            if ret != -1:
+                return self.parent.rva2virt(s.addr + ret)
+            offset = 0
+        return -1
+
 
 # PE object
 
