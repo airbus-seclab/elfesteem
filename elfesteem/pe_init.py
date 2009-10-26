@@ -476,7 +476,7 @@ class DirDelay(Directory):
             d.firstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(d.firstthunk))
 
             d.impbynames = []
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
@@ -496,11 +496,11 @@ class DirDelay(Directory):
         c[self.parent.rva2off(of1)] = str(self.delaydesc)
         for i, d in enumerate(self.delaydesc):
             c[self.parent.rva2off(d.name)] = str(d.dlldescname)
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 c[self.parent.rva2off(d.originalfirstthunk)] = str(d.originalfirstthunks)
             if d.firstthunk:
                 c[self.parent.rva2off(d.firstthunk)] = str(d.firstthunks)
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
@@ -512,7 +512,7 @@ class DirDelay(Directory):
 
     def get_funcrva(self, f):
         for i, d in enumerate(self.delaydesc):
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
@@ -548,11 +548,11 @@ class DirDelay(Directory):
         l = (len(self.delaydesc)+1)*pe.Delaydesc._size
         for i, d in enumerate(self.delaydesc):
             l+=len(d.dlldescname)
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 l+=(len(d.originalfirstthunks)+1)*pe.Rva._size
             if d.firstthunk:
                 l+=(len(d.firstthunks)+1)*pe.Rva._size
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             """
             elif d.firstthunk:
@@ -577,14 +577,14 @@ class DirDelay(Directory):
         for i, d in enumerate(self.delaydesc):
             d.name = rva
             rva+=len(d.dlldescname)
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 d.originalfirstthunk = rva
                 rva+=(len(d.originalfirstthunks)+1)*pe.Rva._size
             #XXX rva fthunk not patched => fun addr
             #if d.firstthunk:
             #    d.firstthunk = rva
             #    rva+=(len(d.firstthunks)+1)*pe.Rva._size
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
@@ -673,7 +673,7 @@ class DirImport(Directory):
             d.firstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(d.firstthunk))
 
             d.impbynames = []
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
@@ -694,11 +694,11 @@ class DirImport(Directory):
         c[self.parent.rva2off(of1)] = str(self.impdesc)
         for i, d in enumerate(self.impdesc):
             c[self.parent.rva2off(d.name)] = str(d.dlldescname)
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 c[self.parent.rva2off(d.originalfirstthunk)] = str(d.originalfirstthunks)
             if d.firstthunk:
                 c[self.parent.rva2off(d.firstthunk)] = str(d.firstthunks)
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
@@ -710,7 +710,7 @@ class DirImport(Directory):
 
     def get_funcrva(self, f):
         for i, d in enumerate(self.impdesc):
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
@@ -746,11 +746,11 @@ class DirImport(Directory):
         l = (len(self.impdesc)+1)*pe.ImpDesc._size
         for i, d in enumerate(self.impdesc):
             l+=len(d.dlldescname)
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 l+=(len(d.originalfirstthunks)+1)*pe.Rva._size
             if d.firstthunk:
                 l+=(len(d.firstthunks)+1)*pe.Rva._size
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             """
             elif d.firstthunk:
@@ -775,14 +775,14 @@ class DirImport(Directory):
         for i, d in enumerate(self.impdesc):
             d.name = rva
             rva+=len(d.dlldescname)
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 d.originalfirstthunk = rva
                 rva+=(len(d.originalfirstthunks)+1)*pe.Rva._size
             #XXX rva fthunk not patched => fun addr
             #if d.firstthunk:
             #    d.firstthunk = rva
             #    rva+=(len(d.firstthunks)+1)*pe.Rva._size
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
