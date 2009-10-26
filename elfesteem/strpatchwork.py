@@ -44,4 +44,6 @@ class StrPatchwork:
         self.s.extend(array("B", other))
         return self
         
-        
+    def find(self, pattern, offset = 0):
+        return str(self).find(pattern, offset)
+    
