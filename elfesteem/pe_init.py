@@ -133,10 +133,6 @@ class WImpDesc(StructWrapper):
     wrapped = pe.ImpDesc
     _size = pe.ImpDesc._size
 
-class WDelayDesc(StructWrapper):
-    wrapped = pe.DelayDesc
-    _size = pe.DelayDesc._size
-
 class WRva(StructWrapper):
     wrapped = pe.Rva
     _size = pe.Rva._size
@@ -457,202 +453,6 @@ class ResEntry:
         return self._size
 
 
-class DirDelay(Directory):
-    dirname = 'Directory Delay'
-    def __init__(self, parent):
-        self.parent = parent
-        if not len(self.parent.Opthdr.Optehdr):
-            self.delaydesc = ClassArray(self.parent, WDelayDesc, None)
-            return
-        dirdelay = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_DELAY_IMPORT]
-        of1 = dirdelay.rva
-        if not of1: # No Delay
-            self.delaydesc = ClassArray(self.parent, WDelayDesc, None)
-            return
-        self.delaydesc = ClassArray(self.parent, WDelayDesc, self.parent.rva2off(of1))
-        for i, d in enumerate(self.delaydesc):
-            d.dlldescname = DescName(self.parent, d.name)
-            d.originalfirstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(d.originalfirstthunk))
-            d.firstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(d.firstthunk))
-
-            d.impbynames = []
-            if d.originalfirstthunk:
-                tmp_thunk = d.originalfirstthunks
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise "no thunk!!"
-            for i in xrange(len(tmp_thunk)):
-                if tmp_thunk[i].rva&0x80000000 == 0:
-                    d.impbynames.append(ImportByName(self.parent, tmp_thunk[i].rva))
-                else:
-                    d.impbynames.append(tmp_thunk[i].rva&0x7fffffff)
-
-    def build_content(self, c):
-        dirdelay = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_DELAY_IMPORT]
-        of1 = dirdelay.rva
-        if not of1: # No Delay Import
-            return
-        c[self.parent.rva2off(of1)] = str(self.delaydesc)
-        for i, d in enumerate(self.delaydesc):
-            c[self.parent.rva2off(d.name)] = str(d.dlldescname)
-            if d.originalfirstthunk:
-                c[self.parent.rva2off(d.originalfirstthunk)] = str(d.originalfirstthunks)
-            if d.firstthunk:
-                c[self.parent.rva2off(d.firstthunk)] = str(d.firstthunks)
-            if d.originalfirstthunk:
-                tmp_thunk = d.originalfirstthunks
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise "no thunk!!"
-            for j, imp in enumerate(d.impbynames):
-                if isinstance(imp, ImportByName):
-                    c[self.parent.rva2off(tmp_thunk[j].rva)] = str(imp)
-
-    def get_funcrva(self, f):
-        for i, d in enumerate(self.delaydesc):
-            if d.originalfirstthunk:
-                tmp_thunk = d.originalfirstthunks
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise "no thunk!!"
-            
-            if type(f) is str:
-                for j, imp in enumerate(d.impbynames):
-                    if isinstance(imp, ImportByName):
-                        if f == imp.name:
-                            return d.firstthunk+j*4
-            elif type(f) in (int, long):
-                for j, imp in enumerate(d.impbynames):
-                    if not isinstance(imp, ImportByName):
-                        if tmp_thunk[j].rva&0x7FFFFFFF == f:
-                            return d.firstthunk+j*4
-            else:
-                raise ValueError('unknown func tpye %s'%str(f))
-                            
-    def get_funcvirt(self, f):
-        rva = self.get_funcrva(f)
-        if rva==None:
-            return
-        return self.parent.rva2virt(rva)
-        
-    def __str__(self):
-        c = []
-        for s in self.delaydesc:
-            c.append(str(s))
-        return "".join(c)
-
-    def __len__(self):
-        l = (len(self.delaydesc)+1)*pe.Delaydesc._size
-        for i, d in enumerate(self.delaydesc):
-            l+=len(d.dlldescname)
-            if d.originalfirstthunk:
-                l+=(len(d.originalfirstthunks)+1)*pe.Rva._size
-            if d.firstthunk:
-                l+=(len(d.firstthunks)+1)*pe.Rva._size
-            if d.originalfirstthunk:
-                tmp_thunk = d.originalfirstthunks
-            """
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise "no thunk!!"
-            """
-            
-            for i, imp in enumerate(d.impbynames):
-                if isinstance(imp, ImportByName):
-                    l+=len(imp)
-        return l
-
-    
-    def set_rva(self, rva, size = None):
-        self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].rva = rva
-        if not size:
-            self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].size= len(self)
-        else:
-            self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].size= size
-        rva+=(len(self.delaydesc)+1)*pe.Delaydesc._size
-        for i, d in enumerate(self.delaydesc):
-            d.name = rva
-            rva+=len(d.dlldescname)
-            if d.originalfirstthunk:
-                d.originalfirstthunk = rva
-                rva+=(len(d.originalfirstthunks)+1)*pe.Rva._size
-            #XXX rva fthunk not patched => fun addr
-            #if d.firstthunk:
-            #    d.firstthunk = rva
-            #    rva+=(len(d.firstthunks)+1)*pe.Rva._size
-            if d.originalfirstthunk:
-                tmp_thunk = d.originalfirstthunks
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise "no thunk!!"
-            
-            for i, imp in enumerate(d.impbynames):
-                if isinstance(imp, ImportByName):
-                    tmp_thunk[i].rva = rva
-                    rva+=len(imp)
-
-    def add_dlldesc(self, new_dll):
-        new_delaydesc = []
-        of1 = None
-        for nd, fcts in new_dll:
-            d = pe.Delaydesc()
-            d.__dict__.update(nd)
-            if d.firstthunk!=None:
-                of1 = d.firstthunk
-            elif of1 == None:
-                raise "set fthunk"
-            else:
-                d.firstthunk = of1
-            d.dlldescname = DescName(self.parent)
-            d.dlldescname.name = d.name
-            d.originalfirstthunk = True
-            d.originalfirstthunks = ClassArray.from_cls(self.parent, WRva(self.parent))
-            d.firstthunks = ClassArray.from_cls(self.parent, WRva(self.parent))
-            impbynames = []
-            for nf in fcts:
-                f = pe.Rva()
-                if type(nf) in [int, long]:
-                    f.rva = 0x80000000+nf
-                    ibn = None
-                elif type(nf) in [str]:
-                    f.rva = True
-                    ibn = ImportByName(self.parent)
-                    ibn.name = nf
-                else:
-                    raise 'unknown func type %s'%str(nf)
-                impbynames.append(ibn)
-                d.originalfirstthunks.append(f)
-
-                ff = pe.Rva()
-                ff.rva = 0xDEADBEEF #default func addr
-                d.firstthunks.append(ff)
-                of1+=4
-            #for null thunk
-            of1+=4
-            d.impbynames = impbynames
-            new_delaydesc.append(d)
-        if not self.delaydesc:
-            #(parent, cls_tab, num = None):
-            self.delaydesc = ClassArray.from_cls(self.parent, WDelaydesc(self.parent))
-            self.delaydesc.list = new_delaydesc
-        else:
-            for d in new_delaydesc:
-                self.delaydesc.append(d)
-
-    def __repr__(self):
-        rep = ["<%s>"%self.dirname]
-        for i,s in enumerate(self.delaydesc):
-            l = "%2d %-25s %s"%(i, repr(s.dlldescname) ,repr(s))
-            rep.append(l)
-            for ii, f in enumerate(s.impbynames):
-                l = "    %2d %-16s"%(ii, repr(f))
-                rep.append(l)
-        return "\n".join(rep)
 
 class DirImport(Directory):
     dirname = 'Directory Import'
@@ -671,8 +471,9 @@ class DirImport(Directory):
             d.dlldescname = DescName(self.parent, d.name)
             d.originalfirstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(d.originalfirstthunk))
             d.firstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(d.firstthunk))
+
             d.impbynames = []
-            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
+            if d.originalfirstthunk:
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
@@ -693,11 +494,11 @@ class DirImport(Directory):
         c[self.parent.rva2off(of1)] = str(self.impdesc)
         for i, d in enumerate(self.impdesc):
             c[self.parent.rva2off(d.name)] = str(d.dlldescname)
-            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
+            if d.originalfirstthunk:
                 c[self.parent.rva2off(d.originalfirstthunk)] = str(d.originalfirstthunks)
             if d.firstthunk:
                 c[self.parent.rva2off(d.firstthunk)] = str(d.firstthunks)
-            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
+            if d.originalfirstthunk:
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
@@ -774,14 +575,14 @@ class DirImport(Directory):
         for i, d in enumerate(self.impdesc):
             d.name = rva
             rva+=len(d.dlldescname)
-            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
+            if d.originalfirstthunk:
                 d.originalfirstthunk = rva
                 rva+=(len(d.originalfirstthunks)+1)*pe.Rva._size
             #XXX rva fthunk not patched => fun addr
             #if d.firstthunk:
             #    d.firstthunk = rva
             #    rva+=(len(d.firstthunks)+1)*pe.Rva._size
-            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
+            if d.originalfirstthunk:
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
@@ -1353,100 +1154,40 @@ class virt:
             if not s:
                 return None, None
             start = rva-s.addr
-            return [(s, start)]
+            return s, start
         #if not type(item) is slice:
         #    return None
-        start = item.start - self.parent.Opthdr.Opthdr.ImageBase
-        stop  = item.stop - self.parent.Opthdr.Opthdr.ImageBase
-        step  = item.step
-
+        start = item.start-self.parent.Opthdr.Opthdr.ImageBase
+        s = self.parent.getsectionbyrva(start)
+        if not s:
+            log.warn('unknown virt address!')
+            return
+        start = start - s.addr
+        stop = item.stop-self.parent.Opthdr.Opthdr.ImageBase-s.addr
+        if stop >s.size:
+            raise ValueError('lack data %d, %d'%(stop, s.size))
+        step = item.step
         if start==None or stop==None:
             raise ValueError('strange limits %s, %s'%(stop, s.size))
-
-
-        total_len = stop - start
-
-        virt_item = []
-        while total_len:
-            
-            s = self.parent.getsectionbyrva(start)
-            s_max = max(s.size, s.rawsize)                        
-            #print repr(s)
-            #print "%(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x" % s
-            #print 'virtitem', hex(start), hex(stop), hex(total_len), hex(s_max)
-
-            if not s:
-                log.warn('unknown virt address!')
-                return
-
-
-            s_start = start - s.addr
-            s_stop = stop - s.addr
-            #print hex(s_stop), hex(s_start)
-            if s_stop >s_max:
-                #print 'yy'
-                #raise ValueError('lack data %d, %d'%(stop, s_max))
-                s_stop = s_max
-
-            #print hex(s_start), hex(s_stop)
-                
-            s_len = s_stop - s_start
-            
-            total_len -= s_len
-            start += s_len
-                
-            n_item = slice(s_start, s_stop, step)
-            virt_item.append((s, n_item))
-        return virt_item
+        n_item = slice(start, stop, step)
+        return s, n_item
         
     def __getitem__(self, item):
-        virt_item = self.item2virtitem(item)
-        if not virt_item:
+        s, n_item = self.item2virtitem(item)
+        if not n_item:
             return
-        data_out = ""
-        for s, n_item in virt_item:
-            data_out += s.data.__getitem__(n_item)
-        return data_out
+        return s.data.__getitem__(n_item)
 
     def __setitem__(self, item, data):
-        if not type(item) is slice:
-            item = slice(item, item+len(data), None)
-            
-        virt_item = self.item2virtitem(item)
-        if not virt_item:
+        s, n_item = self.item2virtitem(item)
+        if n_item == None:
             return
-        off = 0
-        for s, n_item in virt_item:
-            i = slice(n_item.start+off, n_item.stop+off, n_item.step)
-            s.data.__setitem__(n_item, data.__getitem__(i))
-            off = i.stop
-            
-        return #s.data.__setitem__(n_item, data)
+        return s.data.__setitem__(n_item, data)
 
     def __len__(self):
         s = self.parent.SHList[-1]
         l = s.addr+s.size+self.parent.Opthdr.Opthdr.ImageBase
         return int(l)
-
-    def find(self, pattern, offset = 0):
-        offset = self.parent.virt2rva(offset)
-
-        sections = []
-        for s in self.parent.SHList:
-            s_max = max(s.size, s.rawsize)
-            if offset > s.addr + s_max:#or offset > s.addr:
-                continue
-            
-            sections.append(s)
-        if not sections:
-            return -1
-        offset -= sections[0].addr
-        for s in sections:
-            ret = s.data.find(pattern, offset)
-            if ret != -1:
-                return self.parent.rva2virt(s.addr + ret)
-            offset = 0
-        return -1
 
 # PE object
 
@@ -1464,7 +1205,6 @@ class PE(object):
             self.SHList = SHList(self)
             self.DirImport = DirImport(self)
             self.DirExport = DirExport(self)
-            self.DirDelay = DirDelay(self)
             self.DirReloc = DirReloc(self)
             self.DirRes = DirRes(self)
 
@@ -1525,7 +1265,6 @@ class PE(object):
         
         self.DirImport = DirImport(self)
         self.DirExport = DirExport(self)
-        self.DirDelay = DirDelay(self)
         self.DirReloc = DirReloc(self)
         self.DirRes = DirRes(self)
 
@@ -1551,8 +1290,7 @@ class PE(object):
         if not self.SHList:
             return
         for s in self.SHList:
-            s_max = max(s.size, s.rawsize)
-            if s.addr <= rva < s.addr+s_max:
+            if s.addr <= rva < s.addr+s.size:
                 return s
 
     def getsectionbyoff(self, off):
