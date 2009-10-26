@@ -1371,7 +1371,7 @@ class virt:
             s = self.parent.getsectionbyrva(start)
             s_max = max(s.size, s.rawsize)                        
             #print repr(s)
-            #print "%(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x" % s
+            #print "%(name)s %(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x" % s
             #print 'virtitem', hex(start), hex(stop), hex(total_len), hex(s_max)
 
             if not s:
@@ -1417,7 +1417,7 @@ class virt:
              return
         off = 0
         for s, n_item in virt_item:
-            i = slice(n_item.start+off, n_item.stop+off, n_item.step)
+            i = slice(off, n_item.stop+off-n_item.start, n_item.step)
             s.data.__setitem__(n_item, data.__getitem__(i))
             off = i.stop
             
