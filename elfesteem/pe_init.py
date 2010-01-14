@@ -577,7 +577,7 @@ class DirDelay(Directory):
         for i, d in enumerate(self.delaydesc):
             d.name = rva
             rva+=len(d.dlldescname)
-            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
+            if d.originalfirstthunk:# and self.parent.rva2off(d.originalfirstthunk):
                 d.originalfirstthunk = rva
                 rva+=(len(d.originalfirstthunks)+1)*pe.Rva._size
             #XXX rva fthunk not patched => fun addr
@@ -775,14 +775,14 @@ class DirImport(Directory):
         for i, d in enumerate(self.impdesc):
             d.name = rva
             rva+=len(d.dlldescname)
-            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
+            if d.originalfirstthunk:# and self.parent.rva2off(d.originalfirstthunk):
                 d.originalfirstthunk = rva
                 rva+=(len(d.originalfirstthunks)+1)*pe.Rva._size
             #XXX rva fthunk not patched => fun addr
             #if d.firstthunk:
             #    d.firstthunk = rva
             #    rva+=(len(d.firstthunks)+1)*pe.Rva._size
-            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
+            if d.originalfirstthunk:# and self.parent.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
