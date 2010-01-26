@@ -782,13 +782,25 @@ class DirImport(Directory):
             #if d.firstthunk:
             #    d.firstthunk = rva
             #    rva+=(len(d.firstthunks)+1)*pe.Rva._size
-            if d.originalfirstthunk:# and self.parent.rva2off(d.originalfirstthunk):
+            if d.originalfirstthunk and d.firstthunk:
+                if isinstance(d.originalfirstthunk, ClassArray):
+                    tmp_thunk = d.originalfirstthunks
+                elif isinstance(d.firstthunks, ClassArray):
+                    tmp_thunk = d.firstthunks
+                else:
+                    fdsf
+            elif d.originalfirstthunk:# and self.parent.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
             else:
                 raise "no thunk!!"
-            
+
+            if tmp_thunk == d.originalfirstthunks:
+                d.firstthunks = tmp_thunk
+            else:
+                d.originalfirstthunks = tmp_thunk
+                
             for i, imp in enumerate(d.impbynames):
                 if isinstance(imp, ImportByName):
                     tmp_thunk[i].rva = rva
@@ -827,7 +839,11 @@ class DirImport(Directory):
                 d.originalfirstthunks.append(f)
 
                 ff = pe.Rva()
-                ff.rva = 0xDEADBEEF #default func addr
+                if ibn:
+                    ff.rva = 0xDEADBEEF #default func addr
+                else:
+                    #ord ?XXX?
+                    ff.rva = f.rva
                 d.firstthunks.append(ff)
                 of1+=4
             #for null thunk
