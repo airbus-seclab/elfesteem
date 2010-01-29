@@ -44,7 +44,7 @@ class ContentManager(object):
     def __set__(self, owner, new_content):
         owner.resize(len(owner._content), len(new_content))
         owner._content=new_content
-        owner.parse_content()
+        #owner.parse_content()
     def __delete__(self, owner):
         self.__set__(owner, None)
 
@@ -1339,7 +1339,7 @@ class DirRes(Directory):
 class drva:
     def __init__(self, x):
         self.parent = x
-    def __getitem__(self, item):
+    def get_slice_raw(self, item):
         if not type(item) is slice:
             return None
         start = self.parent.rva2off(item.start)
@@ -1356,7 +1356,14 @@ class drva:
         if not start or not stop:
             return
         n_item = slice(start, stop, step)
+        return n_item
+    
+    def __getitem__(self, item):
+        n_item = self.get_slice_raw(item)
         return self.parent.__getitem__(n_item)
+    def __setitem__(self, item, data):
+        n_item = self.get_slice_raw(item)
+        return self.parent.__setitem__(n_item, data)
     
 
 class virt:
@@ -1434,8 +1441,15 @@ class virt:
         off = 0
         for s, n_item in virt_item:
             i = slice(off, n_item.stop+off-n_item.start, n_item.step)
-            s.data.__setitem__(n_item, data.__getitem__(i))
+
+            data_slice = data.__getitem__(i)
+            s.data.__setitem__(n_item, data_slice)
             off = i.stop
+
+            #XXX test patch content
+            file_off = self.parent.rva2off(s.addr+n_item.start)
+            self.parent.content = self.parent.content[:file_off]+ data_slice + self.parent.content[file_off+len(data_slice):]
+            
             
         return #s.data.__setitem__(n_item, data)
  
@@ -1563,6 +1577,9 @@ class PE(object):
         pass
     def __getitem__(self, item):
         return self.content[item]
+    def __setitem__(self, item, data):
+        self.content.__setitem__(item, data)
+        return 
 
     def getsectionbyrva(self, rva):
         if not self.SHList:
