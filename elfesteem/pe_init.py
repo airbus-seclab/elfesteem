@@ -223,6 +223,8 @@ class SHList:
         self.shlist = ClassArray(self.parent, WShdr, of1, coffhdr.numberofsections)
         filealignment = self.parent.Opthdr.Opthdr.filealignment
         for s in self.shlist:
+            if self.parent.loadfrommem:
+                s.offset = s.addr
             if filealignment ==0:
                 raw_off = s.offset
             else:
@@ -681,7 +683,12 @@ class DirImport(Directory):
                 raise "no thunk!!"
             for i in xrange(len(tmp_thunk)):
                 if tmp_thunk[i].rva&0x80000000 == 0:
-                    d.impbynames.append(ImportByName(self.parent, tmp_thunk[i].rva))
+                    try:
+                        n = ImportByName(self.parent, tmp_thunk[i].rva)
+                    except:
+                        log.warning('cannot import from add %s'%str(tmp_thunk[i].rva))
+                        n = 0
+                    d.impbynames.append(n)
                 else:
                     d.impbynames.append(tmp_thunk[i].rva&0x7fffffff)
 
@@ -1044,10 +1051,16 @@ class DirReloc(Directory):
         if not of1: # No Reloc
             return
         ofend = of1+dirrel.size
+        print hex(of1), hex(ofend)
         self.reldesc = []
         while of1 < ofend:
             of2=of1+pe.Rel._size
             reldesc = pe.Rel(self.parent.drva[of1:of2])
+            if reldesc.size == 0:
+                log.warn('warning null reldesc')
+                reldesc.size = pe.Rel._size
+                break
+                
             reldesc.rels = ClassArray(self.parent, Reloc, self.parent.rva2off(of2), (reldesc.size-pe.Rel._size)/Reloc._size)
             reldesc.patchrel = False
             self.reldesc.append(reldesc)
@@ -1163,7 +1176,11 @@ class DirRes(Directory):
         self.resdesc = pe.ResDesc(self.parent.drva[of1:of2])
 
         nbr = self.resdesc.numberofnamedentries + self.resdesc.numberofidentries
-        self.resdesc.resentries = ClassArray(self.parent, ResEntry, self.parent.rva2off(of2), nbr)
+        try:
+            self.resdesc.resentries = ClassArray(self.parent, ResEntry, self.parent.rva2off(of2), nbr)
+        except:
+            log.warning('cannot parse resources')
+            self.resdesc.resentries = ClassArray(self.parent, ResEntry, None, 0)
         dir_todo = {of1:self.resdesc}
         dir_done = {}
         
@@ -1448,7 +1465,8 @@ class virt:
 
             #XXX test patch content
             file_off = self.parent.rva2off(s.addr+n_item.start)
-            self.parent.content = self.parent.content[:file_off]+ data_slice + self.parent.content[file_off+len(data_slice):]
+            if self.parent.content:
+                self.parent.content = self.parent.content[:file_off]+ data_slice + self.parent.content[file_off+len(data_slice):]
             
             
         return #s.data.__setitem__(n_item, data)
@@ -1482,7 +1500,7 @@ class virt:
 # PE object
 
 class PE(object):
-    def __init__(self, pestr = None):
+    def __init__(self, pestr = None, loadfrommem=False):
         self._drva = drva(self)
         self._virt = virt(self)
         
@@ -1538,6 +1556,7 @@ class PE(object):
             
 
         else:
+            self.loadfrommem = loadfrommem
             self.parse_content()
     
     content = ContentManager()
