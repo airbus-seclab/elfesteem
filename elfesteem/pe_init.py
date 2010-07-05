@@ -1717,6 +1717,22 @@ class PE(object):
     def __str__(self):
         return self.build_content()
 
+    def export_funcs(self):
+        if not self.DirExport:
+            print 'no export dir found'
+            return None, None
+
+        all_func = {}
+        for i, n in enumerate(self.DirExport.f_names):
+            all_func[n.name.name] = self.rva2virt(self.DirExport.f_address[self.DirExport.f_nameordinals[i].ordinal].rva)
+    
+            all_func[self.DirExport.f_nameordinals[i].ordinal+self.DirExport.expdesc.base] = self.rva2virt(self.DirExport.f_address[self.DirExport.f_nameordinals[i].ordinal].rva)
+    
+        #XXX todo: test if redirected export
+        return all_func
+    
+
+
 class Coff(PE):
     def parse_content(self):
         self.Coffhdr = Coffhdr(self, 0)
