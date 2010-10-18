@@ -1567,6 +1567,15 @@ class PE(object):
     def parse_content(self):
         self.Doshdr = WDoshdr(self, self.content)
         self.NTsig = NTsig(self, self.Doshdr.lfanew)
+
+
+        self.DirImport = None
+        self.DirExport = None
+        self.DirDelay = None
+        self.DirReloc = None
+        self.DirRes = None
+
+
         if self.NTsig.NTsig.signature != 0x4550:
             return
         self.Coffhdr = Coffhdr(self, self.Doshdr.lfanew+pe.NTsig._size)

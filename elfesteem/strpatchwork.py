@@ -25,6 +25,8 @@ class StrPatchwork:
             else:
                 return chr(s[item])
     def __setitem__(self, item, val):
+        if val == None:
+            return
         val = array("B",val)
         if type(item) is not slice:
             item = slice(item, item+len(val))
