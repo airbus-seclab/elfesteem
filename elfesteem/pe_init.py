@@ -115,6 +115,7 @@ class Opthdr:
         if self.parent.Coffhdr.Coffhdr.sizeofoptionalheader<numberofrva*pe.Optehdr._size+pe.Opthdr._size:
             #numberofrva = (self.parent.Coffhdr.Coffhdr.sizeofoptionalheader-pe.Opthdr._size)/pe.Optehdr._size
             log.warn('bad number of rva.. using default %d'%numberofrva)
+            numberofrva = 0x10
 
         self.Optehdr = ClassArray(self.parent, WOptehdr, of2, numberofrva)
     def __str__(self):
