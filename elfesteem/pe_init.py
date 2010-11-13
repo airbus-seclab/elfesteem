@@ -1478,18 +1478,20 @@ class virt:
          return int(l)
  
     def find(self, pattern, offset = 0):
-        offset = self.parent.virt2rva(offset)
+        if offset != 0:
+            offset = self.parent.virt2rva(offset)
 
         sections = []
         for s in self.parent.SHList:
             s_max = max(s.size, s.rawsize)
-            if offset > s.addr + s_max:#or offset > s.addr:
-                continue
-            
-            sections.append(s)
+            if offset < s.addr + s_max:
+                sections.append(s)
+
         if not sections:
             return -1
         offset -= sections[0].addr
+        if offset < 0:
+            offset = 0
         for s in sections:
             ret = s.data.find(pattern, offset)
             if ret != -1:
