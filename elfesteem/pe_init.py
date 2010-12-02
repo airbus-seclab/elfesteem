@@ -1079,6 +1079,8 @@ class DirReloc(Directory):
 
     def add_reloc(self, rels, rtype = 3, patchrel = True):
         dirrel = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC]
+        if not rels:
+            return
         o_init = rels[0]&0xFFFFF000
         offsets = ClassArray(self.parent, Reloc, None, num=0)
         for o in rels:
