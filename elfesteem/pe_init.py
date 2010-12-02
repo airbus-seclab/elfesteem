@@ -4,6 +4,7 @@ import struct, array
 import pe
 from strpatchwork import StrPatchwork
 import logging
+from collections import defaultdict
 log = logging.getLogger("peparse")
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
@@ -1081,31 +1082,46 @@ class DirReloc(Directory):
         dirrel = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC]
         if not rels:
             return
-        o_init = rels[0]&0xFFFFF000
-        offsets = ClassArray(self.parent, Reloc, None, num=0)
-        for o in rels:
-            if (o&0xFFFFF000) !=o_init:
-                raise "relocs must be in same range"
-            r = Reloc(self.parent)
-            r.rel = (rtype, o-o_init)
-            #print repr(r.rel)
-            offsets.append(r)
 
-        while len(offsets) &3:
-            r = Reloc(self.parent)
-            r.rel = (0, 0)
-            offsets.append(r)
-
-        reldesc = pe.Rel()
-        reldesc.rva = o_init
-        reldesc.size = (len(offsets)*2+8) 
-        reldesc.rels = offsets
-        reldesc.patchrel = patchrel
-        if not self.reldesc:
-            self.reldesc = []
-        self.reldesc.append(reldesc)
-        dirrel.size+=reldesc.size
+        rels.sort()
+        all_base_ad = set([x & 0xFFFFF000 for x in rels])
+        all_base_ad = list(all_base_ad)
+        all_base_ad.sort()
+        rels_by_base = defaultdict(list)
+        while rels:
+            r = rels.pop()
+            if r >= all_base_ad[-1]:
+                rels_by_base[all_base_ad[-1]].append(r)
+            else:
+                all_base_ad.pop()
+                rels_by_base[all_base_ad[-1]].append(r)
         
+        for o_init, rels in rels_by_base.items():
+            #o_init = rels[0]&0xFFFFF000
+            offsets = ClassArray(self.parent, Reloc, None, num=0)
+            for o in rels:
+                if (o&0xFFFFF000) !=o_init:
+                    raise "relocs must be in same range"
+                r = Reloc(self.parent)
+                r.rel = (rtype, o-o_init)
+                #print repr(r.rel)
+                offsets.append(r)
+    
+            while len(offsets) &3:
+                r = Reloc(self.parent)
+                r.rel = (0, 0)
+                offsets.append(r)
+    
+            reldesc = pe.Rel()
+            reldesc.rva = o_init
+            reldesc.size = (len(offsets)*2+8) 
+            reldesc.rels = offsets
+            reldesc.patchrel = patchrel
+            if not self.reldesc:
+                self.reldesc = []
+            self.reldesc.append(reldesc)
+            dirrel.size+=reldesc.size
+            
 
     def del_reloc(self, taboffset):
         if not self.reldesc:
