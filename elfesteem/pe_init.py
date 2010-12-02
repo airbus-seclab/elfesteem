@@ -1095,8 +1095,9 @@ class DirReloc(Directory):
             else:
                 all_base_ad.pop()
                 rels_by_base[all_base_ad[-1]].append(r)
-        
-        for o_init, rels in rels_by_base.items():
+        rels_by_base = [x for x in rels_by_base.items()]
+        rels_by_base.sort()
+        for o_init, rels in rels_by_base:
             #o_init = rels[0]&0xFFFFF000
             offsets = ClassArray(self.parent, Reloc, None, num=0)
             for o in rels:
