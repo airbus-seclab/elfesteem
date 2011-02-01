@@ -394,7 +394,7 @@ class PHList:
     def __repr__(self):
         r = ["   offset filesz vaddr    memsz"]
         for i,p in enumerate(self.phlist):
-            l = "%(offset)06x %(filesz)06x %(vaddr)08x %(memsz)06x "%p.ph
+            l = "%(offset)07x %(filesz)06x %(vaddr)08x %(memsz)07x %(type)02x"%p.ph
             l = ("%2i " % i)+l
             r.append(l)
             r.append("   "+" ".join([s.sh.name for s in p.shlist]))
@@ -426,35 +426,95 @@ class virt:
             if not s:
                 return None, None
             start = ad-s.sh.addr
-            return s, start
+            return [(s, start)]
         #if not type(item) is slice:
         #    return None
         start = item.start
-        s = self.parent.getsectionbyvad(start)
-        if not s:
-            log.warn('unknown virt address!')
-            return
-        start = start - s.sh.addr
-        stop = item.stop-s.sh.addr
-        if stop >s.sh.size:
-            raise ValueError('lack data %d, %d'%(stop, s.size))
-        step = item.step
-        if start==None or stop==None:
-            raise ValueError('strange limits %s, %s'%(stop, s.size))
-        n_item = slice(start, stop, step)
-        return s, n_item
+        stop  = item.stop
+        step  = item.step
+
+        total_len = stop - start
+
+        virt_item = []
+
+
+        while total_len:
+            
+            s = self.parent.getsectionbyvad(start)
+            s_max = s.size
+            #print repr(s)
+            #print "%(name)s %(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x" % s
+            #print 'virtitem', hex(start), hex(stop), hex(total_len), hex(s_max)
+
+            if not s:
+                log.warn('unknown virt address!')
+                return
+
+
+            s_start = start - s.addr
+            s_stop = stop - s.addr
+            #print hex(s_stop), hex(s_start)
+            if s_stop >s_max:
+                #print 'yy'
+                #raise ValueError('lack data %d, %d'%(stop, s_max))
+                s_stop = s_max
+
+            #print hex(s_start), hex(s_stop)
+                
+            s_len = s_stop - s_start
+            
+            total_len -= s_len
+            start += s_len
+                
+            n_item = slice(s_start, s_stop, step)
+            virt_item.append((s, n_item))
         
+        return virt_item
+
+
+
+
     def __getitem__(self, item):
-        s, n_item = self.item2virtitem(item)
-        if n_item==None:
-            return
-        return s.content.__getitem__(n_item)
+        virt_item = self.item2virtitem(item)
+        if not virt_item:
+             return
+        data_out = ""
+        for s, n_item in virt_item:
+            data_out += s.data.__getitem__(n_item)
+        return data_out
+
+
 
     def __setitem__(self, item, data):
         s, n_item = self.item2virtitem(item)
         if n_item == None:
             return
         return s.content.__setitem__(n_item, data)
+
+    def __setitem__(self, item, data):
+        if not type(item) is slice:
+            item = slice(item, item+len(data), None)
+            
+        virt_item = self.item2virtitem(item)
+        if not virt_item:
+             return
+        off = 0
+        for s, n_item in virt_item:
+            i = slice(off, n_item.stop+off-n_item.start, n_item.step)
+
+            data_slice = data.__getitem__(i)
+            s.content.__setitem__(n_item, data_slice)
+            off = i.stop
+
+            """
+            #XXX test patch content
+            file_off = self.parent.rva2off(s.addr+n_item.start)
+            if self.parent.content:
+                self.parent.content = self.parent.content[:file_off]+ data_slice + self.parent.content[file_off+len(data_slice):]
+            """
+            
+            
+        return #s.data.__setitem__(n_item, data)
 
     def __len__(self):
         m = self.parent.sh.shlist[0]

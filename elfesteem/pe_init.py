@@ -474,13 +474,22 @@ class DirDelay(Directory):
             self.delaydesc = ClassArray(self.parent, WDelayDesc, None)
             return
         self.delaydesc = ClassArray(self.parent, WDelayDesc, self.parent.rva2off(of1))
+
+            
         for i, d in enumerate(self.delaydesc):
-            d.dlldescname = DescName(self.parent, d.name)
-            d.originalfirstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(d.originalfirstthunk))
-            d.firstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(d.firstthunk))
+
+            isfromva = (d.attrs & 1) == 0
+            if isfromva:
+                isfromva = lambda x:self.parent.virt2rva(x)
+            else:
+                isfromva = lambda x:x
+    
+            d.dlldescname = DescName(self.parent, isfromva(d.name))
+            d.originalfirstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(isfromva(d.originalfirstthunk)))
+            d.firstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(isfromva(d.firstthunk)))
 
             d.impbynames = []
-            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
+            if d.originalfirstthunk and self.parent.rva2off(isfromva(d.originalfirstthunk)):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
@@ -488,9 +497,9 @@ class DirDelay(Directory):
                 raise "no thunk!!"
             for i in xrange(len(tmp_thunk)):
                 if tmp_thunk[i].rva&0x80000000 == 0:
-                    d.impbynames.append(ImportByName(self.parent, tmp_thunk[i].rva))
+                    d.impbynames.append(ImportByName(self.parent, isfromva(tmp_thunk[i].rva)))
                 else:
-                    d.impbynames.append(tmp_thunk[i].rva&0x7fffffff)
+                    d.impbynames.append(isfromva(tmp_thunk[i].rva&0x7fffffff))
 
     def build_content(self, c):
         dirdelay = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_DELAY_IMPORT]
@@ -516,7 +525,13 @@ class DirDelay(Directory):
 
     def get_funcrva(self, f):
         for i, d in enumerate(self.delaydesc):
-            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
+            isfromva = (d.attrs & 1) == 0
+            if isfromva:
+                isfromva = lambda x:self.parent.virt2rva(x)
+            else:
+                isfromva = lambda x:x
+
+            if d.originalfirstthunk and self.parent.rva2off(isfromva(d.originalfirstthunk)):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
@@ -527,12 +542,12 @@ class DirDelay(Directory):
                 for j, imp in enumerate(d.impbynames):
                     if isinstance(imp, ImportByName):
                         if f == imp.name:
-                            return d.firstthunk+j*4
+                            return isfromva(d.firstthunk)+j*4
             elif type(f) in (int, long):
                 for j, imp in enumerate(d.impbynames):
                     if not isinstance(imp, ImportByName):
-                        if tmp_thunk[j].rva&0x7FFFFFFF == f:
-                            return d.firstthunk+j*4
+                        if isfromva(tmp_thunk[j].rva&0x7FFFFFFF) == f:
+                            return isfromva(d.firstthunk)+j*4
             else:
                 raise ValueError('unknown func tpye %s'%str(f))
                             
@@ -579,10 +594,15 @@ class DirDelay(Directory):
             self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT].size= size
         rva+=(len(self.delaydesc)+1)*pe.Delaydesc._size
         for i, d in enumerate(self.delaydesc):
-            d.name = rva
+            if isfromva:
+                isfromva = lambda x:self.parent.rva2virt(x)
+            else:
+                isfromva = lambda x:x
+
+            d.name = isfromva(rva)
             rva+=len(d.dlldescname)
             if d.originalfirstthunk:# and self.parent.rva2off(d.originalfirstthunk):
-                d.originalfirstthunk = rva
+                d.originalfirstthunk = isfromva(rva)
                 rva+=(len(d.originalfirstthunks)+1)*pe.Rva._size
             #XXX rva fthunk not patched => fun addr
             #if d.firstthunk:
@@ -597,7 +617,7 @@ class DirDelay(Directory):
             
             for i, imp in enumerate(d.impbynames):
                 if isinstance(imp, ImportByName):
-                    tmp_thunk[i].rva = rva
+                    tmp_thunk[i].rva = isfromva(rva)
                     rva+=len(imp)
 
     def add_dlldesc(self, new_dll):
@@ -1681,6 +1701,14 @@ class PE(object):
 
     def off2virt(self, off):
         return self.rva2virt(self.off2rva(off))
+
+    def is_in_virt_address(self, ad):
+        if ad < self.Opthdr.Opthdr.ImageBase:
+            return False
+        s = self.SHList.shlist[-1]
+        if ad < self.Opthdr.Opthdr.ImageBase + s.addr + s.size:
+            return True
+        return False
 
     def get_drva(self):
         return self._drva
