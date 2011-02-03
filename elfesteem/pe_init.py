@@ -1538,6 +1538,9 @@ class virt:
             offset = 0
         return -1
 
+    def is_addr_in(self, ad):
+        return self.parent.is_in_virt_address(ad)
+
 
 # PE object
 
@@ -1653,21 +1656,23 @@ class PE(object):
 
     def getsectionbyrva(self, rva):
         if not self.SHList:
-            return
+            return None
         for s in self.SHList:
             if s.addr <= rva < s.addr+s.size:
                 return s
+        return None
 
     def getsectionbyoff(self, off):
         if not self.SHList:
-            return
+            return None
         for s in self.SHList:
             if s.offset <= off < s.offset+s.rawsize:
                 return s
+        return None
             
     def getsectionbyname(self, name):
         if not self.SHList:
-            return
+            return None
         for s in self.SHList:
             if s.name.strip('\x00') ==  name:
                 return s
@@ -1744,7 +1749,6 @@ class PE(object):
             s+=end
         s+=l
         return s
-        
         
         
     def build_content(self):
