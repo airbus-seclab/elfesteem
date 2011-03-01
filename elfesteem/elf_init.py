@@ -441,7 +441,7 @@ class virt:
         while total_len:
             
             s = self.parent.getsectionbyvad(start)
-            s_max = s.size
+            s_max = s.sh.size
             #print repr(s)
             #print "%(name)s %(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x" % s
             #print 'virtitem', hex(start), hex(stop), hex(total_len), hex(s_max)
@@ -451,8 +451,8 @@ class virt:
                 return
 
 
-            s_start = start - s.addr
-            s_stop = stop - s.addr
+            s_start = start - s.sh.addr
+            s_stop = stop - s.sh.addr
             #print hex(s_stop), hex(s_start)
             if s_stop >s_max:
                 #print 'yy'
@@ -480,7 +480,7 @@ class virt:
              return
         data_out = ""
         for s, n_item in virt_item:
-            data_out += s.data.__getitem__(n_item)
+            data_out += s.content.__getitem__(n_item)
         return data_out
 
 
@@ -524,6 +524,8 @@ class virt:
         l = m.sh.addr+m.sh.size
         return l
 
+    def is_addr_in(self, ad):
+        return self.parent.is_in_virt_address(ad)
 
 # ELF object
 
@@ -567,6 +569,14 @@ class ELF(object):
             if s.sh.addr <= ad < s.sh.addr+s.sh.size:
                 return s
 
+    def is_in_virt_address(self, ad):
+        for s in self.sh:
+            if not 'addr' in s.__dict__:
+                continue
+            print repr(s)
+            if s.addr <= ad < s.addr + s.size:
+                return True
+        return False
 
 if __name__ == "__main__":
     import rlcompleter,readline,pdb
