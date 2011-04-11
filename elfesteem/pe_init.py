@@ -494,7 +494,8 @@ class DirDelay(Directory):
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
             else:
-                raise "no thunk!!"
+                print  ValueError("no thunk in delay dir!! ")
+                return
             for i in xrange(len(tmp_thunk)):
                 if tmp_thunk[i].rva&0x80000000 == 0:
                     d.impbynames.append(ImportByName(self.parent, isfromva(tmp_thunk[i].rva)))
