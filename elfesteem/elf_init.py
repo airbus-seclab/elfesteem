@@ -71,7 +71,7 @@ class ContentManager(object):
             return owner._content
     def __set__(self, owner, new_content):
         owner.resize(len(owner._content), len(new_content))
-        owner._content=new_content
+        owner._content=StrPatchwork(new_content)
         owner.parse_content()
     def __delete__(self, owner):
         self.__set__(owner, None)
@@ -301,7 +301,7 @@ class SHList:
 
         for s in self.shlist:
             if not isinstance(s, NoBitsSection):
-                s._content = parent[s.sh.offset: s.sh.offset+s.sh.size]
+                s._content = StrPatchwork(parent[s.sh.offset: s.sh.offset+s.sh.size])
             
             
         # Follow dependencies when initializing sections
@@ -557,7 +557,7 @@ class ELF(object):
         c[0] = str(self.Ehdr)
         c[self.Ehdr.phoff] = str(self.ph)
         for s in self.sh:
-            c[s.sh.offset] = s.content
+            c[s.sh.offset] = str(s.content)
         c[self.Ehdr.shoff] = str(self.sh)
         return str(c)
 

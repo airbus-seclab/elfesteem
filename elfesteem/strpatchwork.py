@@ -12,7 +12,7 @@ class StrPatchwork:
         if type(item) is slice:
             end = item.stop
             l = len(s)
-            if l < end:
+            if l < end and end != 0x7fffffff: #XXX hack [x:] give 2GB limit
                 # This is inefficient but avoids complicated maths if step is not 1
                 s = s[:] 
                 s.extend(array("B",self.paddingbyte*(end-l)))
