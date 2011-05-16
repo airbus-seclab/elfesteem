@@ -569,6 +569,13 @@ class ELF(object):
             if s.sh.addr <= ad < s.sh.addr+s.sh.size:
                 return s
 
+    def getsectionbyname(self, name):
+        for s in self.sh:
+            if s.sh.name.strip('\x00') == name:
+                return s.sh
+        return None
+
+
     def is_in_virt_address(self, ad):
         for s in self.sh:
             if not 'addr' in s.__dict__:
