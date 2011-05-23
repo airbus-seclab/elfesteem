@@ -45,8 +45,10 @@ class Opthdr(CStruct):
                 ("sizeofuninitializeddata","u32"),
                 ("AddressOfEntryPoint","u32"),
                 ("BaseOfCode","u32"),
-                ("BaseOfData","u32"),
-                ("ImageBase","u32"),
+                ("BaseOfData","u32")]
+    
+class NThdr(CStruct):
+    _fields = [ ("ImageBase","ptr"),
                 ("sectionalignment","u32"),
                 ("filealignment","u32"),
                 ("majoroperatingsystemversion","u16"),
@@ -61,10 +63,10 @@ class Opthdr(CStruct):
                 ("CheckSum","u32"),
                 ("subsystem","u16"),
                 ("dllcharacteristics","u16"),
-                ("sizeofstackreserve","u32"),
-                ("sizeofstackcommit","u32"),
-                ("sizeofheapreserve","u32"),
-                ("sizeofheapcommit","u32"),
+                ("sizeofstackreserve","ptr"),
+                ("sizeofstackcommit","ptr"),
+                ("sizeofheapreserve","ptr"),
+                ("sizeofheapcommit","ptr"),
                 ("loaderflags","u32"),
                 ("numberofrvaandsizes","u32") ]
 

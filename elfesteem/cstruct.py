@@ -31,7 +31,7 @@ def fix_size(fields, size):
         print name, v
         out.append((name, v))
     fields = out
-    print fields
+    print "fields", fields
     return fields
             
         
@@ -62,7 +62,6 @@ class CStruct(object):
         pstr = fix_size(self._fields, size)
         self._packstring =  sex + self._packformat+"".join(map(lambda x:x[1],pstr))
         self._size = struct.calcsize(self._packstring)
-
 
         self._names = map(lambda x:x[0], self._fields)
         if kargs:

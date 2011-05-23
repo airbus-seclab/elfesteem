@@ -27,8 +27,8 @@ class StructWrapper(object):
             return type.__new__(cls, name, bases, dct)
     wrapped = None
     
-    def __init__(self, parent, *args, **kargs):
-        self.cstr = self.wrapped(*args, **kargs)
+    def __init__(self, parent, sex, size, *args, **kargs):
+        self.cstr = self.wrapped(sex, size, *args, **kargs)
         self.parent = parent
     def __getitem__(self, item):
         return getattr(self,item)
@@ -36,6 +36,8 @@ class StructWrapper(object):
         return "<W-"+repr(self.cstr)[1:]
     def __str__(self):
         return str(self.cstr)
+            
+
             
 
 class ContentManager(object):
@@ -59,16 +61,28 @@ class WNTsig(StructWrapper):
 class WCoffhdr(StructWrapper):
     wrapped = pe.Coffhdr
 
-class NTsig:
-    def __init__(self, parent, of1 = None):
-        self.parent = parent
-        if of1 == None: # No Coffhdr
-            self.NTsig = pe.NTsig()
-            return
-        of2 = of1+pe.NTsig._size
-        strntsig = parent[of1:of2]
-        self.NTsig = pe.NTsig(strntsig)
+class WOpthdr(StructWrapper):
+    wrapped = pe.Opthdr
 
+class WNThdr(StructWrapper):
+    wrapped = pe.NThdr
+
+class WNTsig(StructWrapper):
+    wrapped = pe.NTsig
+
+class NTsig(object):
+    class __metaclass__(type):
+        def __new__(cls, name, bases, dct):
+            o = type.__new__(cls, name, bases, dct)
+            return o
+        def __call__(cls, parent):
+            off = parent.Doshdr.lfanew#
+            if parent.content:
+                s = parent.content[off:off+4]
+            else:
+                s = ""
+            i = WNTsig(parent, 1, 32, s)#cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
+            return i
     def __str__(self):
         return str(self.NTsig)
     
@@ -76,32 +90,146 @@ class NTsig:
         return repr(self.NTsig)
 
 
-
-class Coffhdr:
-    def __init__(self, parent, of1 = None):
-        self.parent = parent
-        if of1 == None: # No Coffhdr
-            self.Coffhdr = pe.Coffhdr()
-            return
-        of2 = of1+pe.Coffhdr._size
-        strcoffhdr = parent[of1:of2]
-        self.Coffhdr = pe.Coffhdr(strcoffhdr)
-
+class Coffhdr(object):
+    class __metaclass__(type):
+        def __new__(cls, name, bases, dct):
+            o = type.__new__(cls, name, bases, dct)
+            return o
+        def __call__(cls, parent):
+            off = parent.Doshdr.lfanew+parent.NTsig.cstr._size
+            size = pe.Coffhdr(1, 32)._size
+            if parent.content:
+                s = parent.content[off:off+size]
+            else:
+                s = ""
+            i = WCoffhdr(parent, 1, 32, s)#cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
+            return i
     def __str__(self):
-        return str(self.Coffhdr)
+        return str(self.NTsig)
     
     def __repr__(self):
-        return repr(self.Coffhdr)
+        return repr(self.NTsig)
 
+class Opthdr(object):
+    class __metaclass__(type):
+        def __new__(cls, name, bases, dct):
+            o = type.__new__(cls, name, bases, dct)
+            return o
+        def __call__(cls, parent):
+            of1 = parent.Doshdr.lfanew+parent.NTsig.cstr._size+parent.Coffhdr.cstr._size
+            size = pe.Opthdr(1, 32)._size
+            if parent.content:
+                s = parent.content[of1:of1+size]
+            else:
+                s = ""
+            i = WOpthdr(parent, 1, 32, s)
+            of1 = of1+size
+            
+            """
+            if self.parent.Coffhdr.Coffhdr.sizeofoptionalheader == 0: # No Coffhdr
+                self.Opthdr = pe.Opthdr()
+                self.Optehdr = ClassArray(self.parent, WOptehdr, None, 16)
+                return
+            of2 = off+pe.Opthdr._size
+                
+            size = pe.Opthdr(1, 32)._size
+            s = parent.content[off:off+size]
+            i = WCoffhdr(parent, 1, 32, s)#cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
+            """
+            return i
+    def __str__(self):
+        return str(self.NTsig)
+    
+    def __repr__(self):
+        return repr(self.NTsig)
+
+
+class NThdr(object):
+    class __metaclass__(type):
+        def __new__(cls, name, bases, dct):
+            o = type.__new__(cls, name, bases, dct)
+            return o
+        def __call__(cls, parent):
+            off = parent.Doshdr.lfanew+parent.NTsig.cstr._size+parent.Coffhdr.cstr._size
+            off += parent.Opthdr.cstr._size
+            size = pe.NThdr(1, 32)._size
+            if parent.content:
+                s = parent.content[off:off+size]
+            else:
+                s = ""
+            i = WNThdr(parent, 1, 32, s)
+            return i
+    def __str__(self):
+        return str(self.NTsig)
+    
+    def __repr__(self):
+        return repr(self.NTsig)
+
+
+class Optehdr(object):
+    class __metaclass__(type):
+        def __new__(cls, name, bases, dct):
+            o = type.__new__(cls, name, bases, dct)
+            return o
+        def __call__(cls, parent):
+            off = parent.Doshdr.lfanew+parent.NTsig.cstr._size+parent.Coffhdr.cstr._size
+            off += parent.Opthdr.cstr._size
+            off += parent.NThdr.cstr._size
+            numberofrva = parent.NThdr.numberofrvaandsizes
+            size_e = pe.Optehdr(1, 32)._size
+            if parent.Coffhdr.sizeofoptionalheader < numberofrva*size_e + parent.Opthdr.cstr._size:
+                numberofrva = (parent.Coffhdr.sizeofoptionalheader-parent.Opthdr.cstr._size)/size_e
+                log.warn('bad number of rva.. using default %d'%numberofrva)
+                numberofrva = 0x10
+            i = ClassArray(parent, parent.sex, parent.size, WOptehdr, off, numberofrva)
+    
+            
+            """
+            if self.parent.Coffhdr.Coffhdr.sizeofoptionalheader == 0: # No Coffhdr
+                self.Opthdr = pe.Opthdr()
+                self.Optehdr = ClassArray(self.parent, WOptehdr, None, 16)
+                return
+            of2 = off+pe.Opthdr._size
+                
+            size = pe.Opthdr(1, 32)._size
+            s = parent.content[off:off+size]
+            i = WCoffhdr(parent, 1, 32, s)#cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
+            """
+            return i
+    def __str__(self):
+        return str(self.NTsig)
+    
+    def __repr__(self):
+        return repr(self.NTsig)
+    
+
+
+#class Coffhdr:
+#    def __init__(self, parent, of1 = None):
+#        self.parent = parent
+#        if of1 == None: # No Coffhdr
+#            self.Coffhdr = pe.Coffhdr()
+#            return
+#        of2 = of1+pe.Coffhdr._size
+#        strcoffhdr = parent[of1:of2]
+#        self.Coffhdr = pe.Coffhdr(strcoffhdr)
+#
+#    def __str__(self):
+#        return str(self.Coffhdr)
+#    
+#    def __repr__(self):
+#        return repr(self.Coffhdr)
+#
 class WOptehdr(StructWrapper):
     wrapped = pe.Optehdr
-    #_size = pe.Optehdr._size
+    tmp = pe.Optehdr(1, 32)
+    _size = tmp._size
 
 class WSymb(StructWrapper):
     wrapped = pe.Symb
     #_size = pe.Symb._size
 
-
+"""
 class Opthdr:
     def __init__(self, parent, of1 = None):
         self.parent = parent
@@ -124,45 +252,67 @@ class Opthdr:
 
     def __repr__(self):
         return "<Opthdr>\n"+repr(self.Optehdr)
-
+"""
 
 
 class WShdr(StructWrapper):
     wrapped = pe.Shdr
     #_size = pe.Shdr._size
+    tmp = pe.Shdr(1, 32)
+    _size = tmp._size
 
 class WImpDesc(StructWrapper):
     wrapped = pe.ImpDesc
     #_size = pe.ImpDesc._size
+    tmp = pe.ImpDesc(1, 32)
+    _size = tmp._size
 
 class WDelayDesc(StructWrapper):
     wrapped = pe.DelayDesc
     #_size = pe.DelayDesc._size
+    tmp = pe.DelayDesc(1, 32)
+    _size = tmp._size
 
 class WRva(StructWrapper):
     wrapped = pe.Rva
     #_size = pe.Rva._size
+    tmp = pe.Rva(1, 32)
+    _size = tmp._size
 
 class WOrdinal(StructWrapper):
     wrapped = pe.Ordinal
     #_size = pe.Ordinal._size
 
+class WResDesc(StructWrapper):
+    wrapped = pe.ResDesc
+    #_size = pe.ResEntry._size
+    tmp = pe.ResDesc(1, 32)
+    _size = tmp._size
+
 class WResEntry(StructWrapper):
     wrapped = pe.ResEntry
     #_size = pe.ResEntry._size
+    tmp = pe.ResEntry(1, 32)
+    _size = tmp._size
 
+
+class WResDataEntry(StructWrapper):
+    wrapped = pe.ResDataEntry
+    #_size = pe.ResDataEntry._size
+    tmp = pe.ResDataEntry(1, 32)
+    _size = tmp._size
 
 #if not num => null class terminated
 class ClassArray:
-    def __init__(self, parent, cls, of1, num = None):
+    def __init__(self, parent, sex, size, cls, of1, num = None):
         self.parent = parent
         self.cls = cls
         self.list = []
-        self.null_str = '\x00'*self.cls._size
+        self.null_str = '\x00'*cls(parent, sex, size)._size
         self.num = num
         if not of1:
             if num!=None:
-                self.list = [self.cls(parent, self.null_str) for x in xrange(num)]
+                self.list = [self.cls(parent, sex, size, self.null_str) for x in xrange(num)]
             return
         index = -1
         while True:
@@ -174,7 +324,7 @@ class ClassArray:
                     break
             elif index==num:
                 break
-            self.list.append(self.cls(parent, cls_str))
+            self.list.append(self.cls(parent, sex, size, cls_str))
             of1 = of2
     @classmethod            
     def from_cls(cls, parent, clst, num = None):
@@ -214,27 +364,44 @@ class ClassArray:
         if self.num!=None:
             self.num+=1
             
-        
-class SHList:
+
+#, self.Doshdr.lfanew+self.NTsig.cstr._size+self.Coffhdr.cstr._size+self.Coffhdr.sizeofoptionalheader)
+class SHList(object):
     def __init__(self, parent, of1 = None):
         self.parent = parent
         if of1 == None: # No shlist
             self.shlist = ClassArray(self.parent, WShdr, None, 0)
             return
-        coffhdr = self.parent.Coffhdr.Coffhdr
-        self.shlist = ClassArray(self.parent, WShdr, of1, coffhdr.numberofsections)
-        filealignment = self.parent.Opthdr.Opthdr.filealignment
-        for s in self.shlist:
-            if self.parent.loadfrommem:
-                s.offset = s.addr
-            if filealignment ==0:
-                raw_off = s.offset
-            else:
-                raw_off = filealignment*(s.offset/filealignment)
-            if raw_off != s.offset:
-                log.warn('unaligned raw section!')
-            s.data = StrPatchwork()
-            s.data[0] = self.parent[raw_off:raw_off+s.rawsize]
+
+    class __metaclass__(type):
+        def __new__(cls, name, bases, dct):
+            o = type.__new__(cls, name, bases, dct)
+            return o
+        def __call__(cls, parent):
+            i = cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
+
+            off = parent.Doshdr.lfanew+parent.NTsig.cstr._size+parent.Coffhdr.cstr._size+parent.Coffhdr.sizeofoptionalheader
+
+            if not parent.content:
+                i.shlist = []
+                return i
+            
+            i.shlist = ClassArray(parent, parent.sex, parent.size, WShdr, off, parent.Coffhdr.numberofsections)
+            filealignment = parent.NThdr.filealignment
+            for s in i.shlist:
+                if parent.loadfrommem:
+                    s.offset = s.addr
+                if filealignment ==0:
+                    raw_off = s.offset
+                else:
+                    raw_off = filealignment*(s.offset/filealignment)
+                if raw_off != s.offset:
+                    log.warn('unaligned raw section!')
+                s.data = StrPatchwork()
+                s.data[0] = parent.content[raw_off:raw_off+s.rawsize]
+                
+            return i
+
 
     def __getitem__(self, item):
         return self.shlist[item]
@@ -416,7 +583,7 @@ class SUnicode:
         
 class ResEntry:
     _size = 8
-    def __init__(self, parent, s):
+    def __init__(self, parent, sex, size, s = None):
         self.parent = parent
         self.s = s
         if not s:
@@ -425,11 +592,11 @@ class ResEntry:
         name, offsettodata = struct.unpack('LL', s)
         self.name = name
         self.name_s = None
-        self.offsettodata = (offsettodata & 0x7FFFFFFF) + self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva #XXX res rva??
+        self.offsettodata = (offsettodata & 0x7FFFFFFF) + self.parent.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva #XXX res rva??
         self.offsettosubdir = None
         self.data = None
         if name & 0x80000000:
-            self.name = (name & 0x7FFFFFFF) + self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva #XXX res rva??
+            self.name = (name & 0x7FFFFFFF) + self.parent.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva #XXX res rva??
             self.name_s = SUnicode(parent, self.name) #XXX res rva??
         if offsettodata & 0x80000000:
             self.offsettosubdir = self.offsettodata
@@ -463,45 +630,55 @@ class ResEntry:
 
 class DirDelay(Directory):
     dirname = 'Directory Delay'
-    def __init__(self, parent):
-        self.parent = parent
-        if not len(self.parent.Opthdr.Optehdr):
-            self.delaydesc = ClassArray(self.parent, WDelayDesc, None)
-            return
-        dirdelay = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_DELAY_IMPORT]
-        of1 = dirdelay.rva
-        if not of1: # No Delay
-            self.delaydesc = ClassArray(self.parent, WDelayDesc, None)
-            return
-        self.delaydesc = ClassArray(self.parent, WDelayDesc, self.parent.rva2off(of1))
-
-            
-        for i, d in enumerate(self.delaydesc):
-
-            isfromva = (d.attrs & 1) == 0
-            if isfromva:
-                isfromva = lambda x:self.parent.virt2rva(x)
-            else:
-                isfromva = lambda x:x
-    
-            d.dlldescname = DescName(self.parent, isfromva(d.name))
-            d.originalfirstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(isfromva(d.originalfirstthunk)))
-            d.firstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(isfromva(d.firstthunk)))
-
-            d.impbynames = []
-            if d.originalfirstthunk and self.parent.rva2off(isfromva(d.originalfirstthunk)):
-                tmp_thunk = d.originalfirstthunks
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                print  ValueError("no thunk in delay dir!! ")
+    def __init__(self):
+        pass
+    class __metaclass__(type):
+        def __new__(cls, name, bases, dct):
+            o = type.__new__(cls, name, bases, dct)
+            return o
+        def __call__(cls, parent):
+            o_cls = cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
+            """
+            def __init__(self, parent):
+            self.parent = parent
+            """
+            if not len(parent.Optehdr):
+                o_cls.delaydesc = ClassArray(parent, parent.sex, parent.size, WDelayDesc, None)
                 return
-            for i in xrange(len(tmp_thunk)):
-                if tmp_thunk[i].rva&0x80000000 == 0:
-                    d.impbynames.append(ImportByName(self.parent, isfromva(tmp_thunk[i].rva)))
+            dirdelay = parent.Optehdr[pe.DIRECTORY_ENTRY_DELAY_IMPORT]
+            of1 = dirdelay.rva
+            if not of1: # No Delay
+                o_cls.delaydesc = ClassArray(parent, parent.sex, parent.size, WDelayDesc, None)
+                return
+            self.delaydesc = ClassArray(self.parent, WDelayDesc, self.parent.rva2off(of1))
+    
+                
+            for i, d in enumerate(self.delaydesc):
+    
+                isfromva = (d.attrs & 1) == 0
+                if isfromva:
+                    isfromva = lambda x:self.parent.virt2rva(x)
                 else:
-                    d.impbynames.append(isfromva(tmp_thunk[i].rva&0x7fffffff))
-
+                    isfromva = lambda x:x
+        
+                d.dlldescname = DescName(self.parent, isfromva(d.name))
+                d.originalfirstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(isfromva(d.originalfirstthunk)))
+                d.firstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(isfromva(d.firstthunk)))
+    
+                d.impbynames = []
+                if d.originalfirstthunk and self.parent.rva2off(isfromva(d.originalfirstthunk)):
+                    tmp_thunk = d.originalfirstthunks
+                elif d.firstthunk:
+                    tmp_thunk = d.firstthunks
+                else:
+                    print  ValueError("no thunk in delay dir!! ")
+                    return
+                for i in xrange(len(tmp_thunk)):
+                    if tmp_thunk[i].rva&0x80000000 == 0:
+                        d.impbynames.append(ImportByName(self.parent, isfromva(tmp_thunk[i].rva)))
+                    else:
+                        d.impbynames.append(isfromva(tmp_thunk[i].rva&0x7fffffff))
+    
     def build_content(self, c):
         dirdelay = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_DELAY_IMPORT]
         of1 = dirdelay.rva
@@ -679,42 +856,52 @@ class DirDelay(Directory):
                 rep.append(l)
         return "\n".join(rep)
 
-class DirImport(Directory):
+class DirImport(object):
     dirname = 'Directory Import'
-    def __init__(self, parent):
-        self.parent = parent
-        if not len(self.parent.Opthdr.Optehdr):
-            self.impdesc = ClassArray(self.parent, WImpDesc, None)
-            return
-        dirimp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT]
-        of1 = dirimp.rva
-        if not of1: # No Import
-            self.impdesc = ClassArray(self.parent, WImpDesc, None)
-            return
-        self.impdesc = ClassArray(self.parent, WImpDesc, self.parent.rva2off(of1))
-        for i, d in enumerate(self.impdesc):
-            d.dlldescname = DescName(self.parent, d.name)
-            d.originalfirstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(d.originalfirstthunk))
-            d.firstthunks = ClassArray(self.parent, WRva, self.parent.rva2off(d.firstthunk))
-
-            d.impbynames = []
-            if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
-                tmp_thunk = d.originalfirstthunks
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise "no thunk!!"
-            for i in xrange(len(tmp_thunk)):
-                if tmp_thunk[i].rva&0x80000000 == 0:
-                    try:
-                        n = ImportByName(self.parent, tmp_thunk[i].rva)
-                    except:
-                        log.warning('cannot import from add %s'%str(tmp_thunk[i].rva))
-                        n = 0
-                    d.impbynames.append(n)
+    def __init__(self):
+        pass
+    class __metaclass__(type):
+        def __new__(cls, name, bases, dct):
+            o = type.__new__(cls, name, bases, dct)
+            return o
+        def __call__(cls, parent):
+            o_cls = cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
+            """
+            def __init__(self, parent):
+                self.parent = parent
+                if not len(self.parent.Opthdr.Optehdr):
+                    self.impdesc = ClassArray(self.parent, WImpDesc, None)
+                    return
+            """
+            dirimp = parent.Optehdr[pe.DIRECTORY_ENTRY_IMPORT]
+            of1 = dirimp.rva
+            if not of1: # No Import
+                o_cls.impdesc = ClassArray(parent, parent.sex, parent.size, WImpDesc, None)
+                return
+            o_cls.impdesc = ClassArray(parent, parent.sex, parent.size, WImpDesc, parent.rva2off(of1))
+            for i, d in enumerate(o_cls.impdesc):
+                d.dlldescname = DescName(parent, d.name)
+                d.originalfirstthunks = ClassArray(parent, parent.sex, parent.size, WRva, parent.rva2off(d.originalfirstthunk))
+                d.firstthunks = ClassArray(parent, parent.sex, parent.size, WRva, parent.rva2off(d.firstthunk))
+    
+                d.impbynames = []
+                if d.originalfirstthunk and parent.rva2off(d.originalfirstthunk):
+                    tmp_thunk = d.originalfirstthunks
+                elif d.firstthunk:
+                    tmp_thunk = d.firstthunks
                 else:
-                    d.impbynames.append(tmp_thunk[i].rva&0x7fffffff)
-
+                    raise "no thunk!!"
+                for i in xrange(len(tmp_thunk)):
+                    if tmp_thunk[i].rva&0x80000000 == 0:
+                        try:
+                            n = ImportByName(parent, tmp_thunk[i].rva)
+                        except:
+                            log.warning('cannot import from add %s'%str(tmp_thunk[i].rva))
+                            n = 0
+                        d.impbynames.append(n)
+                    else:
+                        d.impbynames.append(tmp_thunk[i].rva&0x7fffffff)
+    
     
     def build_content(self, c):
         dirimp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_IMPORT]
@@ -901,24 +1088,34 @@ class DirImport(Directory):
 
 class DirExport(Directory):
     dirname = 'Directory Export'
-    def __init__(self, parent):
-        self.parent = parent
-        if not len(self.parent.Opthdr.Optehdr):
-            return
-        direxp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT]
-        self.expdesc = None
-        of1 = direxp.rva
-        if not of1: # No Export
-            return
-        of2 = of1+pe.ExpDesc._size
-        self.expdesc = pe.ExpDesc(self.parent.drva[of1:of2])
-        self.dlldescname = DescName(self.parent, self.expdesc.name)
-        self.f_address = ClassArray(self.parent, WRva, self.parent.rva2off(self.expdesc.addressoffunctions), self.expdesc.numberoffunctions)
-        self.f_names = ClassArray(self.parent, WRva, self.parent.rva2off(self.expdesc.addressofnames), self.expdesc.numberofnames)
-        self.f_nameordinals = ClassArray(self.parent, WOrdinal, self.parent.rva2off(self.expdesc.addressofordinals), self.expdesc.numberofnames)
-        for n in self.f_names:
-            n.name = DescName(self.parent, n.rva)
-
+    def __init__(self):
+        pass
+    class __metaclass__(type):
+        def __new__(cls, name, bases, dct):
+            o = type.__new__(cls, name, bases, dct)
+            return o
+        def __call__(cls, parent):
+            o_cls = cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
+            """
+            def __init__(self, parent):
+            self.parent = parent
+            """
+            if not len(parent.Optehdr):
+                return
+            direxp = parent.Optehdr[pe.DIRECTORY_ENTRY_EXPORT]
+            o_cls.expdesc = None
+            of1 = direxp.rva
+            if not of1: # No Export
+                return
+            of2 = of1+pe.ExpDesc._size
+            self.expdesc = pe.ExpDesc(self.parent.drva[of1:of2])
+            self.dlldescname = DescName(self.parent, self.expdesc.name)
+            self.f_address = ClassArray(self.parent, WRva, self.parent.rva2off(self.expdesc.addressoffunctions), self.expdesc.numberoffunctions)
+            self.f_names = ClassArray(self.parent, WRva, self.parent.rva2off(self.expdesc.addressofnames), self.expdesc.numberofnames)
+            self.f_nameordinals = ClassArray(self.parent, WOrdinal, self.parent.rva2off(self.expdesc.addressofordinals), self.expdesc.numberofnames)
+            for n in self.f_names:
+                n.name = DescName(self.parent, n.rva)
+    
 
     def build_content(self, c):
         direxp = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_EXPORT]
@@ -1064,31 +1261,41 @@ class DirExport(Directory):
 
 class DirReloc(Directory):
     dirname = 'Directory Relocation'
-    def __init__(self, parent):
-        self.parent = parent
-        if not len(self.parent.Opthdr.Optehdr):
-            return
-        dirrel = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC]
-        self.reldesc = None
-        of1 = dirrel.rva
-        if not of1: # No Reloc
-            return
-        ofend = of1+dirrel.size
-        print hex(of1), hex(ofend)
-        self.reldesc = []
-        while of1 < ofend:
-            of2=of1+pe.Rel._size
-            reldesc = pe.Rel(self.parent.drva[of1:of2])
-            if reldesc.size == 0:
-                log.warn('warning null reldesc')
-                reldesc.size = pe.Rel._size
-                break
-                
-            reldesc.rels = ClassArray(self.parent, Reloc, self.parent.rva2off(of2), (reldesc.size-pe.Rel._size)/Reloc._size)
-            reldesc.patchrel = False
-            self.reldesc.append(reldesc)
-            of1+=reldesc.size
-
+    def __init__(self):
+        pass
+    class __metaclass__(type):
+        def __new__(cls, name, bases, dct):
+            o = type.__new__(cls, name, bases, dct)
+            return o
+        def __call__(cls, parent):
+            o_cls = cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
+            """
+            def __init__(self, parent):
+                self.parent = parent
+            """
+            if not len(parent.Optehdr):
+                return
+            dirrel = parent.Optehdr[pe.DIRECTORY_ENTRY_BASERELOC]
+            o_cls.reldesc = None
+            of1 = dirrel.rva
+            if not of1: # No Reloc
+                return
+            ofend = of1+dirrel.size
+            print hex(of1), hex(ofend)
+            self.reldesc = []
+            while of1 < ofend:
+                of2=of1+pe.Rel._size
+                reldesc = pe.Rel(self.parent.drva[of1:of2])
+                if reldesc.size == 0:
+                    log.warn('warning null reldesc')
+                    reldesc.size = pe.Rel._size
+                    break
+                    
+                reldesc.rels = ClassArray(self.parent, Reloc, self.parent.rva2off(of2), (reldesc.size-pe.Rel._size)/Reloc._size)
+                reldesc.patchrel = False
+                self.reldesc.append(reldesc)
+                of1+=reldesc.size
+    
     def set_rva(self, rva, size = None):
         if not self.reldesc:
             return
@@ -1204,56 +1411,69 @@ class DirReloc(Directory):
 
 class DirRes(Directory):
     dirname = 'Directory Resource'
-    def __init__(self, parent):
-        self.parent = parent
-        if not len(self.parent.Opthdr.Optehdr):
-            return
-        dirres = self.parent.Opthdr.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE]
-        self.resdesc = None
-        of1 = dirres.rva
-        if not of1: # No Resources
-            return
-        of2 = of1+pe.ResDesc._size
-        self.resdesc = pe.ResDesc(self.parent.drva[of1:of2])
-
-        nbr = self.resdesc.numberofnamedentries + self.resdesc.numberofidentries
-        try:
-            self.resdesc.resentries = ClassArray(self.parent, ResEntry, self.parent.rva2off(of2), nbr)
-        except:
-            log.warning('cannot parse resources')
-            self.resdesc.resentries = ClassArray(self.parent, ResEntry, None, 0)
-        dir_todo = {of1:self.resdesc}
-        dir_done = {}
-        
-        while dir_todo:
-            of1, my_dir = dir_todo.popitem()
-            dir_done[of1] = my_dir
-            for e in my_dir.resentries:
-                of1 = e.offsettosubdir
-                if not of1:
-                    #data dir
-                    of1 = e.offsettodata
-                    of2 = of1+pe.ResDataEntry._size
-                    data = pe.ResDataEntry(self.parent.drva[of1:of2])
-                    of1 = data.offsettodata
-                    c =  StrPatchwork()                    
-                    c[0] = self.parent.drva[of1:of1+data.size]
-                    data.s = c
-                    e.data = data
-                    continue
+    def __init__(self):
+        pass
+    class __metaclass__(type):
+        def __new__(cls, name, bases, dct):
+            o = type.__new__(cls, name, bases, dct)
+            return o
+        def __call__(cls, parent):
+            o_cls = cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
+            """
+            def __init__(self, parent):
+                self.parent = parent
+            """
+            if not len(parent.Optehdr):
+                return
+            dirres = parent.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE]
+            o_cls.resdesc = None
+            of1 = dirres.rva
+            if not of1: # No Resources
+                return
+            of2 = of1+WResDesc._size
+            o_cls.resdesc = WResDesc(parent, parent.sex, parent.size, parent.drva[of1:of2])
+    
+            nbr = o_cls.resdesc.numberofnamedentries + o_cls.resdesc.numberofidentries
+            if 1:#try:
+                o_cls.resdesc.resentries = ClassArray(parent, parent.sex, parent.size, ResEntry, parent.rva2off(of2), nbr)
+            if 0:#except:
+                log.warning('cannot parse resources')
+                o_cls.resdesc.resentries = ClassArray(parent, parent.sex, parent.size, ResEntry, None, 0)
+            dir_todo = {of1:o_cls.resdesc}
+            dir_done = {}
+            
+            while dir_todo:
+                of1, my_dir = dir_todo.popitem()
+                print hex(of1)
+                print repr(my_dir)
+                dir_done[of1] = my_dir
+                for e in my_dir.resentries:
+                    of1 = e.offsettosubdir
+                    if not of1:
+                        #data dir
+                        of1 = e.offsettodata
+                        of2 = of1+WResDataEntry._size
+                        data = WResDataEntry(parent, parent.sex, parent.size, parent.drva[of1:of2])
+                        of1 = data.offsettodata
+                        c =  StrPatchwork()                    
+                        c[0] = parent.drva[of1:of1+data.size]
+                        data.s = c
+                        e.data = data
+                        continue
+                        
+                    #subdir
+                    if of1 in dir_done:
+                        log.warn('warning recusif subdir')
+                        fdds
+                        continue
+                    of2 = of1+WResDesc._size
+                    subdir = WResDesc(parent, parent.sex, parent.size, parent.drva[of1:of2])
+                    nbr = subdir.numberofnamedentries + subdir.numberofidentries
+                    subdir.resentries = ClassArray(parent, parent.sex, parent.size, ResEntry, parent.rva2off(of2), nbr)
+                    e.subdir = subdir
+                    dir_todo[of1] = e.subdir
+            return o_cls
                     
-                #subdir
-                if of1 in dir_done:
-                    log.warn('warning recusif subdir')
-                    fdds
-                    continue
-                of2 = of1+pe.ResDesc._size
-                subdir = pe.ResDesc(self.parent.drva[of1:of2])
-                nbr = subdir.numberofnamedentries + subdir.numberofidentries
-                subdir.resentries = ClassArray(self.parent, ResEntry, self.parent.rva2off(of2), nbr)
-                e.subdir = subdir
-                dir_todo[of1] = e.subdir
-                
                 
 
     def set_rva(self, rva, size = None):
@@ -1375,7 +1595,7 @@ class DirRes(Directory):
             a = dir_todo.pop(0)
             if isinstance(a, int):
                 index+=a
-            elif isinstance(a, pe.ResDesc):
+            elif isinstance(a, WResDesc):
                 #out.append((index, repr(a)))
                 dir_todo=[1]+a.resentries.list+[-1]+dir_todo
             elif isinstance(a, ResEntry):
@@ -1546,58 +1766,64 @@ class virt:
 # PE object
 
 class PE(object):
+    content = ContentManager()
     def __init__(self, pestr = None, loadfrommem=False):
         self._drva = drva(self)
         self._virt = virt(self)
         
         self._content = pestr
         if pestr == None:
-            self.Doshdr = pe.Doshdr()
-            self.NTsig = pe.NTsig()
+            self.sex = 1
+            self.size = 32
+            self.Doshdr = pe.Doshdr(1, 32)
+            self.NTsig = NTsig(self)
             self.Coffhdr = Coffhdr(self)
             self.Opthdr = Opthdr(self)
+            self.NThdr = NThdr(self)
             self.SHList = SHList(self)
+            
             self.DirImport = DirImport(self)
             self.DirExport = DirExport(self)
             self.DirDelay = DirDelay(self)
             self.DirReloc = DirReloc(self)
             self.DirRes = DirRes(self)
+            
 
             self.Doshdr.magic = 0x5a4d
             self.Doshdr.lfanew = 0x200
 
-            self.Opthdr.Opthdr.magic = 0x10b
-            self.Opthdr.Opthdr.majorlinkerversion = 0x7
-            self.Opthdr.Opthdr.minorlinkerversion = 0x0
-            self.Opthdr.Opthdr.filealignment = 0x1000
-            self.Opthdr.Opthdr.sectionalignment = 0x1000
-            self.Opthdr.Opthdr.majoroperatingsystemversion = 0x5
-            self.Opthdr.Opthdr.minoroperatingsystemversion = 0x1
-            self.Opthdr.Opthdr.MajorImageVersion = 0x5
-            self.Opthdr.Opthdr.MinorImageVersion = 0x1
-            self.Opthdr.Opthdr.majorsubsystemversion = 0x4
-            self.Opthdr.Opthdr.minorsubsystemversion = 0x0
-            self.Opthdr.Opthdr.subsystem = 0x2
-            self.Opthdr.Opthdr.dllcharacteristics = 0x8000
+            self.Opthdr.magic = 0x10b
+            self.Opthdr.majorlinkerversion = 0x7
+            self.Opthdr.minorlinkerversion = 0x0
+            self.NThdr.filealignment = 0x1000
+            self.NThdr.sectionalignment = 0x1000
+            self.NThdr.majoroperatingsystemversion = 0x5
+            self.NThdr.minoroperatingsystemversion = 0x1
+            self.NThdr.MajorImageVersion = 0x5
+            self.NThdr.MinorImageVersion = 0x1
+            self.NThdr.majorsubsystemversion = 0x4
+            self.NThdr.minorsubsystemversion = 0x0
+            self.NThdr.subsystem = 0x2
+            self.NThdr.dllcharacteristics = 0x8000
 
             #for createthread 
-            self.Opthdr.Opthdr.sizeofstackreserve = 0x200000
-            self.Opthdr.Opthdr.sizeofstackcommit = 0x1000
-            self.Opthdr.Opthdr.sizeofheapreserve = 0x100000
-            self.Opthdr.Opthdr.sizeofheapcommit = 0x1000
+            self.NThdr.sizeofstackreserve = 0x200000
+            self.NThdr.sizeofstackcommit = 0x1000
+            self.NThdr.sizeofheapreserve = 0x100000
+            self.NThdr.sizeofheapcommit = 0x1000
             
 
-            self.Opthdr.Opthdr.ImageBase = 0x400000
-            self.Opthdr.Opthdr.sizeofheaders = 0x400
-            self.Opthdr.Opthdr.numberofrvaandsizes = 0x10
+            self.NThdr.ImageBase = 0x400000
+            self.NThdr.sizeofheaders = 0x400
+            self.NThdr.numberofrvaandsizes = 0x10
             
             
 
 
             self.NTsig.signature = 0x4550
-            self.Coffhdr.Coffhdr.machine = 0x14c
-            self.Coffhdr.Coffhdr.sizeofoptionalheader = 0xe0
-            self.Coffhdr.Coffhdr.characteristics = 0x10f
+            self.Coffhdr.machine = 0x14c
+            self.Coffhdr.sizeofoptionalheader = 0xe0
+            self.Coffhdr.characteristics = 0x10f
             
             
 
@@ -1605,14 +1831,13 @@ class PE(object):
             self.loadfrommem = loadfrommem
             self.parse_content()
     
-    content = ContentManager()
 
     def isPE(self):
         return self.NTsig.NTsig.signature == 0x4550
     
     def parse_content(self):
-        self.Doshdr = WDoshdr(self, self.content)
-        self.NTsig = NTsig(self, self.Doshdr.lfanew)
+        self.Doshdr = WDoshdr(self, 1, 32, self.content)
+        self.NTsig = NTsig(self)
 
 
         self.DirImport = None
@@ -1622,12 +1847,15 @@ class PE(object):
         self.DirRes = None
 
 
-        if self.NTsig.NTsig.signature != 0x4550:
+        if self.NTsig.signature != 0x4550:
             return
-        self.Coffhdr = Coffhdr(self, self.Doshdr.lfanew+pe.NTsig._size)
-        self.Opthdr = Opthdr(self, self.Doshdr.lfanew+pe.NTsig._size+pe.Coffhdr._size)
-        self.SHList = SHList(self, self.Doshdr.lfanew+pe.NTsig._size+pe.Coffhdr._size+self.Coffhdr.Coffhdr.sizeofoptionalheader)
-        
+        self.Coffhdr = Coffhdr(self)
+        self.Opthdr = Opthdr(self)
+        self.sex = 1
+        self.size = (self.Opthdr.magic>>8) *32
+        self.NThdr = NThdr(self)
+        self.Optehdr = Optehdr(self)
+        self.SHList = SHList(self)
         self.DirImport = DirImport(self)
         self.DirExport = DirExport(self)
         self.DirDelay = DirDelay(self)
@@ -1760,11 +1988,19 @@ class PE(object):
         for s in self.SHList:
             c[s.offset:s.offset+s.rawsize] = str(s.data)
 
-        c[self.Doshdr.lfanew] = str(self.NTsig)
-        c[self.Doshdr.lfanew+pe.NTsig._size] = str(self.Coffhdr)
-        c[self.Doshdr.lfanew+pe.NTsig._size+pe.Coffhdr._size] = str(self.Opthdr)
-        c[self.Doshdr.lfanew+pe.NTsig._size+pe.Coffhdr._size+self.Coffhdr.Coffhdr.sizeofoptionalheader] = str(self.SHList)
-
+        off = self.Doshdr.lfanew
+        c[off] = str(self.NTsig)
+        off += self.NTsig.cstr._size
+        c[off] = str(self.Coffhdr)
+        off += self.Coffhdr.cstr._size
+        c[off] = str(self.Opthdr)
+        off += self.Opthdr.cstr._size
+        c[off] = str(self.NThdr)
+        off += self.NThdr.cstr._size
+        c[off] = str(self.Optehdr)
+        
+        c[self.Doshdr.lfanew+self.NTsig.cstr._size+self.Coffhdr.cstr._size+self.Coffhdr.sizeofoptionalheader] = str(self.SHList)
+        return str(c)
         self.DirImport.build_content(c)
         self.DirExport.build_content(c)
         self.DirReloc.build_content(c)
