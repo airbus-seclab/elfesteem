@@ -1,9 +1,13 @@
 #! /usr/bin/env python
 
 import struct
+
+import cstruct
 import elf
 from strpatchwork import StrPatchwork
 
+class test(type):
+    pass
 class StructWrapper(object):
     class __metaclass__(type):
         def __new__(cls, name, bases, dct):
@@ -20,7 +24,10 @@ class StructWrapper(object):
     wrapped = None
     
     def __init__(self, parent, *args, **kargs):
-        self.cstr = self.wrapped(*args, **kargs)
+        cls = cstruct.fix_sex_and_size(self.wrapped._fields, self.wrapped,
+                                       parent.my_sex, parent.my_size)
+        self.cstr = cls(*args, **kargs)
+        fsd
         self.parent = parent
     def __getitem__(self, item):
         return getattr(self,item)
@@ -544,7 +551,11 @@ class ELF(object):
     
     content = ContentManager()
     def parse_content(self):
-        self.Ehdr = WEhdr(self, self.content)
+        h = self.content[:8]
+        self.my_size = ord(h[4])*32
+        self.my_sex = ord(h[5])
+        
+        self.Ehdr = WEhdr(self, self.content, self.my_size, self.my_sex)
         self.sh = SHList(self)
         self.ph = PHList(self)
     def resize(self, old, new):

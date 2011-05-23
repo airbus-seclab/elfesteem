@@ -2,14 +2,54 @@
 
 import struct
 
+type_size = {}
+size2type = {}
+for t in 'B', 'H', 'I', 'Q', 'P':
+    s = struct.calcsize(t)
+    type_size[t] = s*8
+    size2type[s*8] = t
+
+type_size['u08'] = size2type[8]
+type_size['u16'] = size2type[16]
+type_size['u32'] = size2type[32]
+type_size['u64'] = size2type[64]
+
+def fix_sex_and_size(fields, cls, sex, size):
+    print sex, size, fields
+    if sex==1:
+        order = '<'
+    else:
+        order = '>'
+    out = []
+    for name, v in fields:
+        if v in type_size:
+            s = type_size[v]
+            print 'patch', v
+            v = size2type[s]
+        print name, v
+        v = order+v
+        out.append((name, v))
+    fields = out
+    print fields
+    c_name = "cls_%.8X"%hash(tuple(fields))
+    dct = dict(CStruct.__dict__)
+    dct.update({'_fields':fields})
+    
+    c = super(Cstruct_Metaclass, Cstruct_Metaclass).__new__(Cstruct_Metaclass,
+                                                            c_name, (CStruct,),
+                                                            dct)
+    print c
+    print cls
+    return c
+            
+        
 class Cstruct_Metaclass(type):
     def __new__(cls, name, bases, dct):
         o = super(Cstruct_Metaclass, cls).__new__(cls, name, bases, dct)
+        print bases
         o._packstring =  o._packformat+"".join(map(lambda x:x[1],o._fields))
         o._size = struct.calcsize(o._packstring)
         return o
-    
-
 class CStruct(object):
     __metaclass__ = Cstruct_Metaclass
     _packformat = ""
@@ -20,6 +60,8 @@ class CStruct(object):
         return cls(f.read(cls._size))
     
     def __init__(self, *args, **kargs):
+        print 'INIT', self.__class__
+        print self._fields
         self._names = map(lambda x:x[0], self._fields)
         if kargs:
             self.__dict__.update(kargs)
