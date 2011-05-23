@@ -23,11 +23,8 @@ class StructWrapper(object):
             return type.__new__(cls, name, bases, dct)
     wrapped = None
     
-    def __init__(self, parent, *args, **kargs):
-        cls = cstruct.fix_sex_and_size(self.wrapped._fields, self.wrapped,
-                                       parent.my_sex, parent.my_size)
-        self.cstr = cls(*args, **kargs)
-        fsd
+    def __init__(self, parent, sex, size, *args, **kargs):
+        self.cstr = self.wrapped(sex, size, *args, **kargs)
         self.parent = parent
     def __getitem__(self, item):
         return getattr(self,item)
@@ -99,10 +96,10 @@ class Section(object):
         def register(cls, o):
             if o.sht is not None:
                 cls.sectypes[o.sht] = o
-        def __call__(cls, parent, shstr=None):
+        def __call__(cls, parent, sex, size, shstr=None):
             sh = None
             if shstr is not None:
-                sh = WShdr(None, shstr)
+                sh = WShdr(None, sex, size, shstr)
                 if sh.type in Section.sectypes:
                     cls = Section.sectypes[sh.type]
             i = cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
@@ -117,7 +114,7 @@ class Section(object):
         self.parent.resize(self, new-old)
         if self.phparent:
             self.phparent.resize(self, new-old)        
-    def parse_content(self):
+    def parse_content(self, sex,size):
         pass
     def get_linksection(self):
         return self.parent[self.sh.link]
@@ -191,7 +188,7 @@ class CheckSumSection(Section):
 
 class NoteSection(Section):
     sht = elf.SHT_NOTE
-    def parse_content(self):
+    def parse_content(self, sex, size):
         c = self.content
         self.notes = []
         while c:
@@ -205,14 +202,14 @@ class NoteSection(Section):
 
 class Dynamic(Section):
     sht = elf.SHT_DYNAMIC
-    def parse_content(self):
+    def parse_content(self, sex, size):
         c = self.content
         self.dyntab = []
         self.dynamic = {}
         sz = self.sh.entsize
         while c:
             s,c = c[:sz],c[sz:]
-            dyn = WDynamic(self,s)
+            dyn = WDynamic(self,sex, size, s)
             self.dyntab.append(dyn)
             if type(dyn.name) is str:
                 self.dynamic[dyn.name] = dyn
@@ -228,7 +225,7 @@ class Dynamic(Section):
 class StrTable(Section):
     sht = elf.SHT_STRTAB
 
-    def parse_content(self):
+    def parse_content(self, sex, size):
         self.res = {}
         c = self.content
         q = 0
@@ -256,14 +253,14 @@ class StrTable(Section):
     
 class SymTable(Section):
     sht = elf.SHT_SYMTAB
-    def parse_content(self):
+    def parse_content(self, sex, size):
         c = self.content
         self.symtab=[]
         self.symbols={}
         sz = self.sh.entsize
         while c:
             s,c = c[:sz],c[sz:]
-            sym = WSym(self,s)
+            sym = WSym(self,sex, size, s)
             self.symtab.append(sym)
             self.symbols[sym.name] = sym
     def __getitem__(self,item):
@@ -277,14 +274,14 @@ class DynSymTable(SymTable):
 
 class RelTable(Section):
     sht = elf.SHT_REL
-    def parse_content(self):
+    def parse_content(self, sex, size):
         c = self.content
         self.reltab=[]
         self.rel = {}
         sz = self.sh.entsize
         while c:
             s,c = c[:sz],c[sz:]
-            rel = WRel(self,s)
+            rel = WRel(self,sex, size, s)
             self.reltab.append(rel)
             self.rel[rel.sym] = rel
     
@@ -292,7 +289,7 @@ class RelTable(Section):
 ### Section List
 
 class SHList:
-    def __init__(self, parent):
+    def __init__(self, parent, sex, size):
         self.parent = parent
         self.shlist = []
         ehdr = self.parent.Ehdr
@@ -302,7 +299,7 @@ class SHList:
         for i in range(ehdr.shnum):
             of2 = of1+ehdr.shentsize
             shstr = parent[of1:of2]
-            self.shlist.append( Section(self, shstr=shstr) )
+            self.shlist.append( Section(self, sex, size, shstr=shstr) )
             of1=of2
         self._shstr = self.shlist[ehdr.shstrndx]
 
@@ -320,7 +317,7 @@ class SHList:
             if ( (s.linksection == zero or s.linksection in done)
                  and  (s.infosection == zero or s.infosection in done)):
                 done.append(s)
-                s.parse_content()
+                s.parse_content(sex, size)
             else:
                 todo.append(s)
             
@@ -367,9 +364,9 @@ class SHList:
 
 
 class ProgramHeader:
-    def __init__(self, parent, phstr):
+    def __init__(self, parent, sex, size, phstr):
         self.parent = parent
-        self.ph = WPhdr(self,phstr)
+        self.ph = WPhdr(self,sex, size, phstr)
         self.shlist = []
         for s in self.parent.parent.sh:
             if isinstance(s, NullSection):
@@ -384,7 +381,7 @@ class ProgramHeader:
         self.parent.resize(sec, diff)
 
 class PHList:
-    def __init__(self, parent):
+    def __init__(self, parent, sex, size):
         self.parent = parent
         self.phlist = []
         ehdr = self.parent.Ehdr
@@ -392,7 +389,7 @@ class PHList:
         for i in range(ehdr.phnum):
             of2 = of1+ehdr.phentsize
             phstr = parent[of1:of2]
-            self.phlist.append(ProgramHeader(self, phstr))
+            self.phlist.append(ProgramHeader(self, sex, size, phstr))
             of1 = of2
         
     def __getitem__(self, item):
@@ -552,12 +549,12 @@ class ELF(object):
     content = ContentManager()
     def parse_content(self):
         h = self.content[:8]
-        self.my_size = ord(h[4])*32
-        self.my_sex = ord(h[5])
+        self.size = ord(h[4])*32
+        self.sex = ord(h[5])
         
-        self.Ehdr = WEhdr(self, self.content, self.my_size, self.my_sex)
-        self.sh = SHList(self)
-        self.ph = PHList(self)
+        self.Ehdr = WEhdr(self, self.sex, self.size, self.content)
+        self.sh = SHList(self, self.sex, self.size)
+        self.ph = PHList(self, self.sex, self.size)
     def resize(self, old, new):
         pass
     def __getitem__(self, item):

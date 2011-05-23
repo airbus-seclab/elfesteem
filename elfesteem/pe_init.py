@@ -95,11 +95,11 @@ class Coffhdr:
 
 class WOptehdr(StructWrapper):
     wrapped = pe.Optehdr
-    _size = pe.Optehdr._size
+    #_size = pe.Optehdr._size
 
 class WSymb(StructWrapper):
     wrapped = pe.Symb
-    _size = pe.Symb._size
+    #_size = pe.Symb._size
 
 
 class Opthdr:
@@ -129,27 +129,27 @@ class Opthdr:
 
 class WShdr(StructWrapper):
     wrapped = pe.Shdr
-    _size = pe.Shdr._size
+    #_size = pe.Shdr._size
 
 class WImpDesc(StructWrapper):
     wrapped = pe.ImpDesc
-    _size = pe.ImpDesc._size
+    #_size = pe.ImpDesc._size
 
 class WDelayDesc(StructWrapper):
     wrapped = pe.DelayDesc
-    _size = pe.DelayDesc._size
+    #_size = pe.DelayDesc._size
 
 class WRva(StructWrapper):
     wrapped = pe.Rva
-    _size = pe.Rva._size
+    #_size = pe.Rva._size
 
 class WOrdinal(StructWrapper):
     wrapped = pe.Ordinal
-    _size = pe.Ordinal._size
+    #_size = pe.Ordinal._size
 
 class WResEntry(StructWrapper):
     wrapped = pe.ResEntry
-    _size = pe.ResEntry._size
+    #_size = pe.ResEntry._size
 
 
 #if not num => null class terminated

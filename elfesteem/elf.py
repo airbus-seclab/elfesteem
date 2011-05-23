@@ -4,72 +4,72 @@ from cstruct import CStruct
 
 class Ehdr(CStruct):
     _fields = [ ("ident","16s"),
-                ("type","H"),
-                ("machine","H"),
-                ("version","I"),
-                ("entry","L"),
-                ("phoff","L"),
-                ("shoff","L"),
-                ("flags","I"),
-                ("ehsize","H"),
-                ("phentsize","H"),
-                ("phnum","H"),
-                ("shentsize","H"),
-                ("shnum","H"),
-                ("shstrndx","H") ]
+                ("type","u16"),
+                ("machine","u16"),
+                ("version","u32"),
+                ("entry","ptr"),
+                ("phoff","ptr"),
+                ("shoff","ptr"),
+                ("flags","u32"),
+                ("ehsize","u16"),
+                ("phentsize","u16"),
+                ("phnum","u16"),
+                ("shentsize","u16"),
+                ("shnum","u16"),
+                ("shstrndx","u16") ]
 
 
 class Shdr(CStruct):
-    _fields = [ ("name","I"),
-                ("type","I"),
-                ("flags","I"),
-                ("addr","I"),
-                ("offset","I"),
-                ("size","I"),
-                ("link","I"),
-                ("info","I"),
-                ("addralign","I"),
-                ("entsize","I") ]
+    _fields = [ ("name","u32"),
+                ("type","u32"),
+                ("flags","u32"),
+                ("addr","u32"),
+                ("offset","u32"),
+                ("size","u32"),
+                ("link","u32"),
+                ("info","u32"),
+                ("addralign","u32"),
+                ("entsize","u32") ]
 
 class Phdr(CStruct):
-    _fields = [ ("type","I"),
-                ("offset","I"),
-                ("vaddr","I"),
-                ("paddr","I"),
-                ("filesz","I"),
-                ("memsz","I"),
-                ("flags","I"),
-                ("align","I") ]
+    _fields = [ ("type","u32"),
+                ("offset","u32"),
+                ("vaddr","u32"),
+                ("paddr","u32"),
+                ("filesz","u32"),
+                ("memsz","u32"),
+                ("flags","u32"),
+                ("align","u32") ]
 
 class Sym(CStruct):
-    _fields = [ ("name","I"),
-                ("value","I"),
-                ("size","I"),
-                ("info","B"),
-                ("other","B"),
-                ("shndx","H") ]
+    _fields = [ ("name","u32"),
+                ("value","u32"),
+                ("size","u32"),
+                ("info","u08"),
+                ("other","u08"),
+                ("shndx","u16") ]
 
 class Dym(CStruct):
-    _fields = [ ("tag","I"),
-                ("val","I") ]
+    _fields = [ ("tag","u32"),
+                ("val","u32") ]
 
 class Rel(CStruct):
     _packformat = "="
-    _fields = [ ("offset","I"),
-                ("type","B"),
-                ("sym","H"),
-                ("zero","B") ]
+    _fields = [ ("offset","u32"),
+                ("type","u08"),
+                ("sym","u16"),
+                ("zero","u08") ]
 
 class Rela(CStruct):
-    _fields = [ ("offset","I"),
-                ("type","B"),
-                ("sym","B"),
-                ("zero","H"),
+    _fields = [ ("offset","u32"),
+                ("type","u08"),
+                ("sym","u08"),
+                ("zero","u16"),
                 ("addend","i") ]
 
 class Dynamic(CStruct):
-    _fields = [ ("type","I"),
-                ("name","I") ]
+    _fields = [ ("type","u32"),
+                ("name","u32") ]
 
 
 # Legal values for e_type (object file type). 

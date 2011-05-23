@@ -4,7 +4,7 @@ import struct
 
 type_size = {}
 size2type = {}
-for t in 'B', 'H', 'I', 'Q', 'P':
+for t in 'B', 'H', 'I', 'Q':
     s = struct.calcsize(t)
     type_size[t] = s*8
     size2type[s*8] = t
@@ -14,33 +14,25 @@ type_size['u16'] = size2type[16]
 type_size['u32'] = size2type[32]
 type_size['u64'] = size2type[64]
 
-def fix_sex_and_size(fields, cls, sex, size):
-    print sex, size, fields
-    if sex==1:
-        order = '<'
-    else:
-        order = '>'
+def fix_size(fields, size):
+    print size, fields
     out = []
     for name, v in fields:
-        if v in type_size:
-            s = type_size[v]
-            print 'patch', v
-            v = size2type[s]
+        if v.endswith("s"):
+            pass
+        elif v == "ptr":
+            print 'patch1', v
+            v = size2type[size]
+        elif not v in type_size:
+            raise ValueError("unkown Cstruct type", v)
+        else:
+            print 'patch2', v
+            v = type_size[v]
         print name, v
-        v = order+v
         out.append((name, v))
     fields = out
     print fields
-    c_name = "cls_%.8X"%hash(tuple(fields))
-    dct = dict(CStruct.__dict__)
-    dct.update({'_fields':fields})
-    
-    c = super(Cstruct_Metaclass, Cstruct_Metaclass).__new__(Cstruct_Metaclass,
-                                                            c_name, (CStruct,),
-                                                            dct)
-    print c
-    print cls
-    return c
+    return fields
             
         
 class Cstruct_Metaclass(type):
@@ -51,7 +43,7 @@ class Cstruct_Metaclass(type):
         o._size = struct.calcsize(o._packstring)
         return o
 class CStruct(object):
-    __metaclass__ = Cstruct_Metaclass
+    #__metaclass__ = Cstruct_Metaclass
     _packformat = ""
     _fields = []
 
@@ -59,9 +51,19 @@ class CStruct(object):
     def _from_file(cls, f):
         return cls(f.read(cls._size))
     
-    def __init__(self, *args, **kargs):
-        print 'INIT', self.__class__
-        print self._fields
+    def __init__(self, sex, size, *args, **kargs):
+        if sex==1:
+            sex = '<'
+        else:
+            sex = '>'
+        #packformat enforce sex
+        if self._packformat:
+            sex = ""
+        pstr = fix_size(self._fields, size)
+        self._packstring =  sex + self._packformat+"".join(map(lambda x:x[1],pstr))
+        self._size = struct.calcsize(self._packstring)
+
+
         self._names = map(lambda x:x[0], self._fields)
         if kargs:
             self.__dict__.update(kargs)

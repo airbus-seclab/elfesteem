@@ -3,163 +3,163 @@
 from cstruct import CStruct
 
 class Doshdr(CStruct):
-    _fields = [ ("magic", "H"),
-                ("cblp","H"),
-                ("cp","H"),
-                ("crlc","H"),
-                ("cparhdr","H"),
-                ("minalloc","H"),
-                ("maxalloc","H"),
-                ("ss","H"),
-                ("sp","H"),
-                ("csum","H"),
-                ("ip","H"),
-                ("cs","H"),
-                ("lfarlc","H"),
-                ("ovno","H"),
+    _fields = [ ("magic", "u16"),
+                ("cblp","u16"),
+                ("cp","u16"),
+                ("crlc","u16"),
+                ("cparhdr","u16"),
+                ("minalloc","u16"),
+                ("maxalloc","u16"),
+                ("ss","u16"),
+                ("sp","u16"),
+                ("csum","u16"),
+                ("ip","u16"),
+                ("cs","u16"),
+                ("lfarlc","u16"),
+                ("ovno","u16"),
                 ("res","8s"),
-                ("oemid","H"),
-                ("oeminfo","H"),
+                ("oemid","u16"),
+                ("oeminfo","u16"),
                 ("res2","20s"),
-                ("lfanew","I") ]
+                ("lfanew","u32") ]
 
 class NTsig(CStruct):
-    _fields = [ ("signature","I"),
+    _fields = [ ("signature","u32"),
                 ]
 
 class Coffhdr(CStruct):
-    _fields = [ ("machine","H"),
-                ("numberofsections","H"),
-                ("timedatestamp","I"),
-                ("pointertosymboltable","I"),
-                ("numberofsymbols","I"),
-                ("sizeofoptionalheader","H"),
-                ("characteristics","H") ]
+    _fields = [ ("machine","u16"),
+                ("numberofsections","u16"),
+                ("timedatestamp","u32"),
+                ("pointertosymboltable","u32"),
+                ("numberofsymbols","u32"),
+                ("sizeofoptionalheader","u16"),
+                ("characteristics","u16") ]
 
 class Opthdr(CStruct):
-    _fields = [ ("magic","H"),
-                ("majorlinkerversion","B"),
-                ("minorlinkerversion","B"),
-                ("SizeOfCode","I"),
-                ("sizeofinitializeddata","I"),
-                ("sizeofuninitializeddata","I"),
-                ("AddressOfEntryPoint","I"),
-                ("BaseOfCode","I"),
-                ("BaseOfData","I"),
-                ("ImageBase","I"),
-                ("sectionalignment","I"),
-                ("filealignment","I"),
-                ("majoroperatingsystemversion","H"),
-                ("minoroperatingsystemversion","H"),
-                ("MajorImageVersion","H"),
-                ("MinorImageVersion","H"),
-                ("majorsubsystemversion","H"),
-                ("minorsubsystemversion","H"),
-                ("Reserved1","I"),
-                ("sizeofimage","I"),
-                ("sizeofheaders","I"),
-                ("CheckSum","I"),
-                ("subsystem","H"),
-                ("dllcharacteristics","H"),
-                ("sizeofstackreserve","I"),
-                ("sizeofstackcommit","I"),
-                ("sizeofheapreserve","I"),
-                ("sizeofheapcommit","I"),
-                ("loaderflags","I"),
-                ("numberofrvaandsizes","I") ]
+    _fields = [ ("magic","u16"),
+                ("majorlinkerversion","u08"),
+                ("minorlinkerversion","u08"),
+                ("SizeOfCode","u32"),
+                ("sizeofinitializeddata","u32"),
+                ("sizeofuninitializeddata","u32"),
+                ("AddressOfEntryPoint","u32"),
+                ("BaseOfCode","u32"),
+                ("BaseOfData","u32"),
+                ("ImageBase","u32"),
+                ("sectionalignment","u32"),
+                ("filealignment","u32"),
+                ("majoroperatingsystemversion","u16"),
+                ("minoroperatingsystemversion","u16"),
+                ("MajorImageVersion","u16"),
+                ("MinorImageVersion","u16"),
+                ("majorsubsystemversion","u16"),
+                ("minorsubsystemversion","u16"),
+                ("Reserved1","u32"),
+                ("sizeofimage","u32"),
+                ("sizeofheaders","u32"),
+                ("CheckSum","u32"),
+                ("subsystem","u16"),
+                ("dllcharacteristics","u16"),
+                ("sizeofstackreserve","u32"),
+                ("sizeofstackcommit","u32"),
+                ("sizeofheapreserve","u32"),
+                ("sizeofheapcommit","u32"),
+                ("loaderflags","u32"),
+                ("numberofrvaandsizes","u32") ]
 
 class Optehdr(CStruct):
-    _fields = [ ("rva","I"),
-                ("size","I") ]
+    _fields = [ ("rva","u32"),
+                ("size","u32") ]
 
 class Shdr(CStruct):
     _fields = [ ("name","8s"),
-                ("size","I"),
-                ("addr","I"),
-                ("rawsize","I"),
-                ("offset","I"),
-                ("pointertorelocations","I"),
-                ("pointertolinenumbers","I"),
-                ("numberofrelocations","H"),
-                ("numberoflinenumbers","H"),
-                ("flags","I") ]
+                ("size","u32"),
+                ("addr","u32"),
+                ("rawsize","u32"),
+                ("offset","u32"),
+                ("pointertorelocations","u32"),
+                ("pointertolinenumbers","u32"),
+                ("numberofrelocations","u16"),
+                ("numberoflinenumbers","u16"),
+                ("flags","u32") ]
 
 
 class Rva(CStruct):
-    _fields = [ ("rva","I"),
+    _fields = [ ("rva","u32"),
                 ]
 
 
 class ImpDesc(CStruct):
-    _fields = [ ("originalfirstthunk","I"),
-                ("timestamp","I"),
-                ("forwarderchain","I"),
-                ("name","I"),
-                ("firstthunk","I")
+    _fields = [ ("originalfirstthunk","u32"),
+                ("timestamp","u32"),
+                ("forwarderchain","u32"),
+                ("name","u32"),
+                ("firstthunk","u32")
               ]
 
 class ExpDesc(CStruct):
-    _fields = [ ("characteristics","I"),
-                ("timestamp","I"),
-                ("majorv","H"),
-                ("minorv","H"),
-                ("name","I"),
-                ("base","I"),
-                ("numberoffunctions","I"),
-                ("numberofnames","I"),
-                ("addressoffunctions","I"),
-                ("addressofnames","I"),
-                ("addressofordinals","I"),
+    _fields = [ ("characteristics","u32"),
+                ("timestamp","u32"),
+                ("majorv","u16"),
+                ("minorv","u16"),
+                ("name","u32"),
+                ("base","u32"),
+                ("numberoffunctions","u32"),
+                ("numberofnames","u32"),
+                ("addressoffunctions","u32"),
+                ("addressofnames","u32"),
+                ("addressofordinals","u32"),
               ]
 
 class DelayDesc(CStruct):
-    _fields = [ ("attrs","I"),
-                ("name","I"),
-                ("hmod","I"),
-                ("firstthunk","I"),
-                ("originalfirstthunk","I"),
-                ("boundiat","I"),
-                ("unloadiat","I"),
-                ("timestamp","I"),
+    _fields = [ ("attrs","u32"),
+                ("name","u32"),
+                ("hmod","u32"),
+                ("firstthunk","u32"),
+                ("originalfirstthunk","u32"),
+                ("boundiat","u32"),
+                ("unloadiat","u32"),
+                ("timestamp","u32"),
               ]
 
 class Ordinal(CStruct):
-    _fields = [ ("ordinal","H"),
+    _fields = [ ("ordinal","u16"),
                 ]
 
 class Rel(CStruct):
-    _fields = [ ("rva","I"),
-                ("size","I")
+    _fields = [ ("rva","u32"),
+                ("size","u32")
                 ]
 
 
 class ResDesc(CStruct):
-    _fields = [ ("characteristics","I"),
-                ("timestamp","I"),
-                ("majorv","H"),
-                ("minorv","H"),
-                ("numberofnamedentries","H"),
-                ("numberofidentries","H")
+    _fields = [ ("characteristics","u32"),
+                ("timestamp","u32"),
+                ("majorv","u16"),
+                ("minorv","u16"),
+                ("numberofnamedentries","u16"),
+                ("numberofidentries","u16")
               ]
 
 class ResEntry(CStruct):
-    _fields = [ ("name","I"),
-                ("offset2data","I")
+    _fields = [ ("name","u32"),
+                ("offset2data","u32")
                 ]
 
 class ResDataEntry(CStruct):
-    _fields = [ ("offsettodata","I"),
-                ("size","I"),
-                ("codepage","I"),
-                ("reserved","I"),                
+    _fields = [ ("offsettodata","u32"),
+                ("size","u32"),
+                ("codepage","u32"),
+                ("reserved","u32"),                
                 ]
 
 
 class Symb(CStruct):
     _fields = [ ("name","8s"),
-                ("res1","I"),
-                ("res2","I"),
-                ("res3","H")]
+                ("res1","u32"),
+                ("res2","u32"),
+                ("res3","u16")]
 
 
 DIRECTORY_ENTRY_EXPORT           = 0

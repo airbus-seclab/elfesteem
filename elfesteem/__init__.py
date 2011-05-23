@@ -1,3 +1,3 @@
 #!/usr/bin/env python
 
-__all__ = ['elf_init', 'strpatchwork']
+__all__ = ['pe_init', 'elf_init', 'strpatchwork']
