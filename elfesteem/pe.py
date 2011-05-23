@@ -36,7 +36,7 @@ class Coffhdr(CStruct):
                 ("sizeofoptionalheader","u16"),
                 ("characteristics","u16") ]
 
-class Opthdr(CStruct):
+class Opthdr32(CStruct):
     _fields = [ ("magic","u16"),
                 ("majorlinkerversion","u08"),
                 ("minorlinkerversion","u08"),
@@ -46,6 +46,16 @@ class Opthdr(CStruct):
                 ("AddressOfEntryPoint","u32"),
                 ("BaseOfCode","u32"),
                 ("BaseOfData","u32")]
+
+class Opthdr64(CStruct):
+    _fields = [ ("magic","u16"),
+                ("majorlinkerversion","u08"),
+                ("minorlinkerversion","u08"),
+                ("SizeOfCode","u32"),
+                ("sizeofinitializeddata","u32"),
+                ("sizeofuninitializeddata","u32"),
+                ("AddressOfEntryPoint","u32"),
+                ("BaseOfCode","u32")]
     
 class NThdr(CStruct):
     _fields = [ ("ImageBase","ptr"),
@@ -88,7 +98,7 @@ class Shdr(CStruct):
 
 
 class Rva(CStruct):
-    _fields = [ ("rva","u32"),
+    _fields = [ ("rva","ptr"),
                 ]
 
 

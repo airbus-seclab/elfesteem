@@ -15,30 +15,24 @@ type_size['u32'] = size2type[32]
 type_size['u64'] = size2type[64]
 
 def fix_size(fields, size):
-    print size, fields
     out = []
     for name, v in fields:
         if v.endswith("s"):
             pass
         elif v == "ptr":
-            print 'patch1', v
             v = size2type[size]
         elif not v in type_size:
             raise ValueError("unkown Cstruct type", v)
         else:
-            print 'patch2', v
             v = type_size[v]
-        print name, v
         out.append((name, v))
     fields = out
-    print "fields", fields
     return fields
             
         
 class Cstruct_Metaclass(type):
     def __new__(cls, name, bases, dct):
         o = super(Cstruct_Metaclass, cls).__new__(cls, name, bases, dct)
-        print bases
         o._packstring =  o._packformat+"".join(map(lambda x:x[1],o._fields))
         o._size = struct.calcsize(o._packstring)
         return o
