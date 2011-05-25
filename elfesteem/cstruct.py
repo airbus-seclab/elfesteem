@@ -14,13 +14,13 @@ type_size['u16'] = size2type[16]
 type_size['u32'] = size2type[32]
 type_size['u64'] = size2type[64]
 
-def fix_size(fields, size):
+def fix_size(fields, wsize):
     out = []
     for name, v in fields:
         if v.endswith("s"):
             pass
         elif v == "ptr":
-            v = size2type[size]
+            v = size2type[wsize]
         elif not v in type_size:
             raise ValueError("unkown Cstruct type", v)
         else:
@@ -45,7 +45,7 @@ class CStruct(object):
     def _from_file(cls, f):
         return cls(f.read(cls._size))
     
-    def __init__(self, sex, size, *args, **kargs):
+    def __init__(self, sex, wsize, *args, **kargs):
         if sex==1:
             sex = '<'
         else:
@@ -53,7 +53,7 @@ class CStruct(object):
         #packformat enforce sex
         if self._packformat:
             sex = ""
-        pstr = fix_size(self._fields, size)
+        pstr = fix_size(self._fields, wsize)
         self._packstring =  sex + self._packformat+"".join(map(lambda x:x[1],pstr))
         self._size = struct.calcsize(self._packstring)
 
