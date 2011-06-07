@@ -687,6 +687,11 @@ class DirDelay(Directory):
             o = type.__new__(cls, name, bases, dct)
             return o
         def __call__(cls, parent):
+            if parent.wsize == 32:
+                mask_ptr = 0x80000000
+            elif parent.wsize == 64:
+                mask_ptr = 0x8000000000000000L
+                
             o_cls = cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
             o_cls.parent = parent
             """
@@ -725,10 +730,10 @@ class DirDelay(Directory):
                     print  ValueError("no thunk in delay dir!! ")
                     return
                 for i in xrange(len(tmp_thunk)):
-                    if tmp_thunk[i].rva&0x80000000 == 0:
+                    if tmp_thunk[i].rva&mask_ptr == 0:
                         d.impbynames.append(ImportByName(parent, isfromva(tmp_thunk[i].rva)))
                     else:
-                        d.impbynames.append(isfromva(tmp_thunk[i].rva&0x7fffffff))
+                        d.impbynames.append(isfromva(tmp_thunk[i].rva&(mask_ptr-1)))
             return o_cls
     
     def build_content(self, c):
@@ -853,6 +858,11 @@ class DirDelay(Directory):
     def add_dlldesc(self, new_dll):
         new_delaydesc = []
         of1 = None
+        if self.parent.wsize == 32:
+            mask_ptr = 0x80000000
+        elif self.parent.wsize == 64:
+            mask_ptr = 0x8000000000000000L
+        
         for nd, fcts in new_dll:
             d = pe.Delaydesc()
             d.__dict__.update(nd)
@@ -871,7 +881,7 @@ class DirDelay(Directory):
             for nf in fcts:
                 f = pe.Rva()
                 if type(nf) in [int, long]:
-                    f.rva = 0x80000000+nf
+                    f.rva = mask_ptr+nf
                     ibn = None
                 elif type(nf) in [str]:
                     f.rva = True
@@ -1025,7 +1035,7 @@ class DirImport(object):
         for i, d in enumerate(self.impdesc):
             l+=len(d.dlldescname)
             if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
-                l+=(len(d.originalfirstthunks)+1)*pe.Rva._size
+                l+=(len(d.originalfirstthunks)+1)*WRva(self.parent, self.parent.sex, self.parent.wsize).cstr._size
             if d.firstthunk:
                 l+=(len(d.firstthunks)+1)*WRva(self.parent, self.parent.sex, self.parent.wsize).cstr._size
             if d.originalfirstthunk and self.parent.rva2off(d.originalfirstthunk):
@@ -1085,6 +1095,10 @@ class DirImport(object):
                     rva+=len(imp)
 
     def add_dlldesc(self, new_dll):
+        if self.parent.wsize == 32:
+            mask_ptr = 0x80000000
+        elif self.parent.wsize == 64:
+            mask_ptr = 0x8000000000000000L
         new_impdesc = []
         of1 = None
         for nd, fcts in new_dll:
@@ -1105,7 +1119,7 @@ class DirImport(object):
             for nf in fcts:
                 f = WRva(self.parent, self.parent.sex, self.parent.wsize)
                 if type(nf) in [int, long]:
-                    f.rva = 0x80000000+nf
+                    f.rva = mask_ptr+nf
                     ibn = None
                 elif type(nf) in [str]:
                     f.rva = True
@@ -1130,7 +1144,7 @@ class DirImport(object):
             new_impdesc.append(d)
         if not self.impdesc:
             #(parent, cls_tab, num = None):
-            self.impdesc = ClassArray.from_cls(self.parent, WImpDesc(self.parent))
+            self.impdesc = ClassArray.from_cls(self.parent, WImpDesc)
             self.impdesc.list = new_impdesc
         else:
             for d in new_impdesc:
@@ -1576,7 +1590,7 @@ class DirRes(Directory):
                 of1 = e.offsettosubdir
                 if not of1:
                     e.offsettodata = rva
-                    rva+=pe.ResDataEntry._size
+                    rva+=WResDataEntry._size
                     #XXX menu rsrc must be even aligned?
                     if rva%2:rva+=1
                     e.data.offsettodata = rva
@@ -1640,7 +1654,7 @@ class DirRes(Directory):
                     l+=len(e.name_s)
                 of1 = e.offsettosubdir
                 if not of1:
-                    l+=pe.ResDataEntry._size
+                    l+=WResDataEntry._size
                     #XXX because rva may be even rounded
                     l+=1
                     l+=e.data.size
