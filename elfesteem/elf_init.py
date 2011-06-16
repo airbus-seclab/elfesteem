@@ -191,7 +191,9 @@ class NoteSection(Section):
     def parse_content(self, sex, size):
         c = self.content
         self.notes = []
-        while c:
+        # XXX: c may not be aligned?
+        while len(c)> 12:
+            print repr(c)
             namesz,descsz,typ = struct.unpack("III",c[:12])
             name = c[12:12+namesz]
             desc = c[12+namesz:12+namesz+descsz]
