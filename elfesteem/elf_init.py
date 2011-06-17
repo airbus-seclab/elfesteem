@@ -125,6 +125,9 @@ class Section(object):
             self.sh.link = val
     linksection = property(get_linksection, set_linksection)
     def get_infosection(self):
+        #XXX info may not be in sh list ?!?
+        if not self.sh.info in self.parent:
+            return None
         return self.parent[self.sh.info]
     def set_infosection(self, val):
         if isinstance(val, Section):
@@ -317,7 +320,7 @@ class SHList:
         while todo:
             s = todo.pop(0)
             if ( (s.linksection == zero or s.linksection in done)
-                 and  (s.infosection == zero or s.infosection in done)):
+                 and  (s.infosection in  [zero, None] or s.infosection in done)):
                 done.append(s)
                 s.parse_content(sex, size)
             else:
