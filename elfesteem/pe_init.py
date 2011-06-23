@@ -57,8 +57,6 @@ class ContentManager(object):
 class WDoshdr(StructWrapper):
     wrapped = pe.Doshdr
 
-class WNTsig(StructWrapper):
-    wrapped = pe.NTsig
 
 class WCoffhdr(StructWrapper):
     wrapped = pe.Coffhdr
@@ -78,6 +76,8 @@ class WNThdr(StructWrapper):
 
 class WNTsig(StructWrapper):
     wrapped = pe.NTsig
+    tmp = wrapped(1, 32)
+    _size = tmp._size
 
 class NTsig(object):
     class __metaclass__(type):
@@ -485,7 +485,7 @@ class SHList(object):
                 
             offset = s_last.offset+s_last.rawsize
         else:
-            offset = self.parent.Doshdr.lfanew+pe.NTsig._size+pe.Coffhdr._size+self.parent.Coffhdr.Coffhdr.sizeofoptionalheader
+            offset = self.parent.Doshdr.lfanew+self.parent.NTsig._size+self.parent.Coffhdr.cstr._size+self.parent.Coffhdr.sizeofoptionalheader
             addr = 0x2000
         #round addr
         addr = (addr+(s_align-1))&~(s_align-1)
@@ -1850,6 +1850,7 @@ class PE(object):
         
         self._content = pestr
         if pestr == None:
+            self._content = StrPatchwork()
             self.sex = 1
             self.wsize = 32
             self.Doshdr = pe.Doshdr(1, 32)
@@ -1857,6 +1858,8 @@ class PE(object):
             self.Coffhdr = Coffhdr(self)
             self.Opthdr = Opthdr(self)
             self.NThdr = NThdr(self)
+            self.Optehdr = Optehdr(self)
+
             self.SHList = SHList(self)
             
             self.DirImport = DirImport(self)
