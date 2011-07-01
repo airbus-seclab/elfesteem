@@ -591,10 +591,7 @@ class ELF(object):
 
     def is_in_virt_address(self, ad):
         for s in self.sh:
-            if not 'addr' in s.__dict__:
-                continue
-            print repr(s)
-            if s.addr <= ad < s.addr + s.size:
+            if s.sh.addr <= ad < s.sh.addr + s.sh.size:
                 return True
         return False
 
