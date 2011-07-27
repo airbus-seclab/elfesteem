@@ -585,7 +585,7 @@ class ELF(object):
     def getsectionbyname(self, name):
         for s in self.sh:
             if s.sh.name.strip('\x00') == name:
-                return s.sh
+                return s
         return None
 
 
