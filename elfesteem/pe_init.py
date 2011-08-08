@@ -1913,7 +1913,7 @@ class PE(object):
     
 
     def isPE(self):
-        return self.NTsig.NTsig.signature == 0x4550
+        return self.NTsig.signature == 0x4550
     
     def parse_content(self):
         self.Doshdr = WDoshdr(self, 1, 32, self.content)

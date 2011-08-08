@@ -1,5 +1,5 @@
 from array import array
-
+from sys import maxint
 class StrPatchwork:
     def __init__(self, s="", paddingbyte="\x00"):
         self.s = array("B",s)
@@ -12,7 +12,7 @@ class StrPatchwork:
         if type(item) is slice:
             end = item.stop
             l = len(s)
-            if l < end and end != 0x7fffffff: #XXX hack [x:] give 2GB limit
+            if l < end and end != maxint: #XXX hack [x:] give 2GB limit
                 # This is inefficient but avoids complicated maths if step is not 1
                 s = s[:] 
                 s.extend(array("B",self.paddingbyte*(end-l)))
