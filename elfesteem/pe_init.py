@@ -639,7 +639,7 @@ class ResEntry:
         if not s:
             return
         self.id, self.name = None, None
-        name, offsettodata = struct.unpack('LL', s)
+        name, offsettodata = struct.unpack('II', s)
         self.name = name
         self.name_s = None
         self.offsettodata = (offsettodata & 0x7FFFFFFF) + self.parent.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva #XXX res rva??
@@ -659,7 +659,7 @@ class ResEntry:
             name=(self.name-self.parent.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva)+0x80000000L
         if self.offsettosubdir:
             offsettodata=(self.offsettosubdir-self.parent.Optehdr[pe.DIRECTORY_ENTRY_RESOURCE].rva)+0x80000000L
-        return struct.pack('LL', name, offsettodata)
+        return struct.pack('II', name, offsettodata)
         
     def __repr__(self):
         if self.name_s:
