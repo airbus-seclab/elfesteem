@@ -22,9 +22,9 @@ class Ehdr(CStruct):
 class Shdr(CStruct):
     _fields = [ ("name","u32"),
                 ("type","u32"),
-                ("flags","u32"),
-                ("addr","u32"),
-                ("offset","u32"),
+                ("flags","ptr"),
+                ("addr","ptr"),
+                ("offset","ptr"),
                 ("size","u32"),
                 ("link","u32"),
                 ("info","u32"),

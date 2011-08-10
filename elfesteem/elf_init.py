@@ -148,6 +148,9 @@ class Section(object):
     
 class NullSection(Section):
     sht = elf.SHT_NULL
+    def get_name(self, ofs):
+        # XXX check this
+        return ""
 
 class ProgBits(Section):
     sht = elf.SHT_PROGBITS
