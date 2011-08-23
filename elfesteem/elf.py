@@ -25,11 +25,11 @@ class Shdr(CStruct):
                 ("flags","ptr"),
                 ("addr","ptr"),
                 ("offset","ptr"),
-                ("size","u32"),
+                ("size","ptr"),
                 ("link","u32"),
                 ("info","u32"),
-                ("addralign","u32"),
-                ("entsize","u32") ]
+                ("addralign","ptr"),
+                ("entsize","ptr") ]
 
 class Phdr(CStruct):
     _fields = [ ("type","u32"),
@@ -53,19 +53,33 @@ class Dym(CStruct):
     _fields = [ ("tag","u32"),
                 ("val","u32") ]
 
-class Rel(CStruct):
+class Rel32(CStruct):
     _packformat = "="
-    _fields = [ ("offset","u32"),
+    _fields = [ ("offset","ptr"),
                 ("type","u08"),
                 ("sym","u16"),
                 ("zero","u08") ]
 
-class Rela(CStruct):
-    _fields = [ ("offset","u32"),
+class Rel64(CStruct):
+    _packformat = "="
+    _fields = [ ("offset","ptr"),
+                ("type","u32"),
+                ("sym","u32") ]
+
+class Rela32(CStruct):
+    _packformat = "="
+    _fields = [ ("offset","ptr"),
                 ("type","u08"),
                 ("sym","u08"),
                 ("zero","u16"),
-                ("addend","i") ]
+                ("addend","ptr") ]
+
+class Rela64(CStruct):
+    _packformat = "="
+    _fields = [ ("offset","ptr"),
+                ("type","u32"),
+                ("sym","u32"),
+                ("addend","ptr") ]
 
 class Dynamic(CStruct):
     _fields = [ ("type","u32"),

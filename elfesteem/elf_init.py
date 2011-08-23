@@ -45,13 +45,25 @@ class WSym(StructWrapper):
     def get_name(self):
         return self.parent.linksection.get_name(self.cstr.name)
 
-class WRel(StructWrapper):
-    wrapped = elf.Rel
+class WRel32(StructWrapper):
+    wrapped = elf.Rel32
     def get_sym(self):
         return self.parent.linksection.symtab[self.cstr.sym].name
 
-class WRela(WRel):
-    wrapped = elf.Rela
+class WRel64(StructWrapper):
+    wrapped = elf.Rel64
+    def get_sym(self):
+        return self.parent.linksection.symtab[self.cstr.sym].name
+
+class WRela32(WRel32):
+    wrapped = elf.Rela32
+    def get_sym(self):
+        return self.parent.linksection.symtab[self.cstr.sym].name
+
+class WRela64(WRel64):
+    wrapped = elf.Rela64
+    def get_sym(self):
+        return self.parent.linksection.symtab[self.cstr.sym].name
 
 class WShdr(StructWrapper):
     wrapped = elf.Shdr
@@ -199,7 +211,6 @@ class NoteSection(Section):
         self.notes = []
         # XXX: c may not be aligned?
         while len(c)> 12:
-            print repr(c)
             namesz,descsz,typ = struct.unpack("III",c[:12])
             name = c[12:12+namesz]
             desc = c[12+namesz:12+namesz+descsz]
@@ -283,6 +294,12 @@ class DynSymTable(SymTable):
 class RelTable(Section):
     sht = elf.SHT_REL
     def parse_content(self, sex, size):
+        if size == 32:
+            WRel = WRel32
+        elif size == 64:
+            WRel = WRel64
+        else:
+            ValueError('unknown size')
         c = self.content
         self.reltab=[]
         self.rel = {}
@@ -293,6 +310,26 @@ class RelTable(Section):
             self.reltab.append(rel)
             self.rel[rel.sym] = rel
     
+class RelATable(Section):
+    sht = elf.SHT_RELA
+    def parse_content(self, sex, size):
+        if size == 32:
+            WRela = WRela32
+            sz = 16
+        elif size == 64:
+            WRela = WRela64
+            sz = 24
+        else:
+            ValueError('unknown size')
+        c = self.content
+        self.reltab=[]
+        self.rel = {}
+        #sz = self.sh.entsize
+        while c:
+            s,c = c[:sz],c[sz:]
+            rel = WRela(self,sex, size, s)
+            self.reltab.append(rel)
+            self.rel[rel.sym] = rel
 
 ### Section List
 
