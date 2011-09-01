@@ -48,15 +48,29 @@ def fix_size(fields, wsize):
 
 all_cstructs = {}
 class Cstruct_Metaclass(type):
+    field_suffix = "_value"
     def __new__(cls, name, bases, dct):
+        for fields in dct['_fields']:
+            fname = fields[0]
+            if fname in ['parent', 'parent_head']:
+                raise ValueError('field name will confuse internal structs', 
+                                 repr(fname))
+            dct[fname] = property(dct.pop("get_"+fname,
+                                          lambda self,fname=fname: getattr(self,fname+self.__class__.field_suffix)),
+                                  dct.pop("set_"+fname,
+                                          lambda self,v,fname=fname: setattr(self,fname+self.__class__.field_suffix,v)),
+                                  dct.pop("del_"+fname, None))
+
+
+
         o = super(Cstruct_Metaclass, cls).__new__(cls, name, bases, dct)
         if name != "CStruct":
             all_cstructs[name] = o
         return o
 
-    def unpack(cls, s, off = 0, parent = None, _sex=1, _wsize=32):
+    def unpack(cls, s, off = 0, parent_head = None, _sex=1, _wsize=32):
         c = cls(_sex, _wsize)
-        c.parent = parent
+        c.parent_head = parent_head
 
         of1 = off
         for field in c._fields:
@@ -86,13 +100,15 @@ class Cstruct_Metaclass(type):
                     value = []
                     i = 0
                     while i < cpt(c):
-                        v = all_cstructs[ffmt].unpack(s, of1, parent, _sex, _wsize)
+                        v = all_cstructs[ffmt].unpack(s, of1, parent_head, _sex, _wsize)
+                        v.parent = c
                         value.append(v)
                         of2 += len(v)
                         of1 = of2
                         i += 1
                 else:
-                    value = all_cstructs[ffmt].unpack(s, of1, parent, _sex, _wsize)
+                    value = all_cstructs[ffmt].unpack(s, of1, parent_head, _sex, _wsize)
+                    value.parent = c
                     of2 = of1 + len(value)
             elif isinstance(ffmt, tuple):
                 f_get, f_set = ffmt
@@ -100,7 +116,7 @@ class Cstruct_Metaclass(type):
             else:
                 raise ValueError('unknown class', ffmt)
             of1 = of2
-            setattr(c, fname, value)
+            setattr(c, fname+c.__class__.field_suffix, value)
 
         return c
 
@@ -117,18 +133,21 @@ class CStruct(object):
             kargs['_sex'] = 0
         if not '_wsize' in kargs:
             kargs['_wsize'] = 0
-        if not 'parent' in kargs:
-            kargs['parent'] = 0
 
         sex = kargs.pop('_sex')
         self.wsize = kargs.pop('_wsize')
-        self.parent = kargs.pop('parent')
 
         #packformat enforce sex
         if self._packformat:
             self.sex = self._packformat
         else:
             self.sex = sex_types[sex]
+        for f in self._fields:
+            setattr(self, f[0]+self.__class__.field_suffix, None)
+        if kargs:
+            for k, v in kargs.items():
+                self.__dict__[k+self.__class__.field_suffix] = v
+
     def pack(self):
         out = ''
         for field in self._fields:
@@ -138,7 +157,7 @@ class CStruct(object):
             elif len(field) == 3:
                 fname, ffmt, cpt = field
 
-            value = getattr(self, fname)
+            value = getattr(self, fname+self.__class__.field_suffix)
             if ffmt in type2realtype:
                 # basic types
                 fmt = type2realtype[ffmt]
@@ -174,41 +193,6 @@ class CStruct(object):
 
     def __repr__(self):
         return "<%s=%s>" % (self.__class__.__name__, "/".join(map(lambda x:repr(getattr(self,x[0])),self._fields)))
-
-
-class StructWrapper(object):
-    class __metaclass__(type):
-        def __new__(cls, name, bases, dct):
-            wrapped = dct["wrapped"]
-            if wrapped is not None: # XXX: make dct lookup look into base classes
-                for fields in wrapped._fields:
-                    fname = fields[0]
-                    dct[fname] = property(dct.pop("get_"+fname,
-                                                  lambda self,fname=fname: getattr(self.cstr,fname)),
-                                          dct.pop("set_"+fname,
-                                                  lambda self,v,fname=fname: setattr(self.cstr,fname,v)),
-                                          dct.pop("del_"+fname, None))
-            o = type.__new__(cls, name, bases, dct)
-            all_cstructs[name] = o
-            return o
-    wrapped = None
-
-    def __init__(self, s, off = 0, parent = None, _sex=1, _wsize=32):
-        self.cstr = self.wrapped.unpack(s, off, parent, _sex, _wsize)
-        self.parent = parent
-    def __getitem__(self, item):
-        return getattr(self,item)
-    def __repr__(self):
-        return "<W-%s=%s>" % (self.cstr.__class__.__name__, "/".join(map(lambda x:repr(getattr(self,x[0])),self.wrapped._fields)))
-
-    def __str__(self):
-        return str(self.cstr)
-    def __len__(self):
-        return len(self.cstr)
-    @classmethod
-    def unpack(cls, s, off = 0, parent = None, _sex=1, _wsize=32):
-        c = cls(s, off, parent, _sex, _wsize)
-        return c
 
 if __name__ == "__main__":
 
