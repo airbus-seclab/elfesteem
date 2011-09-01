@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 import struct
+import re
 
 type2realtype = {}
 size2type = {}
@@ -28,6 +29,7 @@ type2realtype['s64'] = size2type_s[64]
 
 type2realtype['d'] = 'd'
 type2realtype['f'] = 'f'
+type2realtype['ptr'] = 'ptr'
 
 sex_types = {0:'<', 1:'>'}
 
@@ -46,6 +48,15 @@ def fix_size(fields, wsize):
     fields = out
     return fields
 
+def real_fmt(fmt, wsize):
+    if fmt == "ptr":
+        v = size2type[wsize]
+    elif fmt in type2realtype:
+        v = type2realtype[fmt]
+    else:
+        v = fmt
+    return v
+
 all_cstructs = {}
 class Cstruct_Metaclass(type):
     field_suffix = "_value"
@@ -53,7 +64,7 @@ class Cstruct_Metaclass(type):
         for fields in dct['_fields']:
             fname = fields[0]
             if fname in ['parent', 'parent_head']:
-                raise ValueError('field name will confuse internal structs', 
+                raise ValueError('field name will confuse internal structs',
                                  repr(fname))
             dct[fname] = property(dct.pop("get_"+fname,
                                           lambda self,fname=fname: getattr(self,fname+self.__class__.field_suffix)),
@@ -79,19 +90,19 @@ class Cstruct_Metaclass(type):
                 fname, ffmt = field
             elif len(field) == 3:
                 fname, ffmt, cpt = field
-            if ffmt in type2realtype:
+            if ffmt in type2realtype or (isinstance(ffmt, str) and re.match(r'\d+s', ffmt)):
                 # basic types
                 if cpt:
                     value = []
                     i = 0
                     while i < cpt(c):
-                        fmt = type2realtype[ffmt]
+                        fmt = real_fmt(ffmt, _wsize)
                         of2 = of1+struct.calcsize(fmt)
                         value.append(struct.unpack(c.sex+fmt, s[of1:of2])[0])
                         of1 = of2
                         i+=1
                 else:
-                    fmt = type2realtype[ffmt]
+                    fmt = real_fmt(ffmt, _wsize)
                     of2 = of1+struct.calcsize(fmt)
                     value = struct.unpack(c.sex+fmt, s[of1:of2])[0]
             elif ffmt in all_cstructs:
@@ -158,9 +169,9 @@ class CStruct(object):
                 fname, ffmt, cpt = field
 
             value = getattr(self, fname+self.__class__.field_suffix)
-            if ffmt in type2realtype:
+            if ffmt in type2realtype or (isinstance(ffmt, str) and re.match(r'\d+s', ffmt)):
                 # basic types
-                fmt = type2realtype[ffmt]
+                fmt = real_fmt(ffmt, self.wsize)
                 if cpt == None:
                     o = struct.pack(self.sex+fmt, value)
                 else:
@@ -229,6 +240,10 @@ if __name__ == "__main__":
             return s[of:of+i], of+i+1
         def sets(cls, value):
             return str(value)+'\x00'
+    class c5(CStruct):
+        _fields = [("g", "u16"),
+                   ("h", "4s"),
+                   ]
 
     print all_cstructs
 
@@ -277,3 +292,8 @@ if __name__ == "__main__":
     print repr(s7)
     print repr(str(c))
     assert s7 == str(c)
+
+    s8 = struct.pack('H4s', 8888, "abcd")
+    c = c5.unpack(s8)
+    print repr(c)
+    assert s8 == str(c)
