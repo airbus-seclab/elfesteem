@@ -79,8 +79,16 @@ class Cstruct_Metaclass(type):
             all_cstructs[name] = o
         return o
 
-    def unpack(cls, s, off = 0, parent_head = None, _sex=1, _wsize=32):
-        c = cls(_sex, _wsize)
+    def unpack(cls, s, off = 0, parent_head = None, _sex=None, _wsize=None):
+        if _sex == None and _wsize == None:
+            # get sex and size from parent
+            if parent_head:
+                _sex = parent_head._sex
+                _wsize = parent_head._wsize
+            else:
+                _sex = 0
+                _wsize = 32
+        c = cls(_sex = _sex, _wsize = _wsize)
         c.parent_head = parent_head
 
         of1 = off
@@ -114,7 +122,7 @@ class Cstruct_Metaclass(type):
                         v = all_cstructs[ffmt].unpack(s, of1, parent_head, _sex, _wsize)
                         v.parent = c
                         value.append(v)
-                        of2 += len(v)
+                        of2 = of1 + len(v)
                         of1 = of2
                         i += 1
                 else:
@@ -137,22 +145,25 @@ class CStruct(object):
     _packformat = ""
     _fields = []
 
-    def __init__(self, *args, **kargs):
+    def __init__(self, parent_head = None, _sex = None, _wsize = None, **kargs):
+        self.parent_head = parent_head
         self._size = None
         kargs = dict(kargs)
-        if not '_sex' in kargs:
-            kargs['_sex'] = 0
-        if not '_wsize' in kargs:
-            kargs['_wsize'] = 0
-
-        sex = kargs.pop('_sex')
-        self.wsize = kargs.pop('_wsize')
-
-        #packformat enforce sex
+        #if not sex or size: get the one of the parent
+        if _sex == None and _wsize == None:
+            if parent_head:
+                _sex = parent_head._sex
+                _wsize = parent_head._wsize
+            else:
+                # else default sex & size
+                _sex = 0
+                _size = 32
+        self.sex = _sex
+        self.wsize = _wsize
         if self._packformat:
             self.sex = self._packformat
         else:
-            self.sex = sex_types[sex]
+            self.sex = sex_types[_sex]
         for f in self._fields:
             setattr(self, f[0]+self.__class__.field_suffix, None)
         if kargs:
@@ -173,11 +184,17 @@ class CStruct(object):
                 # basic types
                 fmt = real_fmt(ffmt, self.wsize)
                 if cpt == None:
-                    o = struct.pack(self.sex+fmt, value)
+                    if value == None:
+                        o = struct.calcsize(fmt)*"\x00"
+                    else:
+                        o = struct.pack(self.sex+fmt, value)
                 else:
                     o = ""
                     for v in value:
-                        o += struct.pack(self.sex+fmt, v)
+                        if value == None:
+                            o += struct.calcsize(fmt)*"\x00"
+                        else:
+                            o += struct.pack(self.sex+fmt, v)
 
             elif ffmt in all_cstructs:
                 # sub structures
@@ -190,6 +207,7 @@ class CStruct(object):
             elif isinstance(ffmt, tuple):
                 f_get, f_set = ffmt
                 o = f_set(self, value)
+
             else:
                 raise ValueError('unknown class')
             out += o
@@ -204,6 +222,9 @@ class CStruct(object):
 
     def __repr__(self):
         return "<%s=%s>" % (self.__class__.__name__, "/".join(map(lambda x:repr(getattr(self,x[0])),self._fields)))
+
+    def __getitem__(self, item): # to work with format strings
+        return getattr(self, item)
 
 if __name__ == "__main__":
 
