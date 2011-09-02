@@ -539,17 +539,21 @@ if __name__ == "__main__":
     s_myrel = e.SHList.add_section(name = "myrel", rawsize = len(e.DirReloc))
     s_myres = e.SHList.add_section(name = "myres", rawsize = len(e.DirRes))
 
-
+    """
     for s in e.SHList.shlist:
         s.offset+=0xC00
+    """
 
     e.SHList.align_sections(0x1000, 0x1000)
 
     e.DirImport.set_rva(s_myimp.addr)
     e.DirExport.set_rva(s_myexp.addr)
-    e.DirDelay.set_rva(s_mydel.addr)
-    e.DirReloc.set_rva(s_myrel.addr)
-    e.DirRes.set_rva(s_myres.addr)
+    if e.DirDelay.delaydesc:
+        e.DirDelay.set_rva(s_mydel.addr)
+    if e.DirReloc.reldesc:
+        e.DirReloc.set_rva(s_myrel.addr)
+    if e.DirRes.resdesc:
+        e.DirRes.set_rva(s_myres.addr)
 
     e_str = str(e)
     print "f1", e.DirImport.get_funcvirt('LoadStringW')

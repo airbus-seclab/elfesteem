@@ -328,9 +328,9 @@ class DirImport(CStruct):
         for i, d in enumerate(self.impdesc):
             l+=len(d.dlldescname)
             if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                l+=(len(d.originalfirstthunks)+1)*8 #Rva size
+                l+=(len(d.originalfirstthunks)+1)*self.parent_head._wsize/8 #Rva size
             if d.firstthunk:
-                l+=(len(d.firstthunks)+1)*8 #Rva size
+                l+=(len(d.firstthunks)+1)*self.parent_head._wsize/8 #Rva size
             if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             """
@@ -357,11 +357,11 @@ class DirImport(CStruct):
             rva+=len(d.dlldescname)
             if d.originalfirstthunk:# and self.parent_head.rva2off(d.originalfirstthunk):
                 d.originalfirstthunk = rva
-                rva+=(len(d.originalfirstthunks)+1)*8 # rva size
+                rva+=(len(d.originalfirstthunks)+1)*self.parent_head._wsize/8 # rva size
             #XXX rva fthunk not patched => keep original func addr
             #if d.firstthunk:
             #    d.firstthunk = rva
-            #    rva+=(len(d.firstthunks)+1)*8 # Rva size
+            #    rva+=(len(d.firstthunks)+1)*self.parent_head._wsize/8 # Rva size
             if d.originalfirstthunk and d.firstthunk:
                 if isinstance(d.originalfirstthunk, struct_array):
                     tmp_thunk = d.originalfirstthunks
@@ -468,9 +468,9 @@ class DirImport(CStruct):
                     #ord ?XXX?
                     ff.rva = f.rva
                 d.firstthunks.append(ff)
-                of1+=4
+                of1+=self.parent_head._wsize/8
             #for null thunk
-            of1+=4
+            of1+=self.parent_head._wsize/8
             d.impbynames = impbynames
             new_impdesc.append(d)
         if not self.impdesc:
@@ -585,9 +585,9 @@ class DirExport(CStruct):
         self.expdesc.name = rva
         rva+=len(self.dlldescname)
         self.expdesc.addressoffunctions = rva
-        rva+=len(self.f_address)*8# Rva size
+        rva+=len(self.f_address)*self.parent_head._wsize/8# Rva size
         self.expdesc.addressofnames = rva
-        rva+=len(self.f_names)*8# Rva size
+        rva+=len(self.f_names)*self.parent_head._wsize/8# Rva size
         self.expdesc.addressofordinals = rva
         rva+=len(self.f_nameordinals)*2# Ordinal size
         for n in self.f_names:
@@ -600,8 +600,8 @@ class DirExport(CStruct):
             return l
         l+=len(self.expdesc)
         l+=len(self.dlldescname)
-        l+=len(self.f_address)*8# Rva size
-        l+=len(self.f_names)*8# Rva size
+        l+=len(self.f_address)*self.parent_head._wsize/8# Rva size
+        l+=len(self.f_names)*self.parent_head._wsize/8# Rva size
         l+=len(self.f_nameordinals)*2# Ordinal size
         for n in self.f_names:
             l+=len(n.name)
@@ -775,9 +775,9 @@ class DirDelay(CStruct):
         for i, d in enumerate(self.delaydesc):
             l+=len(d.dlldescname)
             if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                l+=(len(d.originalfirstthunks)+1)*8 #Rva size
+                l+=(len(d.originalfirstthunks)+1)*self.parent_head._wsize/8 #Rva size
             if d.firstthunk:
-                l+=(len(d.firstthunks)+1)*8 #Rva size
+                l+=(len(d.firstthunks)+1)*self.parent_head._wsize/8 #Rva size
             if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             """
@@ -797,7 +797,7 @@ class DirDelay(CStruct):
             self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_DELAY_IMPORT].size= len(self)
         else:
             self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_DELAY_IMPORT].size= size
-        rva+=len(self.pack())
+        rva+=(len(self.delaydesc)+1)*(4*8) #DelayDesc_e
         parent = self.parent_head
         for i, d in enumerate(self.delaydesc):
             isfromva = (d.attrs & 1) == 0
@@ -831,7 +831,7 @@ class DirDelay(CStruct):
         of1 = dirdelay.rva
         if not of1: # No Delay Import
             return
-        c[self.parent_head.rva2off(of1)] = str(self.delaydesc)
+        c[self.parent_head.rva2off(of1)] = str(self)
         for i, d in enumerate(self.delaydesc):
             c[self.parent_head.rva2off(d.name)] = str(d.dlldescname)
             if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
@@ -1001,6 +1001,13 @@ class DirReloc(CStruct):
             of1+=reldesc.size
         return out, of
 
+    def sete(self, v):
+        rep = []
+        for n in v:
+            rep.append(str(n))
+            rep.append(str(n.rels))
+        return "".join(rep)
+
     def set_rva(self, rva, size = None):
         if not self.reldesc:
             return
@@ -1049,7 +1056,6 @@ class DirReloc(CStruct):
             """
             l = "\t%2d rels..."%(len(n.rels))
             rep.append(l)
-            
         return "\n".join(rep)
 
     def add_reloc(self, rels, rtype = 3, patchrel = True):
