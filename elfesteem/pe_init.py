@@ -68,8 +68,8 @@ class virt:
             return [(s, start)]
         #if not type(item) is slice:
         #    return None
-        start = item.start - self.parent.NThdr.ImageBase
-        stop  = item.stop - self.parent.NThdr.ImageBase
+        start = self.parent.virt2rva(item.start)
+        stop  = self.parent.virt2rva(item.stop)
         step  = item.step
 
 
@@ -80,14 +80,14 @@ class virt:
         while total_len:
             
             s = self.parent.getsectionbyrva(start)
+            if not s:
+                log.warn('unknown virt address!')
+                return
             s_max = max(s.size, s.rawsize)                        
             #print repr(s)
             #print "%(name)s %(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x" % s
             #print 'virtitem', hex(start), hex(stop), hex(total_len), hex(s_max)
 
-            if not s:
-                log.warn('unknown virt address!')
-                return
 
 
             s_start = start - s.addr
@@ -180,7 +180,6 @@ class PE(object):
     def __init__(self, pestr = None, loadfrommem=False):
         self._drva = drva(self)
         self._virt = virt(self)
-        self._content = pestr
         if pestr == None:
             self._content = StrPatchwork()
             self._sex = 0
@@ -243,6 +242,7 @@ class PE(object):
 
 
         else:
+            self._content = StrPatchwork(pestr)
             self.loadfrommem = loadfrommem
             self.parse_content()
 

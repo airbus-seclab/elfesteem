@@ -810,7 +810,7 @@ class DirDelay(CStruct):
             rva+=len(d.dlldescname)
             if d.originalfirstthunk:# and self.parent_head.rva2off(d.originalfirstthunk):
                 d.originalfirstthunk = isfromva(rva)
-                rva+=(len(d.originalfirstthunks)+1)*8 # rva size
+                rva+=(len(d.originalfirstthunks)+1)*self.parent_head._wsize/8 # rva size
             #XXX rva fthunk not patched => fun addr
             #if d.firstthunk:
             #    d.firstthunk = rva
