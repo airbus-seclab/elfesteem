@@ -73,25 +73,24 @@ class virt:
         step  = item.step
 
 
-
         total_len = stop - start
 
         virt_item = []
         while total_len:
-            
-            s = self.parent.getsectionbyrva(start)
-            if not s:
-                log.warn('unknown virt address!')
-                return
-            s_max = max(s.size, s.rawsize)                        
-            #print repr(s)
-            #print "%(name)s %(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x" % s
-            #print 'virtitem', hex(start), hex(stop), hex(total_len), hex(s_max)
-
-
-
-            s_start = start - s.addr
-            s_stop = stop - s.addr
+            # special case if look at pe hdr address
+            if 0 <= start < 0x1000:
+                s_start = start
+                s_stop = stop
+                s_max = 0x1000
+                s = None
+            else:
+                s = self.parent.getsectionbyrva(start)
+                if not s:
+                    log.warn('unknown virt address!')
+                    return
+                s_max = max(s.size, s.rawsize)
+                s_start = start - s.addr
+                s_stop = stop - s.addr
             #print hex(s_stop), hex(s_start)
             if s_stop >s_max:
                 #print 'yy'
@@ -116,7 +115,11 @@ class virt:
              return
         data_out = ""
         for s, n_item in virt_item:
-            data_out += s.data.__getitem__(n_item)
+            if s:
+                data_out += s.data.__getitem__(n_item)
+            else:
+                data_out += self.parent.__getitem__(n_item)
+
         return data_out
  
     def __setitem__(self, item, data):
@@ -568,5 +571,5 @@ if __name__ == "__main__":
     #
     #print repr(o.Symbols)
 
-    e = PE()
-    open('uu.bin', 'w').write(str(e))
+    f = PE()
+    open('uu.bin', 'w').write(str(f))
