@@ -223,7 +223,7 @@ class CPInterfaceMethodref(CStruct):
                 ("type", "u16")]
 
     def get_name(self):
-        return self.parent_head.get_constant_pool_by_index(self.name_value).value
+        return self.parent_head.get_constant_pool_by_index(self.name_value).name
     def get_type(self):
         return self.parent_head.get_constant_pool_by_index(self.type_value)
     def pp(self):
@@ -448,18 +448,32 @@ class CMethods(CStruct):
     def get_descriptor(self):
         return self.parent_head.get_constant_pool_by_index(self.descriptor_value).value
 
-
 class Jclass_hdr(CStruct):
     _packformat = ">"
     _fields = [ ("magic", "u32"),
                 ("minor_version","u16"),
                 ("major_version","u16"),
                 ("constants_pool_count","u16"),
-                ("constants_pool", "CPoolfield", lambda c:c.constants_pool_count-1),
+                ("constants_pool", (lambda c, s, of:c.gets(s, of),
+                                    lambda c, value:c.sets(value))),
                 ("bitmask", "u16"),
                 ("this","u16"),
                 ("super","u16")
                 ]
+
+    def gets(self, s, of):
+        v = []
+        while len(v) < self.constants_pool_count-1:
+            c = CPoolfield.unpack(s, of, self.parent_head)
+            v.append(c)
+            of += len(str(c))
+            if c.tag in [5, 6]:
+                # XXX long objects insert an supplementary object
+                v.append(None)
+        return v, of
+    def sets(self, value):
+        out = "".join([str(x) for x in value if x != None])
+        return out
 
 class Jclass_description(CStruct):
     _packformat = ">"
@@ -488,8 +502,8 @@ class JCLASS(object):
         return
 
     def __init__(self, pestr = None):
-        self.sex = 0
-        self.wsize = 32
+        self._sex = 0
+        self._wsize = 32
         self._content = pestr
         self.parse_content()
 
@@ -553,25 +567,26 @@ class JCLASS(object):
         c.tag = CONSTANT_TYPES_inv[c.__class__]
         return self.add_constant(c)
 
+    def add_class(self, i):
+        x = self.add_utf8(i)
+        c = CPClass(parent_head = self, name = x)
+        c.tag = CONSTANT_TYPES_inv[c.__class__]
+        return self.add_constant(c)
+
     def add_methodref(self, name, typetype, typename):
-        namei = self.add_utf8(name)
+        namei = self.add_class(name)
         typei = self.add_nameandtype(typename, typetype)
         c = CPMethodref(parent_head = self, name = namei, type = typei)
         c.tag = CONSTANT_TYPES_inv[c.__class__]
         return self.add_constant(c)
 
     def add_fieldref(self, name, typetype, typename):
-        namei = self.add_utf8(name)
+        namei = self.add_class(name)
         typei = self.add_nameandtype(typename, typetype)
         c = CPFieldref(parent_head = self, name = namei, type = typei)
         c.tag = CONSTANT_TYPES_inv[c.__class__]
         return self.add_constant(c)
 
-    def add_class(self, i):
-        x = self.add_utf8(i)
-        c = CPClass(parent_head = self, name = x)
-        c.tag = CONSTANT_TYPES_inv[c.__class__]
-        return self.add_constant(c)
 
 
 if __name__ == "__main__":

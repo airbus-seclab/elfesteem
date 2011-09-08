@@ -29,6 +29,7 @@ type2realtype['s64'] = size2type_s[64]
 
 type2realtype['d'] = 'd'
 type2realtype['f'] = 'f'
+type2realtype['q'] = 'q'
 type2realtype['ptr'] = 'ptr'
 
 sex_types = {0:'<', 1:'>'}
