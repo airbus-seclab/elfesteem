@@ -761,8 +761,8 @@ class DirDelay(CStruct):
                     d.impbynames.append(n)
                 else:
                     d.impbynames.append(isfromva(tmp_thunk[i].rva&(mask_ptr-1)))
-                    print repr(d[-1])
-                    raise ValueError('XXX to check')
+                    #print repr(d[-1])
+                    #raise ValueError('XXX to check')
         return out, of
 
     def sete(self, v):
