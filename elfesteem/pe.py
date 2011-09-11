@@ -3,6 +3,13 @@
 from new_cstruct import CStruct
 from strpatchwork import StrPatchwork
 import struct
+import logging
+
+log = logging.getLogger("pepy")
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
+log.addHandler(console_handler)
+log.setLevel(logging.WARN)
 
 class Doshdr(CStruct):
     _fields = [ ("magic", "u16"),
@@ -213,7 +220,11 @@ class DescName(CStruct):
                           lambda c, value:c.sets(value)))
                 ]
     def gets(self, s, of):
-        ofname = self.parent_head.rva2off(of)
+        if of < 0x1000:
+            log.warn("desname in pe hdr, used as offset")
+            ofname = of
+        else:
+            ofname = self.parent_head.rva2off(of)
         name = self.parent_head[ofname:self.parent_head._content.find('\x00', ofname)]
         return name, of+len(name)+1
     def sets(self, value):
@@ -291,12 +302,19 @@ class DirImport(CStruct):
 
         for i, d in enumerate(out):
             d.dlldescname = DescName.unpack(s, d.name, self.parent_head)
-            d.originalfirstthunks = struct_array(self, s,
-                                                 self.parent_head.rva2off(d.originalfirstthunk),
-                                                 Rva)
-            d.firstthunks = struct_array(self, s,
-                                         self.parent_head.rva2off(d.firstthunk), 
-                                         Rva)
+            if d.originalfirstthunk:
+                d.originalfirstthunks = struct_array(self, s,
+                                                     self.parent_head.rva2off(d.originalfirstthunk),
+                                                     Rva)
+            else:
+                d.originalfirstthunks = None
+
+            if d.firstthunk:
+                d.firstthunks = struct_array(self, s,
+                                             self.parent_head.rva2off(d.firstthunk), 
+                                             Rva)
+            else:
+                d.firstthunks = None
             d.impbynames = []
             if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
@@ -738,12 +756,19 @@ class DirDelay(CStruct):
                 isfromva = lambda x:x
             d.dlldescname = DescName.unpack(s, isfromva(d.name),
                                             self.parent_head)
-            d.originalfirstthunks = struct_array(self, s,
-                                                 self.parent_head.rva2off(isfromva(d.originalfirstthunk)),
-                                                 Rva)
-            d.firstthunks = struct_array(self, s,
-                                         self.parent_head.rva2off(isfromva(d.firstthunk)),
-                                         Rva)
+            if d.originalfirstthunk:
+                d.originalfirstthunks = struct_array(self, s,
+                                                     self.parent_head.rva2off(isfromva(d.originalfirstthunk)),
+                                                     Rva)
+            else:
+                d.originalfirstthunks
+
+            if d.firstthunk:
+                d.firstthunks = struct_array(self, s,
+                                             self.parent_head.rva2off(isfromva(d.firstthunk)),
+                                             Rva)
+            else:
+                d.firstthunk = None
 
             d.impbynames = []
             if d.originalfirstthunk and self.parent_head.rva2off(isfromva(d.originalfirstthunk)):
@@ -1342,6 +1367,7 @@ class ResEntry(CStruct):
                 ]
 
     def getn(self, s, of):
+        self.data = None
         #of = self.parent_head.rva2off(of)
         name = struct.unpack('I', s[of:of+4])[0]
         self.name_s = None
