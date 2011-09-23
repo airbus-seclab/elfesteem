@@ -19,10 +19,8 @@ class StructWrapper(object):
                                           dct.pop("set_"+fname,
                                                   lambda self,v,fname=fname: setattr(self.cstr,fname,v)),
                                           dct.pop("del_"+fname, None))
-            
             return type.__new__(cls, name, bases, dct)
     wrapped = None
-    
     def __init__(self, parent, sex, size, *args, **kargs):
         self.cstr = self.wrapped(sex, size, *args, **kargs)
         self.parent = parent
@@ -32,7 +30,6 @@ class StructWrapper(object):
         return "<W-"+repr(self.cstr)[1:]
     def __str__(self):
         return str(self.cstr)
-            
 
 
 class WEhdr(StructWrapper):
@@ -91,7 +88,6 @@ class ContentManager(object):
         owner.parse_content()
     def __delete__(self, owner):
         self.__set__(owner, None)
-        
 
 
 ### Sections
@@ -125,7 +121,7 @@ class Section(object):
         self.sh.size += new-old
         self.parent.resize(self, new-old)
         if self.phparent:
-            self.phparent.resize(self, new-old)        
+            self.phparent.resize(self, new-old)
     def parse_content(self, sex,size):
         pass
     def get_linksection(self):
@@ -147,7 +143,6 @@ class Section(object):
         if type(val) is int:
             self.sh.info = val
     infosection = property(get_infosection, set_infosection)
-    
     def __init__(self, parent, sh=None):
         self.parent=parent
         self.phparent=None
@@ -157,7 +152,6 @@ class Section(object):
         r = "{%(name)s ofs=%(offset)#x sz=%(size)#x addr=%(addr)#010x}" % self.sh
         return r
 
-    
 class NullSection(Section):
     sht = elf.SHT_NULL
     def get_name(self, ofs):
@@ -181,28 +175,27 @@ class InitArray(Section):
 
 class FiniArray(Section):
     sht = elf.SHT_FINI_ARRAY
-    
+
 class GroupSection(Section):
     sht = elf.SHT_GROUP
-    
+
 class SymTabSHIndeces(Section):
     sht = elf.SHT_SYMTAB_SHNDX
-    
+
 class GNUVerSym(Section):
     sht = elf.SHT_GNU_versym
-    
+
 class GNUVerNeed(Section):
     sht = elf.SHT_GNU_verneed
-    
+
 class GNUVerDef(Section):
     sht = elf.SHT_GNU_verdef
-    
+
 class GNULibLIst(Section):
     sht = elf.SHT_GNU_LIBLIST
-    
+
 class CheckSumSection(Section):
     sht = elf.SHT_CHECKSUM
-    
 
 class NoteSection(Section):
     sht = elf.SHT_NOTE
@@ -236,10 +229,6 @@ class Dynamic(Section):
         if type(item) is str:
             return self.dynamic[item]
         return self.dyntab[item]
-            
-            
-        
-    
 
 class StrTable(Section):
     sht = elf.SHT_STRTAB
@@ -256,7 +245,7 @@ class StrTable(Section):
             self.res[q] = c[:p]
             q += p+1
             c = c[p+1:]
-        
+
     def get_name(self, ofs):
         n = self.content[ofs:]
         n = n[:n.find("\0")]
@@ -269,7 +258,6 @@ class StrTable(Section):
         self.content += name+"\0"
         return n
 
-    
 class SymTable(Section):
     sht = elf.SHT_SYMTAB
     def parse_content(self, sex, size):
@@ -309,7 +297,7 @@ class RelTable(Section):
             rel = WRel(self,sex, size, s)
             self.reltab.append(rel)
             self.rel[rel.sym] = rel
-    
+
 class RelATable(Section):
     sht = elf.SHT_RELA
     def parse_content(self, sex, size):
@@ -351,8 +339,6 @@ class SHList:
         for s in self.shlist:
             if not isinstance(s, NoBitsSection):
                 s._content = StrPatchwork(parent[s.sh.offset: s.sh.offset+s.sh.size])
-            
-            
         # Follow dependencies when initializing sections
         zero = self.shlist[0]
         todo = self.shlist[1:]
@@ -365,17 +351,15 @@ class SHList:
                 s.parse_content(sex, size)
             else:
                 todo.append(s)
-            
         for s in self.shlist:
             self.do_add_section(s)
-        
+
     def do_add_section(self, section):
         n = section.sh.name
         if n.startswith("."):
             n = n[1:]
         n = n.replace(".","_").replace("-","_")
         setattr(self, n, section) #xxx
-        
     def append(self, item):
         self.do_add_section(item)
         self.shlist.append(item)
@@ -401,9 +385,6 @@ class SHList:
             self.parent.Ehdr.shoff += diff
         if self.parent.Ehdr.phoff > sec.sh.offset:
             self.parent.Ehdr.phoff += diff
-        
-        
-        
 
 ### Program Header List
 
@@ -436,7 +417,7 @@ class PHList:
             phstr = parent[of1:of2]
             self.phlist.append(ProgramHeader(self, sex, size, phstr))
             of1 = of2
-        
+
     def __getitem__(self, item):
         return self.phlist[item]
 
@@ -461,67 +442,48 @@ class PHList:
                 p.ph.vaddr += diff
             if p.ph.paddr > sec.phparent.ph.paddr+sec.sh.offset:
                 p.ph.paddr += diff
-                
 
 
 class virt:
     def __init__(self, x):
         self.parent = x
 
-    def item2virtitem(self, item):
-        if not type(item) is slice:#integer
-            ad = item
-            s = self.parent.getsectionbyvad(ad)
+    def get_rvaitem(self, start, stop = None, step = None):
+        if stop == None:
+            s = self.parent.getsectionbyvad(start)
             if not s:
-                return None, None
-            start = ad-s.sh.addr
+                return [(None, start)]
+            start = start-s.sh.addr
             return [(s, start)]
-        #if not type(item) is slice:
-        #    return None
-        start = item.start
-        stop  = item.stop
-        step  = item.step
-
         total_len = stop - start
 
         virt_item = []
-
-
         while total_len:
-            
             s = self.parent.getsectionbyvad(start)
-            s_max = s.sh.size
-            #print repr(s)
-            #print "%(name)s %(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x" % s
-            #print 'virtitem', hex(start), hex(stop), hex(total_len), hex(s_max)
-
             if not s:
-                log.warn('unknown virt address!')
+                log.warn('unknown rva address! %x'%start)
                 return
-
-
+            s_max = s.sh.size
             s_start = start - s.sh.addr
             s_stop = stop - s.sh.addr
-            #print hex(s_stop), hex(s_start)
             if s_stop >s_max:
-                #print 'yy'
-                #raise ValueError('lack data %d, %d'%(stop, s_max))
                 s_stop = s_max
 
-            #print hex(s_start), hex(s_stop)
-                
             s_len = s_stop - s_start
-            
             total_len -= s_len
             start += s_len
-                
             n_item = slice(s_start, s_stop, step)
             virt_item.append((s, n_item))
-        
         return virt_item
 
 
-
+    def item2virtitem(self, item):
+        if not type(item) is slice:#integer
+            return self.get_rvaitem(item)
+        start = item.start
+        stop  = item.stop
+        step  = item.step
+        return self.get_rvaitem(start, stop, step)
 
     def __getitem__(self, item):
         virt_item = self.item2virtitem(item)
@@ -543,7 +505,6 @@ class virt:
     def __setitem__(self, item, data):
         if not type(item) is slice:
             item = slice(item, item+len(data), None)
-            
         virt_item = self.item2virtitem(item)
         if not virt_item:
              return
@@ -555,15 +516,7 @@ class virt:
             s.content.__setitem__(n_item, data_slice)
             off = i.stop
 
-            """
-            #XXX test patch content
-            file_off = self.parent.rva2off(s.addr+n_item.start)
-            if self.parent.content:
-                self.parent.content = self.parent.content[:file_off]+ data_slice + self.parent.content[file_off+len(data_slice):]
-            """
-            
-            
-        return #s.data.__setitem__(n_item, data)
+        return
 
     def __len__(self):
         m = self.parent.sh.shlist[0]
@@ -576,8 +529,14 @@ class virt:
     def is_addr_in(self, ad):
         return self.parent.is_in_virt_address(ad)
 
-# ELF object
+    def __call__(self, ad_start, ad_stop = None, ad_step = None):
+        rva_items = self.get_rvaitem(ad_start, ad_stop, ad_step)
+        data_out = ""
+        for s, n_item in rva_items:
+            data_out += s.content.__getitem__(n_item)
+        return data_out
 
+# ELF object
 class ELF(object):
     def __init__(self, elfstr):
         self._content = elfstr
@@ -587,16 +546,13 @@ class ELF(object):
 
     def get_virt(self):
         return self._virt
-    
     virt = property(get_virt)
 
-    
     content = ContentManager()
     def parse_content(self):
         h = self.content[:8]
         self.size = ord(h[4])*32
         self.sex = ord(h[5])
-        
         self.Ehdr = WEhdr(self, self.sex, self.size, self.content)
         self.sh = SHList(self, self.sex, self.size)
         self.ph = PHList(self, self.sex, self.size)
@@ -616,7 +572,7 @@ class ELF(object):
 
     def __str__(self):
         return self.build_content()
-        
+
     def getsectionbyvad(self, ad):
         for s in self.sh:
             if s.sh.addr <= ad < s.sh.addr+s.sh.size:

@@ -58,21 +58,14 @@ class virt:
     def __init__(self, x):
         self.parent = x
 
-    def item2virtitem(self, item):
-        if not type(item) is slice:#integer
-            rva = item-self.parent.NThdr.ImageBase
-            s = self.parent.getsectionbyrva(rva)
+
+    def get_rvaitem(self, start, stop = None, step = None):
+        if stop == None:
+            s = self.parent.getsectionbyrva(start)
             if not s:
-                return None, None
-            start = rva-s.addr
+                return [(None, start)]
+            start = start-s.addr
             return [(s, start)]
-        #if not type(item) is slice:
-        #    return None
-        start = self.parent.virt2rva(item.start)
-        stop  = self.parent.virt2rva(item.stop)
-        step  = item.step
-
-
         total_len = stop - start
 
         virt_item = []
@@ -86,8 +79,8 @@ class virt:
             else:
                 s = self.parent.getsectionbyrva(start)
                 if not s:
-                    log.warn('unknown virt address!')
-                    return
+                    log.warn('unknown rva address! %x'%start)
+                    return []
                 s_max = max(s.size, s.rawsize)
                 s_start = start - s.addr
                 s_stop = stop - s.addr
@@ -98,17 +91,23 @@ class virt:
                 s_stop = s_max
 
             #print hex(s_start), hex(s_stop)
-                
             s_len = s_stop - s_start
-            
             total_len -= s_len
             start += s_len
-                
             n_item = slice(s_start, s_stop, step)
             virt_item.append((s, n_item))
-        
         return virt_item
-         
+
+
+    def item2virtitem(self, item):
+        if not type(item) is slice:#integer
+            rva = self.parent.virt2rva(item)
+            return self.get_rvaitem(rva)
+        start = self.parent.virt2rva(item.start)
+        stop  = self.parent.virt2rva(item.stop)
+        step  = item.step
+        return self.get_rvaitem(start, stop, step)
+
     def __getitem__(self, item):
         virt_item = self.item2virtitem(item)
         if not virt_item:
@@ -121,11 +120,10 @@ class virt:
                 data_out += self.parent.__getitem__(n_item)
 
         return data_out
- 
+
     def __setitem__(self, item, data):
         if not type(item) is slice:
             item = slice(item, item+len(data), None)
-            
         virt_item = self.item2virtitem(item)
         if not virt_item:
              return
@@ -136,20 +134,17 @@ class virt:
             data_slice = data.__getitem__(i)
             s.data.__setitem__(n_item, data_slice)
             off = i.stop
-
             #XXX test patch content
             file_off = self.parent.rva2off(s.addr+n_item.start)
             if self.parent.content:
                 self.parent.content = self.parent.content[:file_off]+ data_slice + self.parent.content[file_off+len(data_slice):]
-            
-            
         return #s.data.__setitem__(n_item, data)
- 
+
     def __len__(self):
          s = self.parent.SHList[-1]
          l = s.addr+s.size+self.parent.NThdr.ImageBase
          return int(l)
- 
+
     def find(self, pattern, offset = 0):
         if offset != 0:
             offset = self.parent.virt2rva(offset)
@@ -175,6 +170,20 @@ class virt:
     def is_addr_in(self, ad):
         return self.parent.is_in_virt_address(ad)
 
+    def __call__(self, ad_start, ad_stop = None, ad_step = None):
+        ad_start = self.parent.virt2rva(ad_start)
+        if ad_stop != None:
+            ad_stop = self.parent.virt2rva(ad_stop)
+
+        rva_items = self.get_rvaitem(ad_start, ad_stop, ad_step)
+        data_out = ""
+        for s, n_item in rva_items:
+            if s:
+                data_out += s.data.__getitem__(n_item)
+            else:
+                data_out += self.parent.__getitem__(n_item)
+
+        return data_out
 
 # PE object
 
