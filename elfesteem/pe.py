@@ -259,7 +259,7 @@ class struct_array(object):
         if not s:
             return
 
-        while (not num) or (num and i <num):
+        while (num == None) or (num and i <num):
             e = cstr.unpack(s, of, c.parent_head, c.parent_head._sex, c.parent_head._wsize)
             x = str(e)
             if num == None:
