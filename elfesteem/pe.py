@@ -1357,7 +1357,7 @@ class SUnicode(CStruct):
         v = s[of:of+self.length*2]
         return v, of+self.length
     def sets(self, value):
-        return struct.pack('H', self.length)+self.value
+        return self.value
 
 class ResEntry(CStruct):
     _fields = [ ("name",(lambda c, s, of:c.getn(s, of),

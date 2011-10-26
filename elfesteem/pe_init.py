@@ -266,7 +266,7 @@ class PE(object):
         self._sex = 0
         self._wsize = 32
         self.Doshdr = pe.Doshdr.unpack(self.content, of, self)
-        print repr(self.Doshdr)
+        #print repr(self.Doshdr)
         of = self.Doshdr.lfanew
         self.NTsig = pe.NTsig.unpack(self.content,
                                      of, self)
@@ -295,12 +295,12 @@ class PE(object):
             Opthdr = pe.Opthdr64
 
         self.Opthdr = Opthdr.unpack(self.content, of, self)
-        print hex(of+len(self.Opthdr))
+        #print hex(of+len(self.Opthdr))
         self.NThdr = pe.NThdr.unpack(self.content, of+len(self.Opthdr), self)
-        print repr(self.NThdr.optentries)
+        #print repr(self.NThdr.optentries)
         of += self.Coffhdr.sizeofoptionalheader
         self.SHList = pe.SHList.unpack(self.content, of, self)
-        print repr(self.SHList)
+        #print repr(self.SHList)
 
         # load section data
         filealignment = self.NThdr.filealignment
