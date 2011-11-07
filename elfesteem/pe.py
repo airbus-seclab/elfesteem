@@ -494,7 +494,7 @@ class DirImport(CStruct):
         if not self.impdesc:
             self.impdesc = struct_array(self, None,
                                         None,
-                                        Impdesc)
+                                        ImpDesc_e)
             self.impdesc.l = new_impdesc
         else:
             for d in new_impdesc:
