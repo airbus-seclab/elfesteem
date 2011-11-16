@@ -60,6 +60,8 @@ class virt:
 
 
     def get_rvaitem(self, start, stop = None, step = None):
+        if not self.parent.SHList:
+            return [(None, start)]
         if stop == None:
             s = self.parent.getsectionbyrva(start)
             if not s:
@@ -71,10 +73,10 @@ class virt:
         virt_item = []
         while total_len:
             # special case if look at pe hdr address
-            if 0 <= start < 0x1000:
+            if 0 <= start < min(self.parent.SHList[0].addr, 0x1000):
                 s_start = start
                 s_stop = stop
-                s_max = 0x1000
+                s_max = min(self.parent.SHList[0].addr, 0x1000)
                 s = None
             else:
                 s = self.parent.getsectionbyrva(start)
