@@ -245,7 +245,7 @@ class PE(object):
             self.NThdr.sizeofheapcommit = 0x1000
 
             self.NThdr.ImageBase = 0x400000
-            self.NThdr.sizeofheaders = 0x400
+            self.NThdr.sizeofheaders = 0x1000
             self.NThdr.numberofrvaandsizes = 0x10
 
 

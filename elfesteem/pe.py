@@ -426,6 +426,19 @@ class DirImport(CStruct):
                 if isinstance(imp, ImportByName):
                     c[self.parent_head.rva2off(tmp_thunk[j].rva)] = str(imp)
 
+    def get_dlldesc(self):
+        out = []
+        for impdesc in self.impdesc:
+            dllname = impdesc.dlldescname.name
+            funcs = []
+            for f in impdesc.impbynames:
+                if isinstance(f, ImportByName):
+                    funcs.append(f.name)
+                else:
+                    funcs.append(f)
+            d = ({"name":dllname, "firstthunk":impdesc.firstthunk}, funcs)
+            out.append(d)
+        return out
 
     def __repr__(self):
         rep = ["<%s>"%self.__class__.__name__]

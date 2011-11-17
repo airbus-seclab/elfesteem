@@ -10,7 +10,7 @@ readline.parse_and_bind("tab: complete")
 e_ = PE()
 mysh = "\xc3"
 s_text = e_.SHList.add_section(name = "text", addr = 0x1000, rawsize = 0x1000, data = mysh)
-e_.Opthdr.Opthdr.AddressOfEntryPoint = s_text.addr
+e_.Opthdr.AddressOfEntryPoint = s_text.addr
 new_dll = [({"name":"kernel32.dll",
              "firstthunk":s_text.addr+0x100},
             ["CreateFileA", "SetFilePointer", "WriteFile", "CloseHandle"]
@@ -23,7 +23,6 @@ new_dll = [({"name":"kernel32.dll",
            ]
 e_.DirImport.add_dlldesc(new_dll)
 
-s_myimp = e_.SHList.add_section(name = "myimp", rawsize = 0x1000)    
+s_myimp = e_.SHList.add_section(name = "myimp", rawsize = 0x1000)
 e_.DirImport.set_rva(s_myimp.addr)
 open('uu.bin', 'wb').write(str(e_))
-    
