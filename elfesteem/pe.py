@@ -482,7 +482,7 @@ class DirImport(CStruct):
                 f = Rva(self.parent_head)
                 if type(nf) in [int, long]:
                     f.rva = mask_ptr+nf
-                    ibn = None
+                    ibn = nf
                 elif type(nf) in [str]:
                     f.rva = True
                     ibn = ImportByName(self.parent_head)
@@ -493,7 +493,7 @@ class DirImport(CStruct):
                 impbynames.append(ibn)
                 d.originalfirstthunks.append(f)
                 ff = Rva(self.parent_head)
-                if ibn != None:
+                if isinstance(ibn, ImportByName):
                     ff.rva = 0xDEADBEEF #default func addr
                 else:
                     #ord ?XXX?
