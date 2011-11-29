@@ -1193,7 +1193,8 @@ class DirRes(CStruct):
                                                self.parent_head)
                     of1 = data.offsettodata
                     c =  StrPatchwork()
-                    c[0] = self.parent_head.drva[of1:of1+data.size]
+                    offile = self.parent_head.rva2off(of1)
+                    c[0] = s[offile:offile + data.size]
                     data.s = c
                     e.data = data
                     continue
