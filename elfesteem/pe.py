@@ -139,7 +139,8 @@ class SHList(CStruct):
                     s_last = s
             offset = s_last.offset+s_last.rawsize
         else:
-            offset = self.parent_head.Doshdr.lfanew+len(self.parent_head.NTsig)+len(self.parent_head.Coffhdr)+self.parent_head.Coffhdr.sizeofoptionalheader
+            s_null = str(Shdr.unpack(0x100*"\x00"))
+            offset = self.parent_head.Doshdr.lfanew+len(self.parent_head.NTsig)+len(self.parent_head.Coffhdr)+self.parent_head.Coffhdr.sizeofoptionalheader + len(str(self.parent_head.SHList)+s_null)
             addr = 0x2000
         #round addr
         addr = (addr+(s_align-1))&~(s_align-1)
