@@ -559,6 +559,7 @@ class DirExport(CStruct):
     _fields = [ ("expdesc", (lambda c, s, of:c.gete(s, of),
                              lambda c, value:c.sete(value)))]
     def gete(self, s, of):
+        of_o = of
         if not of:
             return None, of
         of = self.parent_head.rva2off(of)
@@ -566,6 +567,11 @@ class DirExport(CStruct):
         expdesc = ExpDesc_e.unpack(s,
                                    of,
                                    self.parent_head)
+        if self.parent_head.rva2off(expdesc.addressoffunctions) == None or \
+                self.parent_head.rva2off(expdesc.addressofnames) == None or \
+                self.parent_head.rva2off(expdesc.addressofordinals) == None:
+            log.warn("export dir malformed!")
+            return None, of_o
         self.dlldescname = DescName.unpack(s, expdesc.name, self.parent_head)
         self.f_address = struct_array(self, s,
                                       self.parent_head.rva2off(expdesc.addressoffunctions), 
