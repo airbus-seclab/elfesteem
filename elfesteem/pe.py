@@ -4,7 +4,7 @@ from new_cstruct import CStruct
 from strpatchwork import StrPatchwork
 import struct
 import logging
-
+from collections import defaultdict
 log = logging.getLogger("pepy")
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
@@ -1104,7 +1104,7 @@ class DirReloc(CStruct):
         return "\n".join(rep)
 
     def add_reloc(self, rels, rtype = 3, patchrel = True):
-        dirrel = self.parent_head.NThdr.optentries[pe.DIRECTORY_ENTRY_BASERELOC]
+        dirrel = self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_BASERELOC]
         if not rels:
             return
         rels.sort()
@@ -1129,13 +1129,12 @@ class DirReloc(CStruct):
                     raise "relocs must be in same range"
                 r = Reloc(self.parent_head)
                 r.rel = (rtype, o-o_init)
-                #print repr(r.rel)
                 offsets.append(r)
             while len(offsets) &3:
                 r = Reloc(self.parent_head)
                 r.rel = (0, 0)
                 offsets.append(r)
-            reldesc = Reloc(self.parent_head)
+            reldesc = Rel(self.parent_head)#Reloc(self.parent_head)
             reldesc.rva = o_init
             reldesc.size = (len(offsets)*2+8)
             reldesc.rels = offsets
