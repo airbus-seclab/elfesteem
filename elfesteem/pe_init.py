@@ -324,15 +324,18 @@ class PE(object):
         self.DirExport = pe.DirExport.unpack(self.content,
                                              self.NThdr.optentries[pe.DIRECTORY_ENTRY_EXPORT].rva,
                                              self)
-        self.DirDelay = pe.DirDelay.unpack(self.content,
-                                           self.NThdr.optentries[pe.DIRECTORY_ENTRY_DELAY_IMPORT].rva,
+        if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_DELAY_IMPORT:
+            self.DirDelay = pe.DirDelay.unpack(self.content,
+                                               self.NThdr.optentries[pe.DIRECTORY_ENTRY_DELAY_IMPORT].rva,
+                                               self)
+        if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_BASERELOC:
+            self.DirReloc = pe.DirReloc.unpack(self.content,
+                                               self.NThdr.optentries[pe.DIRECTORY_ENTRY_BASERELOC].rva,
+                                               self)
+        if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_RESOURCE:
+            self.DirRes = pe.DirRes.unpack(self.content,
+                                           self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
                                            self)
-        self.DirReloc = pe.DirReloc.unpack(self.content,
-                                           self.NThdr.optentries[pe.DIRECTORY_ENTRY_BASERELOC].rva,
-                                           self)
-        self.DirRes = pe.DirRes.unpack(self.content,
-                                       self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
-                                       self)
         
         #self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
 
