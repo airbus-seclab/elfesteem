@@ -317,7 +317,6 @@ class PE(object):
                 log.warn('unaligned raw section!')
             s.data = StrPatchwork()
             s.data[0] = self.content[raw_off:raw_off+s.rawsize]
-
         self.DirImport = pe.DirImport.unpack(self.content,
                                              self.NThdr.optentries[pe.DIRECTORY_ENTRY_IMPORT].rva,
                                              self)
@@ -336,7 +335,7 @@ class PE(object):
             self.DirRes = pe.DirRes.unpack(self.content,
                                            self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
                                            self)
-        
+
         #self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
 
         #print repr(self.Doshdr)

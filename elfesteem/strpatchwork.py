@@ -3,6 +3,8 @@ from sys import maxint
 class StrPatchwork:
     def __init__(self, s="", paddingbyte="\x00"):
         self.s = array("B",s)
+        # cache s to avoid rebuilding str after each find
+        self.s_cache = s
         self.paddingbyte=paddingbyte
     def __str__(self):
         return self.s.tostring()
@@ -35,6 +37,8 @@ class StrPatchwork:
         if l < end:
             self.s.extend(array("B", self.paddingbyte*(end-l)))
         self.s[item] = val
+        self.s_cache = None
+
 
     def __repr__(self):
         return "<Patchwork %r>" % self.s.tostring()
@@ -47,5 +51,7 @@ class StrPatchwork:
         return self
         
     def find(self, pattern, offset = 0):
-        return str(self).find(pattern, offset)
+        if not self.s_cache:
+            self.s_cache = str(s)
+        return self.s_cache.find(pattern, offset)
     
