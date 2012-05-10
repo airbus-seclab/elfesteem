@@ -16,7 +16,7 @@ class StrPatchwork:
             l = len(s)
             if l < end and end != maxint: #XXX hack [x:] give 2GB limit
                 # This is inefficient but avoids complicated maths if step is not 1
-                s = s[:] 
+                s = s[:]
                 s.extend(array("B",self.paddingbyte*(end-l)))
             r = s[item]
             return r.tostring()
@@ -49,9 +49,9 @@ class StrPatchwork:
     def __iadd__(self, other):
         self.s.extend(array("B", other))
         return self
-        
+
     def find(self, pattern, offset = 0):
         if not self.s_cache:
             self.s_cache = str(s)
         return self.s_cache.find(pattern, offset)
-    
+
