@@ -114,6 +114,12 @@ class Cstruct_Metaclass(type):
                     fmt = real_fmt(ffmt, _wsize)
                     of2 = of1+struct.calcsize(fmt)
                     value = struct.unpack(c.sex+fmt, s[of1:of2])[0]
+            elif ffmt == "sz": # null terminated special case
+                i = 0
+                while s[of1 + i] != "\x00":
+                    i += 1
+                of2 = of1+i+1
+                value = s[of1:of1+i]
             elif ffmt in all_cstructs:
                 # sub structures
                 if cpt:
@@ -197,6 +203,8 @@ class CStruct(object):
                         else:
                             o += struct.pack(self.sex+fmt, v)
 
+            elif ffmt == "sz": # null terminated special case
+                o = value+'\x00'
             elif ffmt in all_cstructs:
                 # sub structures
                 if cpt == None:
@@ -210,7 +218,7 @@ class CStruct(object):
                 o = f_set(self, value)
 
             else:
-                raise ValueError('unknown class')
+                raise ValueError('unknown class', ffmt)
             out += o
 
         return out
@@ -267,6 +275,12 @@ if __name__ == "__main__":
                    ("h", "4s"),
                    ]
 
+    class c6(CStruct):
+        _fields = [("i", "u16"),
+                   ("j", "sz"),
+                   ("k", "u16"),
+                   ]
+
     print all_cstructs
 
     s1 = struct.pack('HHI', 1111, 2222, 333333333)
@@ -319,3 +333,11 @@ if __name__ == "__main__":
     c, l = c5.unpack(s8)
     print repr(c)
     assert s8 == str(c)
+
+
+    s9 = struct.pack('H', 9999)+ "toto\x00" + struct.pack('H', 1010)
+    print repr(s9)
+    c, l = c6.unpack(s9)
+    print repr(c), repr(str(c))
+    assert s9 == str(c)
+
