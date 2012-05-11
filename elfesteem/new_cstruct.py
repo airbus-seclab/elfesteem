@@ -120,16 +120,16 @@ class Cstruct_Metaclass(type):
                     value = []
                     i = 0
                     while i < cpt(c):
-                        v = all_cstructs[ffmt].unpack(s, of1, parent_head, _sex, _wsize)
+                        v, l = all_cstructs[ffmt].unpack(s, of1, parent_head, _sex, _wsize)
                         v.parent = c
                         value.append(v)
-                        of2 = of1 + len(v)
+                        of2 = of1 + l
                         of1 = of2
                         i += 1
                 else:
-                    value = all_cstructs[ffmt].unpack(s, of1, parent_head, _sex, _wsize)
+                    value, l = all_cstructs[ffmt].unpack(s, of1, parent_head, _sex, _wsize)
                     value.parent = c
-                    of2 = of1 + len(value)
+                    of2 = of1 + l
             elif isinstance(ffmt, tuple):
                 f_get, f_set = ffmt
                 value, of2 = f_get(c, s, of1)
@@ -138,7 +138,7 @@ class Cstruct_Metaclass(type):
             of1 = of2
             setattr(c, fname+c.__class__.field_suffix, value)
 
-        return c
+        return c, of2-off
 
 
 class CStruct(object):
@@ -270,7 +270,7 @@ if __name__ == "__main__":
     print all_cstructs
 
     s1 = struct.pack('HHI', 1111, 2222, 333333333)
-    c = c1.unpack(s1)
+    c, l = c1.unpack(s1)
     print repr(c)
     assert len(c) == 8
     s2 = str(c)
@@ -281,14 +281,14 @@ if __name__ == "__main__":
     s3 = struct.pack('HHI', 4444, 5555, 666666666)+s2
     print repr(s3)
     assert len(s3) == 16
-    c = c2.unpack(s3)
+    c, l = c2.unpack(s3)
     print repr(c)
     s4 = str(c)
     print repr(s3), repr(s4)
     assert s3 == s4
 
     s5 = struct.pack('HHH', 2, 5555, 6666)+s1*2+struct.pack('H', 9999)
-    c = c3.unpack(s5)
+    c, l = c3.unpack(s5)
     assert len(c) == 24
     print repr(c)
     print c.b
@@ -306,7 +306,7 @@ if __name__ == "__main__":
     assert str(c) == s1
 
     s7 = struct.pack('H', 8888)+"fffff\x00"+struct.pack('H', 9999)
-    c = c4.unpack(s7)
+    c, l = c4.unpack(s7)
     print repr(c)
     print repr(c.e)
     print repr(c.f)
@@ -316,6 +316,6 @@ if __name__ == "__main__":
     assert s7 == str(c)
 
     s8 = struct.pack('H4s', 8888, "abcd")
-    c = c5.unpack(s8)
+    c, l = c5.unpack(s8)
     print repr(c)
     assert s8 == str(c)

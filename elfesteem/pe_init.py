@@ -267,11 +267,11 @@ class PE(object):
         of = 0
         self._sex = 0
         self._wsize = 32
-        self.Doshdr = pe.Doshdr.unpack(self.content, of, self)
+        self.Doshdr, l = pe.Doshdr.unpack(self.content, of, self)
         #print repr(self.Doshdr)
         of = self.Doshdr.lfanew
-        self.NTsig = pe.NTsig.unpack(self.content,
-                                     of, self)
+        self.NTsig, l = pe.NTsig.unpack(self.content,
+                                        of, self)
         self.DirImport = None
         self.DirExport = None
         self.DirDelay = None
@@ -282,9 +282,9 @@ class PE(object):
         if self.NTsig.signature != 0x4550:
             return
         of += len(self.NTsig)
-        self.Coffhdr = pe.Coffhdr.unpack(self.content,
-                                         of,
-                                         self)
+        self.Coffhdr, l = pe.Coffhdr.unpack(self.content,
+                                            of,
+                                            self)
 
         of += len(self.Coffhdr)
         m = struct.unpack('H', self.content[of:of+2])[0]
@@ -296,12 +296,12 @@ class PE(object):
         else:
             Opthdr = pe.Opthdr64
 
-        self.Opthdr = Opthdr.unpack(self.content, of, self)
+        self.Opthdr, l = Opthdr.unpack(self.content, of, self)
         #print hex(of+len(self.Opthdr))
-        self.NThdr = pe.NThdr.unpack(self.content, of+len(self.Opthdr), self)
+        self.NThdr, l = pe.NThdr.unpack(self.content, of+len(self.Opthdr), self)
         #print repr(self.NThdr.optentries)
         of += self.Coffhdr.sizeofoptionalheader
-        self.SHList = pe.SHList.unpack(self.content, of, self)
+        self.SHList, l = pe.SHList.unpack(self.content, of, self)
         #print repr(self.SHList)
 
         # load section data
@@ -317,25 +317,24 @@ class PE(object):
                 log.warn('unaligned raw section!')
             s.data = StrPatchwork()
             s.data[0] = self.content[raw_off:raw_off+s.rawsize]
-        self.DirImport = pe.DirImport.unpack(self.content,
-                                             self.NThdr.optentries[pe.DIRECTORY_ENTRY_IMPORT].rva,
-                                             self)
-        self.DirExport = pe.DirExport.unpack(self.content,
-                                             self.NThdr.optentries[pe.DIRECTORY_ENTRY_EXPORT].rva,
-                                             self)
+        self.DirImport, l = pe.DirImport.unpack(self.content,
+                                                self.NThdr.optentries[pe.DIRECTORY_ENTRY_IMPORT].rva,
+                                                self)
+        self.DirExport, l = pe.DirExport.unpack(self.content,
+                                                self.NThdr.optentries[pe.DIRECTORY_ENTRY_EXPORT].rva,
+                                                self)
         if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_DELAY_IMPORT:
-            self.DirDelay = pe.DirDelay.unpack(self.content,
-                                               self.NThdr.optentries[pe.DIRECTORY_ENTRY_DELAY_IMPORT].rva,
-                                               self)
+            self.DirDelay, l = pe.DirDelay.unpack(self.content,
+                                                  self.NThdr.optentries[pe.DIRECTORY_ENTRY_DELAY_IMPORT].rva,
+                                                  self)
         if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_BASERELOC:
-            self.DirReloc = pe.DirReloc.unpack(self.content,
-                                               self.NThdr.optentries[pe.DIRECTORY_ENTRY_BASERELOC].rva,
-                                               self)
+            self.DirReloc, l = pe.DirReloc.unpack(self.content,
+                                                  self.NThdr.optentries[pe.DIRECTORY_ENTRY_BASERELOC].rva,
+                                                  self)
         if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_RESOURCE:
-            self.DirRes = pe.DirRes.unpack(self.content,
-                                           self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
-                                           self)
-
+            self.DirRes, l = pe.DirRes.unpack(self.content,
+                                              self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
+                                              self)
         #self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
 
         #print repr(self.Doshdr)
