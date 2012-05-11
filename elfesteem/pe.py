@@ -233,14 +233,8 @@ class DescName(CStruct):
 
 class ImportByName(CStruct):
     _fields = [ ("hint", "u16"),
-                ("name", (lambda c, s, of:c.gets(s, of),
-                          lambda c, value:c.sets(value)))
+                ("name", "sz")
                 ]
-    def gets(self, s, of):
-        name = self.parent_head[of:self.parent_head._content.find('\x00', of)]
-        return name, of+len(name)+1
-    def sets(self, value):
-        return str(value)+"\x00"
 
 class ImpDesc_e(CStruct):
     _fields = [ ("originalfirstthunk","u32"),
