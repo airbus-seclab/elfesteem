@@ -237,12 +237,18 @@ class CStruct(object):
 
 if __name__ == "__main__":
 
+    """
+    Classic C struct
+    """
     class c1(CStruct):
         _fields = [("c1_field1", "u16"),
                    ("c1_field2", "u16"),
                    ("c1_field3", "u32"),
                    ]
 
+    """
+    Struct with a sub structure as field (here, c1)
+    """
     class c2(CStruct):
         _fields = [("c2_field1", "u16"),
                    ("c2_field2", "u16"),
@@ -250,6 +256,10 @@ if __name__ == "__main__":
                    ("c2_c", "c1"),
                    ]
 
+    """
+    b field is an array of 2 u16
+    c field is an array of a count u16
+    """
     class c3(CStruct):
         _fields = [("a", "u16"),
                    ("b", "u16", lambda x:2),
@@ -257,6 +267,9 @@ if __name__ == "__main__":
                    ("d", "u16"),
                    ]
 
+    """
+    e field has its own packing/unpacking custom functions
+    """
     class c4(CStruct):
         _fields = [("d", "u16"),
                    ("e", (lambda c, s, of:c.gets(s, of),
@@ -270,11 +283,18 @@ if __name__ == "__main__":
             return s[of:of+i], of+i+1
         def sets(cls, value):
             return str(value)+'\x00'
+
+    """
+    h field is a 4 len string
+    """
     class c5(CStruct):
         _fields = [("g", "u16"),
                    ("h", "4s"),
                    ]
 
+    """
+    j field is a nul terminated string
+    """
     class c6(CStruct):
         _fields = [("i", "u16"),
                    ("j", "sz"),
