@@ -115,11 +115,11 @@ class Cstruct_Metaclass(type):
                     of2 = of1+struct.calcsize(fmt)
                     value = struct.unpack(c.sex+fmt, s[of1:of2])[0]
             elif ffmt == "sz": # null terminated special case
-                i = 0
-                while s[of1 + i] != "\x00":
-                    i += 1
-                of2 = of1+i+1
-                value = s[of1:of1+i]
+                of2 = s.find('\x00', of1)
+                if of2 == -1:
+                    raise ValueError('no null char in string!')
+                of2 += 1
+                value = s[of1:of2-1]
             elif ffmt in all_cstructs:
                 # sub structures
                 if cpt:
