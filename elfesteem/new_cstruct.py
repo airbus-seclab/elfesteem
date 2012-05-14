@@ -90,6 +90,8 @@ class Cstruct_Metaclass(type):
                 _sex = 0
                 _wsize = 32
         c = cls(_sex = _sex, _wsize = _wsize)
+        if parent_head == None:
+            parent_head = c
         c.parent_head = parent_head
 
         of1 = off
@@ -324,6 +326,8 @@ if __name__ == "__main__":
     s4 = str(c)
     print repr(s3), repr(s4)
     assert s3 == s4
+    assert c.c2_c.parent_head == c
+
 
     s5 = struct.pack('HHH', 2, 5555, 6666)+s1*2+struct.pack('H', 9999)
     c = c3.unpack(s5)
