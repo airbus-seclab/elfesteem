@@ -108,8 +108,10 @@ class CPString(CStruct):
         self.parent_head.get_constant_pool_by_index(self.value_value).set_str(v)
     def pp(self):
         s = self.value
+        """
         if len(s) > 40:
             s = str(s)[:40]+'...'
+        """
         return "%r"%(s)
 
 class CPFieldref(CStruct):
