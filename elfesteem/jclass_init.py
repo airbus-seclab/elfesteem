@@ -266,11 +266,17 @@ class CPoolfield(CStruct):
     _packformat = ">"
     _fields = [("tag", "u08")]
     @classmethod
-    def unpack(cls, s, off = 0, parent_head = None, _sex=1, _wsize=32):
+    def unpack_l(cls, s, off = 0, parent_head = None, _sex=1, _wsize=32):
         tag = ord(s[off])
         if not tag in CONSTANT_TYPES:
             raise ValueError('unknown type', hex(tag))
-        c = CONSTANT_TYPES[tag].unpack(s, off, parent_head, _sex, _wsize)
+        c, l = CONSTANT_TYPES[tag].unpack_l(s, off, parent_head, _sex, _wsize)
+        return c, l
+
+    @classmethod
+    def unpack(cls, s, off = 0, parent_head = None, _sex=None, _wsize=None):
+        c, l = cls.unpack_l(s, off = off,
+                            parent_head = parent_head, _sex=_sex, _wsize=_wsize)
         return c
 
 
@@ -400,27 +406,33 @@ class CAttributeInfo(CStruct):
     _fields = [ ("name", "u16")
                 ]
     @classmethod
-    def unpack(cls, s, off = 0, parent_head = None, _sex=1, _wsize=32):
+    def unpack_l(cls, s, off = 0, parent_head = None, _sex=1, _wsize=32):
         tag = struct.unpack('>H', s[off:off+2])[0]
         c = parent_head.get_constant_pool_by_index(tag)
         if not isinstance(c, CPUtf8):
             raise ValueError('Error in parsing, should be string', hex(tag))
         name = c.value
         if name == "Code":
-            c = CAttribute_code.unpack(s, off, parent_head, _sex, _wsize)
+            c, l = CAttribute_code.unpack_l(s, off, parent_head, _sex, _wsize)
         elif name == "LineNumberTable":
-            c = CLineNumberTable.unpack(s, off, parent_head, _sex, _wsize)
+            c, l = CLineNumberTable.unpack_l(s, off, parent_head, _sex, _wsize)
         elif name == "Exceptions":
-            c = CException.unpack(s, off, parent_head, _sex, _wsize)
+            c, l = CException.unpack_l(s, off, parent_head, _sex, _wsize)
         elif name == "InnerClasses":
-            c = CInnerClasses.unpack(s, off, parent_head, _sex, _wsize)
+            c, l = CInnerClasses.unpack_l(s, off, parent_head, _sex, _wsize)
         elif name == "SourceFile":
-            c = CSourceFile.unpack(s, off, parent_head, _sex, _wsize)
+            c, l = CSourceFile.unpack_l(s, off, parent_head, _sex, _wsize)
         elif name == "Synthetic":
-            c = CSynthetic.unpack(s, off, parent_head, _sex, _wsize)
+            c, l = CSynthetic.unpack_l(s, off, parent_head, _sex, _wsize)
         else:
             log.warning("unsupported attribute, skipping:\n%r"%(c))
-            c = CAttributeInfo_default.unpack(s, off, parent_head, _sex, _wsize)
+            c, l = CAttributeInfo_default.unpack_l(s, off, parent_head, _sex, _wsize)
+        return c, l
+
+    @classmethod
+    def unpack(cls, s, off = 0, parent_head = None, _sex=None, _wsize=None):
+        c, l = cls.unpack_l(s, off = off,
+                            parent_head = parent_head, _sex=_sex, _wsize=_wsize)
         return c
 
 class CFieldInfo(CStruct):
@@ -464,9 +476,9 @@ class Jclass_hdr(CStruct):
     def gets(self, s, of):
         v = []
         while len(v) < self.constants_pool_count-1:
-            c = CPoolfield.unpack(s, of, self.parent_head)
+            c, l = CPoolfield.unpack_l(s, of, self.parent_head)
             v.append(c)
-            of += len(str(c))
+            of += l
             if c.tag in [5, 6]:
                 # XXX long objects insert an supplementary object
                 v.append(None)
@@ -514,8 +526,8 @@ class JCLASS(object):
         return None
 
     def parse_content(self):
-        self.hdr = Jclass_hdr.unpack(self.content, 0, self, self)
-        self.description = Jclass_description.unpack(self.content, len(self.hdr), self, self)
+        self.hdr, l = Jclass_hdr.unpack_l(self.content, 0, self, self)
+        self.description = Jclass_description.unpack(self.content, l, self, self)
 
     def __str__(self):
         out = ''
