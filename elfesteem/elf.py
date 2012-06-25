@@ -41,6 +41,17 @@ class Phdr(CStruct):
                 ("flags","u32"),
                 ("align","u32") ]
 
+class Phdr64(CStruct):
+    _fields = [ ("type","u32"),
+                ("flags","u32"),
+                ("offset","ptr"),
+                ("vaddr","ptr"),
+                ("paddr","ptr"),
+                ("filesz","ptr"),
+                ("memsz","ptr"),
+                ("align","ptr") ]
+
+
 class Sym(CStruct):
     _fields = [ ("name","u32"),
                 ("value","u32"),

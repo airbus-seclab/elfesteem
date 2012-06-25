@@ -77,6 +77,9 @@ class WDynamic(StructWrapper):
 class WPhdr(StructWrapper):
     wrapped = elf.Phdr
 
+class WPhdr64(StructWrapper):
+    wrapped = elf.Phdr64
+
 
 class ContentManager(object):
     def __get__(self, owner, x):
@@ -85,7 +88,7 @@ class ContentManager(object):
     def __set__(self, owner, new_content):
         owner.resize(len(owner._content), len(new_content))
         owner._content=StrPatchwork(new_content)
-        owner.parse_content()
+        owner.parse_content(owner.sex, owner.size)
     def __delete__(self, owner):
         self.__set__(owner, None)
 
@@ -123,6 +126,7 @@ class Section(object):
         if self.phparent:
             self.phparent.resize(self, new-old)
     def parse_content(self, sex,size):
+        self.sex, self.size = sex, size
         pass
     def get_linksection(self):
         return self.parent[self.sh.link]
@@ -200,6 +204,7 @@ class CheckSumSection(Section):
 class NoteSection(Section):
     sht = elf.SHT_NOTE
     def parse_content(self, sex, size):
+        self.sex, self.size = sex, size
         c = self.content
         self.notes = []
         # XXX: c may not be aligned?
@@ -215,6 +220,7 @@ class NoteSection(Section):
 class Dynamic(Section):
     sht = elf.SHT_DYNAMIC
     def parse_content(self, sex, size):
+        self.sex, self.size = sex, size
         c = self.content
         self.dyntab = []
         self.dynamic = {}
@@ -234,6 +240,7 @@ class StrTable(Section):
     sht = elf.SHT_STRTAB
 
     def parse_content(self, sex, size):
+        self.sex, self.size = sex, size
         self.res = {}
         c = self.content
         q = 0
@@ -253,14 +260,23 @@ class StrTable(Section):
 
     def add_name(self, name):
         if name in self.content:
-            return self.content.index(name)
+            return self.content.find(name)
         n = len(self.content)
-        self.content += name+"\0"
+        self.content = str(self.content)+name+"\0"
         return n
+
+    def mod_name(self, name, new_name):
+        s = str(self.content)
+        if not name in s:
+            raise ValueError('unknown name', name)
+        s = s.replace('\x00'+name+'\x00', '\x00'+new_name+'\x00')
+        self.content = s
+        return len(self.content)
 
 class SymTable(Section):
     sht = elf.SHT_SYMTAB
     def parse_content(self, sex, size):
+        self.sex, self.size = sex, size
         c = self.content
         self.symtab=[]
         self.symbols={}
@@ -282,6 +298,7 @@ class DynSymTable(SymTable):
 class RelTable(Section):
     sht = elf.SHT_REL
     def parse_content(self, sex, size):
+        self.sex, self.size = sex, size
         if size == 32:
             WRel = WRel32
         elif size == 64:
@@ -301,6 +318,7 @@ class RelTable(Section):
 class RelATable(Section):
     sht = elf.SHT_RELA
     def parse_content(self, sex, size):
+        self.sex, self.size = sex, size
         if size == 32:
             WRela = WRela32
             sz = 16
@@ -406,6 +424,23 @@ class ProgramHeader:
         self.ph.memsz += diff
         self.parent.resize(sec, diff)
 
+class ProgramHeader64:
+    def __init__(self, parent, sex, size, phstr):
+        self.parent = parent
+        self.ph = WPhdr64(self,sex, size, phstr)
+        self.shlist = []
+        for s in self.parent.parent.sh:
+            if isinstance(s, NullSection):
+                continue
+            if ( (isinstance(s,NoBitsSection) and s.sh.offset == self.ph.offset+self.ph.filesz)
+                 or  self.ph.offset <= s.sh.offset < self.ph.offset+self.ph.filesz ):
+                s.phparent = self
+                self.shlist.append(s)
+    def resize(self, sec, diff):
+        self.ph.filesz += diff
+        self.ph.memsz += diff
+        self.parent.resize(sec, diff)
+
 class PHList:
     def __init__(self, parent, sex, size):
         self.parent = parent
@@ -415,7 +450,10 @@ class PHList:
         for i in range(ehdr.phnum):
             of2 = of1+ehdr.phentsize
             phstr = parent[of1:of2]
-            self.phlist.append(ProgramHeader(self, sex, size, phstr))
+            if size == 32:
+                self.phlist.append(ProgramHeader(self, sex, size, phstr))
+            else:
+                self.phlist.append(ProgramHeader64(self, sex, size, phstr))
             of1 = of2
 
     def __getitem__(self, item):

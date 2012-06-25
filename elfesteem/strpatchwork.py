@@ -2,7 +2,7 @@ from array import array
 from sys import maxint
 class StrPatchwork:
     def __init__(self, s="", paddingbyte="\x00"):
-        self.s = array("B",s)
+        self.s = array("B",str(s))
         # cache s to avoid rebuilding str after each find
         self.s_cache = s
         self.paddingbyte=paddingbyte
