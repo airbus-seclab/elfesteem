@@ -410,9 +410,10 @@ class PE(object):
     def is_in_virt_address(self, ad):
         if ad < self.NThdr.ImageBase:
             return False
-        s = self.SHList.shlist[-1]
-        if ad < self.NThdr.ImageBase + s.addr + s.size:
-            return True
+        ad = self.virt2rva(ad)
+        for s in self.SHList.shlist:
+            if s.addr <= ad < s.addr + s.size:
+                return True
         return False
 
     def get_drva(self):
