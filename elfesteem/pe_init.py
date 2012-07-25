@@ -456,6 +456,12 @@ class PE(object):
         for s in self.SHList.shlist:
             c[s.offset:s.offset+s.rawsize] = str(s.data)
 
+        # fix image size
+        s_last = self.SHList.shlist[-1]
+        size = s_last.addr + s_last.size + (self.NThdr.sectionalignment-1)
+        size &= ~(self.NThdr.sectionalignment-1)
+        self.NThdr.sizeofimage = size
+
         off = self.Doshdr.lfanew
         c[off] = str(self.NTsig)
         off += len(self.NTsig)
