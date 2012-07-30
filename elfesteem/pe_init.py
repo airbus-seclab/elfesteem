@@ -31,33 +31,16 @@ class drva:
     def get_slice_raw(self, item):
         if not type(item) is slice:
             return None
-        start = self.parent.rva2off(item.start)
-        s = self.parent.getsectionbyrva(item.start)
-        if not s:
-            fds
-            return
-        stop = item.stop
-        if stop == s.addr+s.size:
-            stop = stop-s.addr+s.offset
-        else:
-            stop = self.parent.rva2off(stop)
-        step = item.step
-        if not start or not stop:
-            return
-        n_item = slice(start, stop, step)
-        return n_item
-
-    def __getitem__(self, item):
-        n_item = self.get_slice_raw(item)
-        return self.parent.__getitem__(n_item)
-    def __setitem__(self, item, data):
-        n_item = self.get_slice_raw(item)
-        return self.parent.__setitem__(n_item, data)
-
-class virt:
-    def __init__(self, x):
-        self.parent = x
-
+        rva_items = self.get_rvaitem(item.start, item.stop, item.step)
+        if not rva_items:
+             return
+        data_out = ""
+        for s, n_item in rva_items:
+            if s:
+                data_out += s.data.__getitem__(n_item)
+            else:
+                data_out += self.parent.__getitem__(n_item)
+        return data_out
 
     def get_rvaitem(self, start, stop = None, step = None):
         if not self.parent.SHList:
@@ -69,14 +52,15 @@ class virt:
             start = start-s.addr
             return [(s, start)]
         total_len = stop - start
-
-        virt_item = []
+        rva_items = []
         while total_len:
             # special case if look at pe hdr address
-            if 0 <= start < min(self.parent.SHList[0].addr, 0x1000):
+            if 0 <= start < min(self.parent.SHList[0].addr,
+                                self.parent.NThdr.sizeofheaders):
                 s_start = start
                 s_stop = stop
-                s_max = min(self.parent.SHList[0].addr, 0x1000)
+                s_max = min(self.parent.SHList[0].addr,
+                            self.parent.NThdr.sizeofheaders)
                 s = None
             else:
                 s = self.parent.getsectionbyrva(start)
@@ -91,48 +75,25 @@ class virt:
                 #print 'yy'
                 #raise ValueError('lack data %d, %d'%(stop, s_max))
                 s_stop = s_max
-
             #print hex(s_start), hex(s_stop)
             s_len = s_stop - s_start
             total_len -= s_len
             start += s_len
             n_item = slice(s_start, s_stop, step)
-            virt_item.append((s, n_item))
-        return virt_item
-
-
-    def item2virtitem(self, item):
-        if not type(item) is slice:#integer
-            rva = self.parent.virt2rva(item)
-            return self.get_rvaitem(rva)
-        start = self.parent.virt2rva(item.start)
-        stop  = self.parent.virt2rva(item.stop)
-        step  = item.step
-        return self.get_rvaitem(start, stop, step)
+            rva_items.append((s, n_item))
+        return rva_items
 
     def __getitem__(self, item):
-        virt_item = self.item2virtitem(item)
-        if not virt_item:
-             return
-        data_out = ""
-        for s, n_item in virt_item:
-            if s:
-                data_out += s.data.__getitem__(n_item)
-            else:
-                data_out += self.parent.__getitem__(n_item)
-
-        return data_out
-
+        return self.get_slice_raw(item)
     def __setitem__(self, item, data):
         if not type(item) is slice:
             item = slice(item, item+len(data), None)
-        virt_item = self.item2virtitem(item)
-        if not virt_item:
+        rva_items = self.get_rvaitem(item.start, item.stop, item.step)
+        if not rva_items:
              return
         off = 0
-        for s, n_item in virt_item:
+        for s, n_item in rva_items:
             i = slice(off, n_item.stop+off-n_item.start, n_item.step)
-
             data_slice = data.__getitem__(i)
             s.data.__setitem__(n_item, data_slice)
             off = i.stop
@@ -141,6 +102,30 @@ class virt:
             if self.parent.content:
                 self.parent.content = self.parent.content[:file_off]+ data_slice + self.parent.content[file_off+len(data_slice):]
         return #s.data.__setitem__(n_item, data)
+
+
+class virt:
+    def __init__(self, x):
+        self.parent = x
+
+    def item_virt2rva(self, item):
+        if not type(item) is slice:#integer
+            rva = self.parent.virt2rva(item)
+            return self.parent.drva.get_rvaitem(rva)
+        start = self.parent.virt2rva(item.start)
+        stop  = self.parent.virt2rva(item.stop)
+        step  = item.step
+        return slice(start, stop, step)
+
+    def __getitem__(self, item):
+        rva_item = self.item_virt2rva(item)
+        return self.parent.drva.__getitem__(rva_item)
+
+    def __setitem__(self, item, data):
+        if not type(item) is slice:
+            item = slice(item, item+len(data), None)
+        rva_item = self.item_virt2rva(item)
+        self.parent.drva.__setitem__(rva_item, data)
 
     def __len__(self):
          s = self.parent.SHList[-1]
@@ -177,7 +162,7 @@ class virt:
         if ad_stop != None:
             ad_stop = self.parent.virt2rva(ad_stop)
 
-        rva_items = self.get_rvaitem(ad_start, ad_stop, ad_step)
+        rva_items = self.parent.drva.get_rvaitem(ad_start, ad_stop, ad_step)
         data_out = ""
         for s, n_item in rva_items:
             if s:
@@ -500,6 +485,24 @@ class PE(object):
             all_func[self.DirExport.f_nameordinals[i].ordinal+self.DirExport.expdesc.base] = self.rva2virt(self.DirExport.f_address[self.DirExport.f_nameordinals[i].ordinal].rva)
         #XXX todo: test if redirected export
         return all_func
+
+    def reloc_to(self, imgbase):
+        offset = imgbase - self.NThdr.ImageBase
+        if not self.DirReloc:
+            log.warn('no relocation found!')
+        for rel in self.DirReloc.reldesc:
+            rva = rel.rva
+            for reloc in rel.rels:
+                t, off = reloc.rel
+                if t == 0 and off == 0:
+                    continue
+                if t != 3:
+                    raise ValueError('reloc type not impl')
+                off += rva
+                v = struct.unpack('I', self.drva[off:off+4])[0]
+                v += offset
+                self.drva[off:off+4] = struct.pack('I', v & 0xFFFFFFFF)
+        self.NThdr.ImageBase = imgbase
 
 class Coff(PE):
     def parse_content(self):
