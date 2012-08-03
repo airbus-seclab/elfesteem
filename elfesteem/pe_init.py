@@ -111,7 +111,7 @@ class virt:
     def item_virt2rva(self, item):
         if not type(item) is slice:#integer
             rva = self.parent.virt2rva(item)
-            return self.parent.drva.get_rvaitem(rva)
+            return slice(rva, None, None)
         start = self.parent.virt2rva(item.start)
         stop  = self.parent.virt2rva(item.stop)
         step  = item.step
