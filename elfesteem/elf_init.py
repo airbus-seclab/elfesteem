@@ -488,22 +488,22 @@ class virt:
 
     def get_rvaitem(self, start, stop = None, step = None):
         if stop == None:
-            s = self.parent.getsectionbyvad(start)
+            s = self.parent.getphbyvad(start)
             if not s:
                 return [(None, start)]
-            start = start-s.sh.addr
+            start = start-s.ph.vaddr
             return [(s, start)]
         total_len = stop - start
 
         virt_item = []
         while total_len:
-            s = self.parent.getsectionbyvad(start)
+            s = self.parent.getphbyvad(start)
             if not s:
                 log.warn('unknown rva address! %x'%start)
                 return
-            s_max = s.sh.size
-            s_start = start - s.sh.addr
-            s_stop = stop - s.sh.addr
+            s_max = s.ph.filesz
+            s_start = start - s.ph.vaddr
+            s_stop = stop - s.ph.vaddr
             if s_stop >s_max:
                 s_stop = s_max
 
@@ -529,7 +529,17 @@ class virt:
              return
         data_out = ""
         for s, n_item in virt_item:
-            data_out += s.content.__getitem__(n_item)
+            if not type(n_item) is slice:
+                n_item = slice(n_item, n_item+1, 1)
+            start = n_item.start + s.ph.offset
+            stop  = n_item.stop + s.ph.offset
+            if n_item.step != None:
+                step  = n_item.step + s.ph.offset
+            else:
+                step = None
+            n_item = slice(start, stop, step)
+            #data_out += self.parent.content.__s.content.__getitem__(n_item)
+            data_out += self.parent.content.__getitem__(n_item)
         return data_out
 
 
@@ -571,8 +581,41 @@ class virt:
         rva_items = self.get_rvaitem(ad_start, ad_stop, ad_step)
         data_out = ""
         for s, n_item in rva_items:
-            data_out += s.content.__getitem__(n_item)
+            #print "njj"
+            #data_out += s.content.__getitem__(n_item)
+            if not type(n_item) is slice:
+                n_item = slice(n_item, n_item+1, 1)
+            start = n_item.start + s.ph.offset
+            stop  = n_item.stop + s.ph.offset
+            if n_item.step != None:
+                step  = n_item.step + s.ph.offset
+            else:
+                step = None
+            n_item = slice(start, stop, step)
+            #data_out += self.parent.content.__s.content.__getitem__(n_item)
+            data_out += self.parent.content.__getitem__(n_item)
+
         return data_out
+
+    def find(self, pattern, offset = 0):
+        sections = []
+        for s in self.parent.ph:
+            s_max = s.ph.memsz#max(s.ph.filesz, s.ph.memsz)
+            if offset < s.ph.vaddr + s_max:
+                sections.append(s)
+
+        if not sections:
+            return -1
+        offset -= sections[0].ph.vaddr
+        if offset < 0:
+            offset = 0
+        for s in sections:
+            data = self.parent.content[s.ph.offset:s.ph.offset+s.ph.filesz]
+            ret = data.find(pattern, offset)
+            if ret != -1:
+                return ret  + s.ph.vaddr#self.parent.rva2virt(s.addr + ret)
+            offset = 0
+        return -1
 
 # ELF object
 class ELF(object):
@@ -610,6 +653,11 @@ class ELF(object):
 
     def __str__(self):
         return self.build_content()
+
+    def getphbyvad(self, ad):
+        for s in self.ph:
+            if s.ph.vaddr <= ad < s.ph.vaddr+s.ph.memsz:
+                return s
 
     def getsectionbyvad(self, ad):
         for s in self.sh:
