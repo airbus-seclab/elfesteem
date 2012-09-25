@@ -458,7 +458,12 @@ class PE(object):
         off += len(self.NThdr)
         #c[off] = str(self.Optehdr)
 
-        c[self.Doshdr.lfanew+len(self.NTsig)+len(self.Coffhdr)+self.Coffhdr.sizeofoptionalheader] = str(self.SHList)
+        off = self.Doshdr.lfanew+len(self.NTsig)+len(self.Coffhdr)+self.Coffhdr.sizeofoptionalheader
+        c[off] = str(self.SHList)
+
+        for s in self.SHList:
+            if off + len(str(self.SHList)) > s.offset:
+                log.warn("secion offset overlap pe hdr 0x%x 0x%x"%(off+len(str(self.SHList)), s.offset))
         self.DirImport.build_content(c)
         self.DirExport.build_content(c)
         self.DirDelay.build_content(c)
