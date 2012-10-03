@@ -508,6 +508,9 @@ class virt:
                 s_stop = s_max
 
             s_len = s_stop - s_start
+            if s_len == 0:
+                log.warn('empty section! %x'%start)
+                return
             total_len -= s_len
             start += s_len
             n_item = slice(s_start, s_stop, step)
