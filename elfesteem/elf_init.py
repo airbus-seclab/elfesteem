@@ -506,8 +506,7 @@ class virt:
         while total_len:
             s = self.parent.getphbyvad(start)
             if not s:
-                log.warn('unknown rva address! %x'%start)
-                return
+                raise ValueError('unknown rva address! %x'%start)
             s_max = s.ph.filesz
             s_start = start - s.ph.vaddr
             s_stop = stop - s.ph.vaddr
@@ -516,8 +515,7 @@ class virt:
 
             s_len = s_stop - s_start
             if s_len == 0:
-                log.warn('empty section! %x'%start)
-                return
+                raise ValueError('empty section! %x'%start)
             total_len -= s_len
             start += s_len
             n_item = slice(s_start, s_stop, step)
