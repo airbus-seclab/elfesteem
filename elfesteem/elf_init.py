@@ -5,6 +5,13 @@ import struct
 import cstruct
 import elf
 from strpatchwork import StrPatchwork
+import logging
+
+log = logging.getLogger("elfparse")
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
+log.addHandler(console_handler)
+log.setLevel(logging.WARN)
 
 class test(type):
     pass
@@ -247,7 +254,7 @@ class StrTable(Section):
         while c:
             p = c.find("\0")
             if p < 0:
-                glog.warning("Missing trailing 0 for string [%s]" % c) # XXX
+                log.warning("Missing trailing 0 for string [%s]" % c) # XXX
                 p = len(c)
             self.res[q] = c[:p]
             q += p+1
