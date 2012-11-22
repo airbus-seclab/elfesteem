@@ -44,9 +44,14 @@ class WEhdr(StructWrapper):
     def set_shstrndx(self, val):
         self.cstr.shstrndx = val
 
-class WSym(StructWrapper):
-    wrapped = elf.Sym
+class WSym32(StructWrapper):
+    wrapped = elf.Sym32
     def get_name(self):
+        return self.parent.linksection.get_name(self.cstr.name)
+
+class WSym64(StructWrapper):
+    wrapped = elf.Sym64
+    def get_name(self): 
         return self.parent.linksection.get_name(self.cstr.name)
 
 class WRel32(StructWrapper):
@@ -290,7 +295,10 @@ class SymTable(Section):
         sz = self.sh.entsize
         while c:
             s,c = c[:sz],c[sz:]
-            sym = WSym(self,sex, size, s)
+            if sz == 16:
+                sym = WSym32(self,sex, size, s)
+            if sz == 24:
+                sym = WSym64(self,sex, size, s)
             self.symtab.append(sym)
             self.symbols[sym.name] = sym
     def __getitem__(self,item):

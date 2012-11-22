@@ -52,13 +52,21 @@ class Phdr64(CStruct):
                 ("align","ptr") ]
 
 
-class Sym(CStruct):
+class Sym32(CStruct):
     _fields = [ ("name","u32"),
                 ("value","u32"),
                 ("size","u32"),
                 ("info","u08"),
                 ("other","u08"),
                 ("shndx","u16") ]
+
+class Sym64(CStruct):
+    _fields = [ ("name","u32"),
+                ("info","u08"),
+                ("other","u08"),
+                ("shndx","u16"),
+                ("value","u32"),
+                ("size","u64") ]
 
 class Dym(CStruct):
     _fields = [ ("tag","u32"),
