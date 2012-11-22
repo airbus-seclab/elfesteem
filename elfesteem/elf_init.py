@@ -495,7 +495,9 @@ class virt:
 
     def get_rvaitem(self, start, stop = None, step = None):
         if stop == None:
-            s = self.parent.getphbyvad(start)
+            s = self.parent.getsectionbyvad(start)
+            if not s:
+                s = self.parent.getphbyvad(start)
             if not s:
                 return [(None, start)]
             start = start-s.ph.vaddr
@@ -504,12 +506,19 @@ class virt:
 
         virt_item = []
         while total_len:
-            s = self.parent.getphbyvad(start)
+            s = self.parent.getsectionbyvad(start)
+            if not s:
+                s = self.parent.getphbyvad(start)
             if not s:
                 raise ValueError('unknown rva address! %x'%start)
-            s_max = s.ph.filesz
-            s_start = start - s.ph.vaddr
-            s_stop = stop - s.ph.vaddr
+            if isinstance(s, ProgramHeader):
+                s_max = s.ph.filesz
+                s_start = start - s.ph.vaddr
+                s_stop = stop - s.ph.vaddr
+            elif isinstance(s, ProgBits):
+                s_max = s.sh.size
+                s_start = start - s.sh.addr
+                s_stop = stop - s.sh.addr
             if s_stop >s_max:
                 s_stop = s_max
 
@@ -537,6 +546,9 @@ class virt:
              return
         data_out = ""
         for s, n_item in virt_item:
+            if isinstance(s, ProgBits):
+                data_out += s.content.__getitem__(n_item)
+                continue
             if not type(n_item) is slice:
                 n_item = slice(n_item, n_item+1, 1)
             start = n_item.start + s.ph.offset
@@ -566,11 +578,14 @@ class virt:
              return
         off = 0
         for s, n_item in virt_item:
-            i = slice(off, n_item.stop+off-n_item.start, n_item.step)
+            if isinstance(s, ProgBits):
+                i = slice(off, n_item.stop+off-n_item.start, n_item.step)
 
-            data_slice = data.__getitem__(i)
-            s.content.__setitem__(n_item, data_slice)
-            off = i.stop
+                data_slice = data.__getitem__(i)
+                s.content.__setitem__(n_item, data_slice)
+                off = i.stop
+            else:
+                SOMEONE_SHOULD_IMPLEMENT_THIS
 
         return
 
@@ -589,8 +604,9 @@ class virt:
         rva_items = self.get_rvaitem(ad_start, ad_stop, ad_step)
         data_out = ""
         for s, n_item in rva_items:
-            #print "njj"
-            #data_out += s.content.__getitem__(n_item)
+            if isinstance(s, ProgBits):
+                data_out += s.content.__getitem__(n_item)
+                continue
             if not type(n_item) is slice:
                 n_item = slice(n_item, n_item+1, 1)
             start = n_item.start + s.ph.offset
