@@ -523,7 +523,7 @@ class virt:
                 s_max = s.ph.filesz
                 s_start = start - s.ph.vaddr
                 s_stop = stop - s.ph.vaddr
-            elif isinstance(s, ProgBits):
+            else:
                 s_max = s.sh.size
                 s_start = start - s.sh.addr
                 s_stop = stop - s.sh.addr
@@ -612,7 +612,7 @@ class virt:
         rva_items = self.get_rvaitem(ad_start, ad_stop, ad_step)
         data_out = ""
         for s, n_item in rva_items:
-            if isinstance(s, ProgBits):
+            if not isinstance(s, ProgramHeader):
                 data_out += s.content.__getitem__(n_item)
                 continue
             if not type(n_item) is slice:
