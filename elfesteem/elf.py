@@ -105,6 +105,32 @@ class Dynamic(CStruct):
                 ("name","u32") ]
 
 
+# Legal values for e_ident (identification indexes)
+
+EI_MAG0	= 	0	# File identification
+EI_MAG1	= 	1	# File identification
+EI_MAG2	= 	2	# File identification
+EI_MAG3	= 	3	# File identification
+EI_CLASS = 	4	# File class
+EI_DATA	= 	5	# Data encoding
+EI_VERSION = 	6	# File version
+EI_OSABI = 	7	# Operating system/ABI identification
+EI_ABIVERSION = 8	# ABI version
+EI_PAD = 	9	# Start of padding bytes
+EI_NIDENT = 	16	# Size of e_ident[]
+
+# Legal values for e_ident[EI_CLASS]
+
+ELFCLASSNONE = 	0	# Invalid class
+ELFCLASS32 =	1	# 32-bit objects
+ELFCLASS64 = 	2	# 64-bit objects
+
+# Legal values for e_ident[EI_DATA]
+
+ELFDATANONE =	0	# Invalid data encoding
+ELFDATA2LSB =	1	# Least significant byte at lowest address
+ELFDATA2MSB =	2	# Most significant byte at lowest address
+
 # Legal values for e_type (object file type). 
 
 ET_NONE =         0               # No file type
@@ -126,6 +152,7 @@ EM_SPARC =        2              # SUN SPARC
 EM_386 =          3              # Intel 80386
 EM_68K =          4              # Motorola m68k family
 EM_88K =          5              # Motorola m88k family
+EM_486 =          6              # Intel 80486
 EM_860 =          7              # Intel 80860
 EM_MIPS =         8              # MIPS R3000 big-endian
 EM_S370 =         9              # IBM System/370
