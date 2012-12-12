@@ -325,7 +325,7 @@ class PE(object):
         #print repr(self.Doshdr)
         #print repr(self.Coffhdr)
         #print repr(self.Opthdr)
-        print repr(self.SHList)
+        #print repr(self.SHList)
 
         #print repr(self.DirImport)
         #print repr(self.DirExport)
