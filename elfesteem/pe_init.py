@@ -348,6 +348,9 @@ class PE(object):
                 return s
         return None
 
+    def getsectionbyvad(self, vad):
+        return self.getsectionbyrva(self.virt2rva(vad))
+
     def getsectionbyoff(self, off):
         if not self.SHList:
             return None
