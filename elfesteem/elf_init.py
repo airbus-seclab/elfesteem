@@ -515,7 +515,6 @@ class virt:
             if not s:
                 return [(None, start)]
             return [(s, start)]
-        print hex(start), hex(stop)
         total_len = stop - start
 
         virt_item = []
