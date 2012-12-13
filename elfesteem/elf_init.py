@@ -588,11 +588,18 @@ class virt:
         return
 
     def __len__(self):
-        m = self.parent.sh.shlist[0]
-        for s in self.parent.sh.shlist:
-            if s.sh.addr+s.sh.size> m.sh.addr+m.sh.size:
-                m = s
-        l = m.sh.addr+m.sh.size
+        # the maximum virtual address is found by retrieving the maximum
+        # possible virtual address, either from the program entries, and
+        # section entries. if there is no such object, raise an error.
+        l = 0
+        if  self.parent.ph.phlist:
+            for phdr in self.parent.ph.phlist:
+                l = max(l, phdr.ph.vaddr + phdr.ph.memsz)
+        if  self.parent.sh.shlist:
+            for shdr in self.parent.sh.shlist:
+                l = max(l, shdr.sh.addr  + shdr.sh.size)
+        if  not l:
+            raise ValueError('maximum virtual address not found !')
         return l
 
     def is_addr_in(self, ad):
