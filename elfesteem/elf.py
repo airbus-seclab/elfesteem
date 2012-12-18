@@ -65,7 +65,7 @@ class Sym64(CStruct):
                 ("info","u08"),
                 ("other","u08"),
                 ("shndx","u16"),
-                ("value","u32"),
+                ("value","u64"),
                 ("size","u64") ]
 
 class Dym(CStruct):
