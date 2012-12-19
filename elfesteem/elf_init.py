@@ -56,8 +56,11 @@ class WSym64(StructWrapper):
 
 class WRel32(StructWrapper):
     wrapped = elf.Rel32
+    wrapped._fields.append(("value","u32"))
     wrapped._fields.append(("sym","u32"))
     wrapped._fields.append(("type","u08"))
+    def get_value(self):
+        return self.parent.linksection.symtab[self.cstr.info>>8].value
     def get_sym(self):
         return self.parent.linksection.symtab[self.cstr.info>>8].name
     def get_type(self):
@@ -65,8 +68,11 @@ class WRel32(StructWrapper):
 
 class WRel64(StructWrapper):
     wrapped = elf.Rel64
+    wrapped._fields.append(("value","u64"))
     wrapped._fields.append(("sym","u32"))
     wrapped._fields.append(("type","u32"))
+    def get_value(self):
+        return self.parent.linksection.symtab[self.cstr.info>>32].value
     def get_sym(self):
         return self.parent.linksection.symtab[self.cstr.info>>32].name
     def get_type(self):
@@ -74,21 +80,9 @@ class WRel64(StructWrapper):
 
 class WRela32(WRel32):
     wrapped = elf.Rela32
-    wrapped._fields.append(("sym","u32"))
-    wrapped._fields.append(("type","u08"))
-    def get_sym(self):
-        return self.parent.linksection.symtab[self.cstr.info>>8].name
-    def get_type(self):
-        return self.cstr.info & 0xff
 
 class WRela64(WRel64):
     wrapped = elf.Rela64
-    wrapped._fields.append(("sym","u32"))
-    wrapped._fields.append(("type","u32"))
-    def get_sym(self):
-        return self.parent.linksection.symtab[self.cstr.info>>32].name
-    def get_type(self):
-        return self.cstr.info & 0xffffffff
 
 class WShdr(StructWrapper):
     wrapped = elf.Shdr
