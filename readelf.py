@@ -15,6 +15,8 @@ for elf_cpu in filter(lambda x:x[:3]=='EM_', elf.__dict__):
     reloc_prefix = 'R_'+elf_cpu[3:]+'_'
     for elf_cpu_reloc in filter(lambda x:x[:len(reloc_prefix)]==reloc_prefix, elf.__dict__):
         elf.reloc_names[elf.__dict__[elf_cpu]][elf.__dict__[elf_cpu_reloc]] = elf_cpu_reloc
+elf.reloc_names[elf.__dict__['EM_SPARC32PLUS']] = elf.reloc_names[elf.__dict__['EM_SPARC']]
+elf.reloc_names[elf.__dict__['EM_SPARCV9']]     = elf.reloc_names[elf.__dict__['EM_SPARC']]
 elf.sym_type = { 0: 'NOTYPE', 1: 'OBJECT', 2: 'FUNC', 3: 'SECTION', 4: 'FILE' }
 elf.sym_bind = { 0: 'LOCAL', 1: 'GLOBAL', 2: 'WEAK' }
 
