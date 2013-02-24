@@ -222,6 +222,10 @@ class Rva(CStruct):
     _fields = [ ("rva","ptr"),
                 ]
 
+class Rva32(CStruct):
+    _fields = [ ("rva","u32"),
+                ]
+
 class DescName(CStruct):
     _fields = [ ("name", (lambda c, s, of:c.gets(s, of),
                           lambda c, value:c.sets(value)))
@@ -577,10 +581,10 @@ class DirExport(CStruct):
         self.dlldescname = DescName.unpack(s, expdesc.name, self.parent_head)
         self.f_address = struct_array(self, s,
                                       self.parent_head.rva2off(expdesc.addressoffunctions), 
-                                      Rva, expdesc.numberoffunctions)
+                                      Rva32, expdesc.numberoffunctions)
         self.f_names = struct_array(self, s,
                                     self.parent_head.rva2off(expdesc.addressofnames), 
-                                    Rva, expdesc.numberofnames)
+                                    Rva32, expdesc.numberofnames)
         self.f_nameordinals = struct_array(self, s,
                                            self.parent_head.rva2off(expdesc.addressofordinals), 
                                            Ordinal, expdesc.numberofnames)
@@ -1171,7 +1175,7 @@ class DirRes(CStruct):
             return [], of
         of1 = self.parent_head.rva2off(of)
         if of1 == None:
-            log.warning('cannot parse resources')
+            log.warning('cannot parse resources, %X'%of)
             return [], of
 
         resdesc, l = ResDesc_e.unpack_l(s,
