@@ -1164,7 +1164,7 @@ class DirRes(CStruct):
             return [], of
         of1 = self.parent_head.rva2off(of)
         if of1 == None:
-            log.warning('cannot parse resources')
+            log.warning('cannot parse resources, %X'%of)
             return [], of
 
         resdesc, l = ResDesc_e.unpack_l(s,

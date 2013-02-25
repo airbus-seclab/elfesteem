@@ -56,39 +56,23 @@ class WSym64(StructWrapper):
 
 class WRel32(StructWrapper):
     wrapped = elf.Rel32
-    wrapped._fields.append(("sym","u32"))
-    wrapped._fields.append(("type","u08"))
     def get_sym(self):
-        return self.parent.linksection.symtab[self.cstr.info>>8].name
-    def get_type(self):
-        return self.cstr.info & 0xff
+        return self.parent.linksection.symtab[self.cstr.sym].name
 
 class WRel64(StructWrapper):
     wrapped = elf.Rel64
-    wrapped._fields.append(("sym","u32"))
-    wrapped._fields.append(("type","u32"))
     def get_sym(self):
-        return self.parent.linksection.symtab[self.cstr.info>>32].name
-    def get_type(self):
-        return self.cstr.info & 0xffffffff
+        return self.parent.linksection.symtab[self.cstr.sym].name
 
 class WRela32(WRel32):
     wrapped = elf.Rela32
-    wrapped._fields.append(("sym","u32"))
-    wrapped._fields.append(("type","u08"))
     def get_sym(self):
-        return self.parent.linksection.symtab[self.cstr.info>>8].name
-    def get_type(self):
-        return self.cstr.info & 0xff
+        return self.parent.linksection.symtab[self.cstr.sym].name
 
 class WRela64(WRel64):
     wrapped = elf.Rela64
-    wrapped._fields.append(("sym","u32"))
-    wrapped._fields.append(("type","u32"))
     def get_sym(self):
-        return self.parent.linksection.symtab[self.cstr.info>>32].name
-    def get_type(self):
-        return self.cstr.info & 0xffffffff
+        return self.parent.linksection.symtab[self.cstr.sym].name
 
 class WShdr(StructWrapper):
     wrapped = elf.Shdr
@@ -354,14 +338,16 @@ class RelATable(Section):
         self.sex, self.size = sex, size
         if size == 32:
             WRela = WRela32
+            sz = 16
         elif size == 64:
             WRela = WRela64
+            sz = 24
         else:
             ValueError('unknown size')
         c = self.content
         self.reltab=[]
         self.rel = {}
-        sz = self.sh.entsize
+        #sz = self.sh.entsize
         while c:
             s,c = c[:sz],c[sz:]
             rel = WRela(self,sex, size, s)
