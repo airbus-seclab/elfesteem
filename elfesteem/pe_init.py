@@ -176,7 +176,7 @@ class virt:
 
 class PE(object):
     content = ContentManager()
-    def __init__(self, pestr = None, loadfrommem=False, parse_resources = True):
+    def __init__(self, pestr = None, loadfrommem=False):
         self._drva = drva(self)
         self._virt = virt(self)
         if pestr == None:
@@ -243,12 +243,12 @@ class PE(object):
         else:
             self._content = StrPatchwork(pestr)
             self.loadfrommem = loadfrommem
-            self.parse_content(parse_resources = parse_resources)
+            self.parse_content()
 
     def isPE(self):
         return self.NTsig.signature == 0x4550
 
-    def parse_content(self, parse_resources = True):
+    def parse_content(self):
         of = 0
         self._sex = 0
         self._wsize = 32
@@ -317,10 +317,9 @@ class PE(object):
                                                self.NThdr.optentries[pe.DIRECTORY_ENTRY_BASERELOC].rva,
                                                self)
         if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_RESOURCE:
-            if parse_resources:
-                self.DirRes = pe.DirRes.unpack(self.content,
-                                               self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
-                                               self)
+            self.DirRes = pe.DirRes.unpack(self.content,
+                                           self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
+                                           self)
         #self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
 
         #print repr(self.Doshdr)
@@ -467,7 +466,7 @@ class PE(object):
 
         for s in self.SHList:
             if off + len(str(self.SHList)) > s.offset:
-                log.warn("section offset overlap pe hdr 0x%x 0x%x"%(off+len(str(self.SHList)), s.offset))
+                log.warn("secion offset overlap pe hdr 0x%x 0x%x"%(off+len(str(self.SHList)), s.offset))
         self.DirImport.build_content(c)
         self.DirExport.build_content(c)
         self.DirDelay.build_content(c)

@@ -256,14 +256,18 @@ class StrTable(Section):
         self.res = {}
         c = self.content
         q = 0
-        while c:
-            p = c.find("\0")
+        index = 0
+        l = len(c)
+        while index < l:
+            p = c.find("\0", index)
             if p < 0:
                 log.warning("Missing trailing 0 for string [%s]" % c) # XXX
-                p = len(c)
-            self.res[q] = c[:p]
-            q += p+1
-            c = c[p+1:]
+                p = len(c)-index
+            self.res[index] = c[index:p]
+            #print q, c[:p]
+            index =p+1
+            #q += p+1
+            #c = c[p+1:]
 
     def get_name(self, ofs):
         n = self.content[ofs:]
@@ -293,8 +297,14 @@ class SymTable(Section):
         self.symtab=[]
         self.symbols={}
         sz = self.sh.entsize
-        while c:
-            s,c = c[:sz],c[sz:]
+        index = 0
+        xx = str(c)
+        l = len(c)
+        while index < l:
+            s = c[index:index+sz]
+            index += sz
+            continue
+            #print len(c), repr(s)
             if size == 32:
                 sym = WSym32(self,sex, size, s)
             elif size == 64:
