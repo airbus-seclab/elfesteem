@@ -713,6 +713,22 @@ class ELF(object):
                 return True
         return False
 
+def compute_elf_constant_names():
+    names = {}
+    names['cpuname'] = {}
+    names['reloc_names'] = {}
+    for elf_cpu in filter(lambda x:x[:3]=='EM_', elf.__dict__):
+        names['cpuname'][elf.__dict__[elf_cpu]] = elf_cpu[3:]
+        names['reloc_names'][elf.__dict__[elf_cpu]] = {}
+        reloc_prefix = 'R_'+elf_cpu[3:]+'_'
+        for elf_cpu_reloc in filter(lambda x:x[:len(reloc_prefix)]==reloc_prefix, elf.__dict__):
+            names['reloc_names'][elf.__dict__[elf_cpu]][elf.__dict__[elf_cpu_reloc]] = elf_cpu_reloc
+    names['reloc_names'][elf.__dict__['EM_SPARC32PLUS']] = names['reloc_names'][elf.__dict__['EM_SPARC']]
+    names['reloc_names'][elf.__dict__['EM_SPARCV9']]     = names['reloc_names'][elf.__dict__['EM_SPARC']]
+    names['sym_type'] = { 0: 'NOTYPE', 1: 'OBJECT', 2: 'FUNC', 3: 'SECTION', 4: 'FILE' }
+    names['sym_bind'] = { 0: 'LOCAL', 1: 'GLOBAL', 2: 'WEAK' }
+    return names
+
 if __name__ == "__main__":
     import rlcompleter,readline,pdb
     from pprint import pprint as pp

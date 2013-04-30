@@ -7,20 +7,6 @@ if sys.version_info[0] == 2 and sys.version_info[1] < 5:
 
 from elfesteem import elf_init, elf
 
-elf.cpuname = {}
-elf.reloc_names = {}
-for elf_cpu in filter(lambda x:x[:3]=='EM_', elf.__dict__):
-    elf.cpuname[elf.__dict__[elf_cpu]] = elf_cpu[3:]
-    elf.reloc_names[elf.__dict__[elf_cpu]] = {}
-    reloc_prefix = 'R_'+elf_cpu[3:]+'_'
-    for elf_cpu_reloc in filter(lambda x:x[:len(reloc_prefix)]==reloc_prefix, elf.__dict__):
-        elf.reloc_names[elf.__dict__[elf_cpu]][elf.__dict__[elf_cpu_reloc]] = elf_cpu_reloc
-elf.reloc_names[elf.__dict__['EM_SPARC32PLUS']] = elf.reloc_names[elf.__dict__['EM_SPARC']]
-elf.reloc_names[elf.__dict__['EM_SPARCV9']]     = elf.reloc_names[elf.__dict__['EM_SPARC']]
-elf.sym_type = { 0: 'NOTYPE', 1: 'OBJECT', 2: 'FUNC', 3: 'SECTION', 4: 'FILE' }
-elf.sym_bind = { 0: 'LOCAL', 1: 'GLOBAL', 2: 'WEAK' }
-
-
 def display_reloc(e, sh):
     # Output format similar to readelf -r
     if not 'rel' in dir(sh):
@@ -42,7 +28,7 @@ def display_reloc(e, sh):
     for r in sh.reltab:
         name = r.sym
         if name == '': name = "."
-        output = format%(r.offset, r.info, elf.reloc_names[e.Ehdr.machine][r.type], r.value, name)
+        output = format%(r.offset, r.info, names['reloc_names'][e.Ehdr.machine][r.type], r.value, name)
         if sh.sht == elf.SHT_RELA:
             output = output + " + %x"%r.addend
         print output
@@ -62,8 +48,8 @@ def display_symbols(e, table_name):
         format = "%6d: %016x  %4d %-7s %-6s %-7s  %-3s %s"
     print header
     for i, value in enumerate(table.symtab):
-        type = elf.sym_type[value.info&0xf]
-        bind = elf.sym_bind[value.info>>4]
+        type = names['sym_type'][value.info&0xf]
+        bind = names['sym_bind'][value.info>>4]
         if value.shndx>999:  ndx = "ABS"
         elif value.shndx==0: ndx = "UND"
         else:                ndx = "%3d"%value.shndx
@@ -84,6 +70,7 @@ for opt, arg in opts:
     elif opt == '-d':
         options['dynsym'] = True
 
+names = elf_init.compute_elf_constant_names()
 for file in args:
     if len(args) > 1:
         print "\nFile: %s" % file
