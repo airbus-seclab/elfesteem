@@ -66,3 +66,8 @@ class StrPatchwork(object):
             self.s_cache = self.s.tostring()
         return self.s_cache.find(pattern, offset)
 
+    def rfind(self, pattern, start = 0, end = None):
+        if not self.s_cache:
+            self.s_cache = self.s.tostring()
+        return self.s_cache.rfind(pattern, start, end)
+
