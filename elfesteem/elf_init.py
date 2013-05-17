@@ -314,19 +314,17 @@ class SymTable(Section):
         self.symbols={}
         sz = self.sh.entsize
         index = 0
-        xx = str(c)
         l = len(c)
+        if size == 32:
+            WSym = WSym32
+        elif size == 64:
+            WSym = WSym64
+        else:
+            ValueError('unknown size')
         while index < l:
             s = c[index:index+sz]
             index += sz
-            continue
-            #print len(c), repr(s)
-            if size == 32:
-                sym = WSym32(self,sex, size, s)
-            elif size == 64:
-                sym = WSym64(self,sex, size, s)
-            else:
-                ValueError('unknown size')
+            sym = WSym(self,sex, size, s)
             self.symtab.append(sym)
             self.symbols[sym.name] = sym
     def __getitem__(self,item):
