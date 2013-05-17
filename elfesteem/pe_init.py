@@ -132,27 +132,66 @@ class virt:
          l = s.addr+s.size+self.parent.NThdr.ImageBase
          return int(l)
 
-    def find(self, pattern, offset = 0):
-        if offset != 0:
-            offset = self.parent.virt2rva(offset)
+
+    def find(self, pattern, start = 0, end = None):
+        if start != 0:
+            start = self.parent.virt2rva(start)
+        if end != None:
+            end = self.parent.virt2rva(end)
 
         sections = []
         for s in self.parent.SHList:
             s_max = max(s.size, s.rawsize)
-            if offset < s.addr + s_max:
+            if s.addr+s_max <= start:
+                continue
+            if end == None or s.addr < end:
                 sections.append(s)
 
         if not sections:
             return -1
-        offset -= sections[0].addr
-        if offset < 0:
-            offset = 0
         for s in sections:
-            ret = s.data.find(pattern, offset)
-            if ret != -1:
-                return self.parent.rva2virt(s.addr + ret)
-            offset = 0
+            if s.addr < start:
+                off = start - s.addr
+            else:
+                off = 0
+            ret = s.data.find(pattern, off)
+            if ret == -1:
+                continue
+            if end != None and s.addr + ret >= end:
+                return -1
+            return self.parent.rva2virt(s.addr + ret)
         return -1
+
+    def rfind(self, pattern, start = 0, end = None):
+        if start != 0:
+            start = self.parent.virt2rva(start)
+        if end != None:
+            end = self.parent.virt2rva(end)
+
+        sections = []
+        for s in self.parent.SHList:
+            s_max = max(s.size, s.rawsize)
+            if s.addr+s_max <= start:
+                continue
+            if end == None or s.addr < end:
+                sections.append(s)
+        if not sections:
+            return -1
+
+        for s in reversed(sections):
+            if s.addr < start:
+                off = start - s.addr
+            else:
+                off = 0
+            if end == None:
+                ret = s.data.rfind(pattern, off)
+            else:
+                ret = s.data.rfind(pattern, off, end-s.addr)
+            if ret == -1:
+                continue
+            return self.parent.rva2virt(s.addr + ret)
+        return -1
+
 
     def is_addr_in(self, ad):
         return self.parent.is_in_virt_address(ad)
