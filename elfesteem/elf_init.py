@@ -696,9 +696,15 @@ class ELF(object):
                 return s
 
     def getsectionbyvad(self, ad):
+        f = []
         for s in self.sh:
             if s.sh.addr <= ad < s.sh.addr+s.sh.size:
-                return s
+                f.append(s)
+        if len(f) > 1:
+            log.warning("Address 0x%08x is found in many sections: %s" %
+                (ad, [s.sh.name for s in f]))
+        if len(f):
+            return f[0]
 
     def getsectionbyname(self, name):
         for s in self.sh:
@@ -715,6 +721,13 @@ class ELF(object):
 
 def compute_elf_constant_names():
     names = {}
+    names['sh_types'] = {}
+    for sht in filter(lambda x:x[:4]=='SHT_', elf.__dict__):
+        names['sh_types'][elf.__dict__[sht]] = sht[4:]
+    names['sh_types'][0x6FFFFFF6] = 'GNU_HASH'
+    names['sh_types'][0x6FFFFFFD] = 'VERDEF'
+    names['sh_types'][0x6FFFFFFE] = 'VERNEED'
+    names['sh_types'][0x6FFFFFFF] = 'VERSYM'
     names['cpuname'] = {}
     names['reloc_names'] = {}
     for elf_cpu in filter(lambda x:x[:3]=='EM_', elf.__dict__):

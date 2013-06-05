@@ -33,6 +33,41 @@ def display_reloc(e, sh):
             output = output + " + %x"%r.addend
         print output
 
+def display_sections(e):
+    if e.size == 32:
+        header = "  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al"
+        format = "  [%2d] %-17s %-15s %08x %06x %06x %02x %3s %2d  %2d %2d"
+    elif e.size == 64:
+        header = "  [Nr] Name              Type             Address           Offset\n       Size              EntSize          Flags  Link  Info  Align"
+        format = "  [%2d] %-17s %-15s  %016x  %08x\n       %016x  %016x %3s      %2d    %2d    %2d"
+    print header
+    for i, sh in enumerate(e.sh):
+        flags = ""
+        if sh.sh.flags & elf.SHF_WRITE:
+            flags += "W"
+        if sh.sh.flags & elf.SHF_ALLOC:
+            flags += "A"
+        if sh.sh.flags & elf.SHF_EXECINSTR:
+            flags += "X"
+        if sh.sh.flags & elf.SHF_MERGE:
+            flags += "M"
+        if sh.sh.flags & elf.SHF_STRINGS:
+            flags += "S"
+        if sh.sh.flags & elf.SHF_INFO_LINK:
+            flags += "I"
+        if sh.sh.flags & elf.SHF_LINK_ORDER:
+            flags += "L"
+        if sh.sh.flags & elf.SHF_OS_NONCONFORMING:
+            flags += "O"
+        if sh.sh.flags & elf.SHF_GROUP:
+            flags += "G"
+        if sh.sh.flags & elf.SHF_TLS:
+            flags += "T"
+        print format%(i, sh.sh.name, names['sh_types'][sh.sh.type],
+                         sh.sh.addr, sh.sh.offset,
+                         sh.sh.size, sh.sh.entsize, flags,
+                         sh.sh.link, sh.sh.info, sh.sh.addralign)
+
 def display_symbols(e, table_name):
     # Output format similar to readelf -s or readelf --dyn-syms
     if not table_name in e.sh.__dict__:
@@ -58,11 +93,13 @@ def display_symbols(e, table_name):
 
 
 options = {}
-opts, args = getopt.getopt(sys.argv[1:], "hrsd", ["help", "Relocation sections", "Symbol Table", "Dynamic symbols"])
+opts, args = getopt.getopt(sys.argv[1:], "hSrsd", ["help", "Sections", "Relocation sections", "Symbol Table", "Dynamic symbols"])
 for opt, arg in opts:
     if opt == '-h':
-        print >> sys.stderr, "Usage: readelf.py [-hrs] elf-file(s)"
+        print >> sys.stderr, "Usage: readelf.py [-hSrsd] elf-file(s)"
         sys.exit(1)
+    elif opt == '-S':
+        options['sections'] = True
     elif opt == '-r':
         options['reltab'] = True
     elif opt == '-s':
@@ -76,6 +113,8 @@ for file in args:
         print "\nFile: %s" % file
     raw = open(file, 'rb').read()
     e = elf_init.ELF(raw)
+    if 'sections' in options:
+        display_sections(e)
     if 'reltab' in options:
         for sh in e.sh:
             display_reloc(e, sh)
