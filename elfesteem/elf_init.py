@@ -511,38 +511,21 @@ class virt:
     def __init__(self, x):
         self.parent = x
 
-    def get_rvaitem(self, start, stop = None, step = None):
+    def get_rvaitem(self, start, stop = None, step = None, section = None):
         if stop == None:
-            s = self.parent.getsectionbyvad(start)
-            if s:
-                start = start-s.sh.addr
-            else:
-                s = self.parent.getphbyvad(start)
-                if s:
-                    start = start-s.ph.vaddr
-            if not s:
-                return [(None, start)]
-            return [(s, start)]
-        total_len = stop - start
+            s, s_addr, s_size = self.parent.getparambyvad(start, section)
+            return [(s, start-s_addr)]
 
+        total_len = stop - start
         virt_item = []
         while total_len:
-            s = self.parent.getsectionbyvad(start)
-            if not s:
-                s = self.parent.getphbyvad(start)
+            s, s_addr, s_size = self.parent.getparambyvad(start, section)
             if not s:
                 raise ValueError('unknown rva address! %x'%start)
-            if isinstance(s, ProgramHeader) or isinstance(s, ProgramHeader64):
-                s_max = s.ph.filesz
-                s_start = start - s.ph.vaddr
-                s_stop = stop - s.ph.vaddr
-            else:
-                s_max = s.sh.size
-                s_start = start - s.sh.addr
-                s_stop = stop - s.sh.addr
-            if s_stop >s_max:
-                s_stop = s_max
-
+            s_start = start - s_addr
+            s_stop = stop - s_addr
+            if s_stop > s_size:
+                s_stop =  s_size
             s_len = s_stop - s_start
             if s_len == 0:
                 raise ValueError('empty section! %x'%start)
@@ -556,10 +539,7 @@ class virt:
     def item2virtitem(self, item):
         if not type(item) is slice:#integer
             return self.get_rvaitem(item)
-        start = item.start
-        stop  = item.stop
-        step  = item.step
-        return self.get_rvaitem(start, stop, step)
+        return self.get_rvaitem(item.start, item.stop, item.step)
 
     def __getitem__(self, item):
         """
@@ -612,8 +592,8 @@ class virt:
     def is_addr_in(self, ad):
         return self.parent.is_in_virt_address(ad)
 
-    def __call__(self, ad_start, ad_stop = None, ad_step = None):
-        rva_items = self.get_rvaitem(ad_start, ad_stop, ad_step)
+    def __call__(self, ad_start, ad_stop = None, ad_step = None, section = None):
+        rva_items = self.get_rvaitem(ad_start, ad_stop, ad_step, section)
         data_out = ""
         for s, n_item in rva_items:
             if not (isinstance(s, ProgramHeader) or isinstance(s, ProgramHeader64)):
@@ -628,7 +608,6 @@ class virt:
             else:
                 step = None
             n_item = slice(start, stop, step)
-            #data_out += self.parent.content.__s.content.__getitem__(n_item)
             data_out += self.parent.content.__getitem__(n_item)
 
         return data_out
@@ -700,11 +679,33 @@ class ELF(object):
         for s in self.sh:
             if s.sh.addr <= ad < s.sh.addr+s.sh.size:
                 f.append(s)
-        if len(f) > 1:
-            log.warning("Address 0x%08x is found in many sections: %s" %
-                (ad, [s.sh.name for s in f]))
-        if len(f):
+        if len(f) == 1:
             return f[0]
+        elif len(f) > 1:
+            # ELF relocatable: all sections start at address 0
+            # The priority given to .text is heuristic
+            for s in f:
+                if s.sh.name == '.text':
+                    return s
+            for s in f:
+                if s.sh.name.startswith('.text'):
+                    return s
+            return f[0]
+
+    def getparambyvad(self, ad, section = None):
+        s = None
+        if section:
+            s = self.getsectionbyname(section)
+            if not (s.sh.addr <= ad < s.sh.addr + s.sh.size):
+                s = None
+        if not s:
+            s = self.getsectionbyvad(ad)
+        if s:
+            return s, s.sh.addr, s.sh.size
+        s = self.getphbyvad(ad)
+        if s:
+            return s, s.ph.vaddr, s.ph.filesz
+        return None, 0, 0
 
     def getsectionbyname(self, name):
         for s in self.sh:
