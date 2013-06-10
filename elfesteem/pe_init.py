@@ -376,6 +376,8 @@ class PE(object):
                 self.DirRes = pe.DirRes.unpack(self.content,
                                                self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
                                                self)
+            else:
+                self.DirRes = pe.DirRes(self)
 
         if self.Coffhdr.pointertosymboltable != 0:
             self.SymbolStrings = StrTable(self.content[
