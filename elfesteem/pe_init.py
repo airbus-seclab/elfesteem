@@ -176,7 +176,8 @@ class virt:
 
 class PE(object):
     content = ContentManager()
-    def __init__(self, pestr = None, loadfrommem=False, parse_resources = True):
+    def __init__(self, pestr = None, loadfrommem=False, parse_resources = True,
+                 **kargs):
         self._drva = drva(self)
         self._virt = virt(self)
         if pestr == None:
@@ -321,6 +322,8 @@ class PE(object):
                 self.DirRes = pe.DirRes.unpack(self.content,
                                                self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
                                                self)
+            else:
+                self.DirRes = pe.DirRes(self)
         #self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
 
         #print repr(self.Doshdr)
