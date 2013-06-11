@@ -157,7 +157,7 @@ class virt:
     def is_addr_in(self, ad):
         return self.parent.is_in_virt_address(ad)
 
-    def __call__(self, ad_start, ad_stop = None, ad_step = None):
+    def __call__(self, ad_start, ad_stop = None, ad_step = None, section = None):
         ad_start = self.parent.virt2rva(ad_start)
         if ad_stop != None:
             ad_stop = self.parent.virt2rva(ad_stop)
