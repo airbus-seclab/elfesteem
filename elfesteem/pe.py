@@ -1447,6 +1447,105 @@ class Symb(CStruct):
                 ("res2","u32"),
                 ("res3","u16")]
 
+class CoffSymbol(CStruct):
+    _fields = [ ("name", (lambda c, s, of:c.getname(s, of),
+                          lambda c, value:c.setname(value))),
+                ("value","u32"),
+                ("sectionnumber","u16"),
+                ("type","u16"),
+                ("storageclass","u08"),
+                ("numberofauxsymbols","u08"),
+                ("aux", (lambda c, s, of:c.getaux(s, of),
+                         lambda c, value:c.setaux(value))) ]
+    def getname(self, s, of):
+        name = s[of:of+8]
+        if name[0:4] == '\0\0\0\0':
+            name = self.parent_head.parent_head.SymbolStrings.getby_offset(struct.unpack('<I', name[4:8])[0])
+        else:
+            name = name.strip('\0')
+        return name, of+8
+    def setname(self, value):
+        if len(value) > 8:
+            of = self.parent_head.parent_head.SymbolStrings.add(value)
+            return struct.pack("<II", 0, of)
+        else:
+            value += '\0\0\0\0\0\0\0\0'
+            return value[0:8]
+    def getaux(self, s, of):
+        aux = []
+        for i in range(self.numberofauxsymbols):
+            if   self.storageclass == IMAGE_SYM_CLASS_EXTERNAL:
+                aux.append(SymbolAuxFunc.unpack(s, of, self.parent_head))
+            elif self.storageclass == IMAGE_SYM_CLASS_STATIC:
+                aux.append(SymbolAuxSect.unpack(s, of, self.parent_head))
+            elif self.storageclass == IMAGE_SYM_CLASS_FILE:
+                aux.append(SymbolAuxFile.unpack(s, of, self.parent_head))
+            else:
+                aux.append(struct.unpack('<18s', s[of:of+18])[0])
+            of += 18
+        return aux, of
+    def setaux(self, value):
+        res = ""
+        for aux in value:
+            res += str(aux)
+        return res
+    def __repr__(self):
+        s  = repr(self.name)
+        s += " value=0x%x" % self.value
+        if 0 < self.sectionnumber < 1+len(self.parent_head.parent_head.SHList):
+            s += " section=%s" % self.parent_head.parent_head.SHList[self.sectionnumber-1].name
+        else:
+            s += " section=0x%x" % self.sectionnumber
+        base_type = self.type & 0xf
+        cplx_type = self.type >> 4
+        if base_type != 0:
+            s += " type=%s" % constants['IMAGE_SYM_TYPE'][base_type]
+        elif cplx_type in constants['IMAGE_SYM_DTYPE']:
+            s += " type=%s" % constants['IMAGE_SYM_DTYPE'][cplx_type]
+        else:
+            s += " type=0x%x" % cplx_type
+        if self.storageclass in constants['IMAGE_SYM_CLASS']:
+            s += " storage=%s" % constants['IMAGE_SYM_CLASS'][self.storageclass]
+        else:
+            s += " storage=0x%x" % self.storageclass
+        s += " aux=%r" % self.aux
+        return "<CoffSymbol " + s + ">"
+
+class SymbolAuxFile(CStruct):
+    _fields = [ ("name", (lambda c, s, of:c.getname(s, of),
+                          lambda c, value:c.setname(value)))]
+    def getname(self, s, of):
+        name = s[of:of+18]
+        if name[0:4] == '\0\0\0\0':
+            name = self.parent_head.parent_head.SymbolStrings.getby_offset(struct.unpack('<I', name[4:8])[0])
+        else:
+            name = name.strip('\0')
+        return name, of+18
+    def setname(self, value):
+        if len(value) > 18:
+            of = self.parent_head.parent_head.SymbolStrings.add(value)
+            return struct.pack("<IIIIH", 0, of, 0, 0, 0)
+        else:
+            value += '\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0'
+            return value[0:18]
+
+class SymbolAuxFunc(CStruct):
+    _fields = [ ("tagIndex","u32"),
+                ("totalSize","u32"),
+                ("pointerToLineNum","u32"),
+                ("pointerToNextFunc","u32"),
+                ("padding","u16")]
+
+class SymbolAuxSect(CStruct):
+    _fields = [ ("length","u32"),
+                ("numberOfRelocations","u16"),
+                ("numberOfLinenumbers","u16"),
+                ("checksum","u32"),
+                ("number","u16"),
+                ("selection","u08"),
+                ("padding1","u08"),
+                ("padding2","u08"),
+                ("padding3","u08")]
 
 DIRECTORY_ENTRY_EXPORT           = 0
 DIRECTORY_ENTRY_IMPORT           = 1
@@ -1513,6 +1612,107 @@ RT = {
     RT_MANIFEST     :"RT_MANIFEST",
     }
 
+
+# Constants, e.g. from http://llvm.org/docs/doxygen/html/namespacellvm_1_1COFF.html
+IMAGE_FILE_MACHINE_UNKNOWN   = 0x0
+IMAGE_FILE_MACHINE_AM33      = 0x13
+IMAGE_FILE_MACHINE_I386      = 0x14C
+IMAGE_FILE_MACHINE_R4000     = 0x166
+IMAGE_FILE_MACHINE_WCEMIPSV2 = 0x169 
+IMAGE_FILE_MACHINE_SH3       = 0x1A2
+IMAGE_FILE_MACHINE_SH3DSP    = 0x1A3
+IMAGE_FILE_MACHINE_SH4       = 0x1A6
+IMAGE_FILE_MACHINE_SH5       = 0x1A8
+IMAGE_FILE_MACHINE_ARM       = 0x1C0
+IMAGE_FILE_MACHINE_THUMB     = 0x1C2
+IMAGE_FILE_MACHINE_ARMV7     = 0x1C4
+IMAGE_FILE_MACHINE_POWERPC   = 0x1F0
+IMAGE_FILE_MACHINE_POWERPCFP = 0x1F1
+IMAGE_FILE_MACHINE_IA64      = 0x200
+IMAGE_FILE_MACHINE_MIPS16    = 0x266
+IMAGE_FILE_MACHINE_MIPSFPU   = 0x366
+IMAGE_FILE_MACHINE_MIPSFPU16 = 0x466
+IMAGE_FILE_MACHINE_EBC       = 0xEBC
+IMAGE_FILE_MACHINE_AMD64     = 0x8664
+IMAGE_FILE_MACHINE_M32R      = 0x9041
+
+IMAGE_FILE_FLAG_RELOCS_STRIPPED         = 0x0001
+IMAGE_FILE_FLAG_EXECUTABLE_IMAGE        = 0x0002
+IMAGE_FILE_FLAG_LINE_NUMS_STRIPPED      = 0x0004
+IMAGE_FILE_FLAG_LOCAL_SYMS_STRIPPED     = 0x0008
+IMAGE_FILE_FLAG_AGGRESSIVE_WS_TRIM      = 0x0010
+IMAGE_FILE_FLAG_LARGE_ADDRESS_AWARE     = 0x0020
+IMAGE_FILE_FLAG_BYTES_REVERSED_LO       = 0x0080
+IMAGE_FILE_FLAG_32BIT_MACHINE           = 0x0100
+IMAGE_FILE_FLAG_DEBUG_STRIPPED          = 0x0200
+IMAGE_FILE_FLAG_REMOVABLE_RUN_FROM_SWAP = 0x0400
+IMAGE_FILE_FLAG_NET_RUN_FROM_SWAP       = 0x0800
+IMAGE_FILE_FLAG_SYSTEM                  = 0x1000
+IMAGE_FILE_FLAG_DLL                     = 0x2000
+IMAGE_FILE_FLAG_UP_SYSTEM_ONLY          = 0x4000
+IMAGE_FILE_FLAG_BYTES_REVERSED_HI       = 0x8000 
+
+IMAGE_SYM_CLASS_END_OF_FUNCTION  = -1
+IMAGE_SYM_CLASS_NULL             = 0
+IMAGE_SYM_CLASS_AUTOMATIC        = 1
+IMAGE_SYM_CLASS_EXTERNAL         = 2
+IMAGE_SYM_CLASS_STATIC           = 3
+IMAGE_SYM_CLASS_REGISTER         = 4
+IMAGE_SYM_CLASS_EXTERNAL_DEF     = 5
+IMAGE_SYM_CLASS_LABEL            = 6
+IMAGE_SYM_CLASS_UNDEFINED_LABEL  = 7
+IMAGE_SYM_CLASS_MEMBER_OF_STRUCT = 8
+IMAGE_SYM_CLASS_ARGUMENT         = 9
+IMAGE_SYM_CLASS_STRUCT_TAG       = 10
+IMAGE_SYM_CLASS_MEMBER_OF_UNION  = 11
+IMAGE_SYM_CLASS_UNION_TAG        = 12
+IMAGE_SYM_CLASS_TYPE_DEFINITION  = 13
+IMAGE_SYM_CLASS_UNDEFINED_STATIC = 14
+IMAGE_SYM_CLASS_ENUM_TAG         = 15
+IMAGE_SYM_CLASS_MEMBER_OF_ENUM   = 16
+IMAGE_SYM_CLASS_REGISTER_PARAM   = 17
+IMAGE_SYM_CLASS_BIT_FIELD        = 18
+IMAGE_SYM_CLASS_BLOCK            = 100
+IMAGE_SYM_CLASS_FUNCTION         = 101
+IMAGE_SYM_CLASS_END_OF_STRUCT    = 102
+IMAGE_SYM_CLASS_FILE             = 103
+IMAGE_SYM_CLASS_SECTION          = 104
+IMAGE_SYM_CLASS_WEAK_EXTERNAL    = 105
+IMAGE_SYM_CLASS_CLR_TOKEN        = 107 
+
+IMAGE_SYM_TYPE_NULL   = 0
+IMAGE_SYM_TYPE_VOID   = 1
+IMAGE_SYM_TYPE_CHAR   = 2
+IMAGE_SYM_TYPE_SHORT  = 3
+IMAGE_SYM_TYPE_INT    = 4
+IMAGE_SYM_TYPE_LONG   = 5
+IMAGE_SYM_TYPE_FLOAT  = 6
+IMAGE_SYM_TYPE_DOUBLE = 7
+IMAGE_SYM_TYPE_STRUCT = 8
+IMAGE_SYM_TYPE_UNION  = 9
+IMAGE_SYM_TYPE_ENUM   = 10
+IMAGE_SYM_TYPE_MOE    = 11
+IMAGE_SYM_TYPE_BYTE   = 12
+IMAGE_SYM_TYPE_WORD   = 13
+IMAGE_SYM_TYPE_UINT   = 14
+IMAGE_SYM_TYPE_DWORD  = 15 
+
+IMAGE_SYM_DTYPE_NULL     = 0
+IMAGE_SYM_DTYPE_POINTER  = 1
+IMAGE_SYM_DTYPE_FUNCTION = 2
+IMAGE_SYM_DTYPE_ARRAY    = 3
+IMAGE_SYM_DTYPE_SCT_COMPLEX_TYPE_SHIFT = 4 
+
+constants = {
+  'IMAGE_FILE_MACHINE' : {},
+  'IMAGE_FILE_FLAG' : {},
+  'IMAGE_SYM_CLASS' : {},
+  'IMAGE_SYM_TYPE'  : {},
+  'IMAGE_SYM_DTYPE' : {},
+  }
+for type in constants.keys():
+    for val in filter(lambda x:x[:len(type)+1]==type+"_", globals().keys()):
+        constants[type][globals()[val]] = val[len(type)+1:]
 
 
 if __name__ == "__main__":

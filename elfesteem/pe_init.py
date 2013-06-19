@@ -172,6 +172,62 @@ class virt:
 
         return data_out
 
+class StrTable(object):
+    def __init__(self, c):
+        self.res = {}
+        self.names = {}
+        self.trail = ""
+        self.len = 0
+        while c:
+            p = c.find("\0")
+            if p < 0:
+                self.trail = c
+                break
+            self.res[self.len] = c[:p]
+            self.names[c[:p]] = self.len
+            self.len += p+1
+            c = c[p+1:]
+    def __str__(self):
+        res = ""
+        k = self.res.keys()
+        k.sort()
+        for s in k:
+            if len(res) != s:
+                raise ValueError("StrTable is incoherent : %r != %r"%(len(res),s))
+            res += self.res[s] + "\0"
+        return res + self.trail
+    def add(self, name):
+        if name in self.names:
+            return self.names[name]
+        self.res[self.len] = name
+        self.names[name] = self.len
+        self.len += len(name)+1
+    def rem(self, name):
+        TODO
+    def getby_name(self, name):
+        return self.names[name]
+    def getby_offset(self, of):
+        return self.res[of]
+
+class CoffSymbols(object):
+    def __init__(self, strpwk, of, numberofsymbols, parent):
+        self._sex = 0
+        self._wsize = 32
+        self.parent_head = parent
+        self.symbols = []
+        if numberofsymbols == 0:
+            raise ValueError("COFF header is not valid")
+        end = of + 18 * numberofsymbols
+        while of < end:
+            s = pe.CoffSymbol.unpack(strpwk, of, self)
+            self.symbols.append(s)
+            of += 18 * (1 + s.numberofauxsymbols)
+    def __str__(self):
+        rep = ""
+        for s in self.symbols:
+            rep += str(s)
+        return rep
+
 # PE object
 
 class PE(object):
@@ -320,7 +376,27 @@ class PE(object):
             self.DirRes = pe.DirRes.unpack(self.content,
                                            self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
                                            self)
-        #self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
+
+        if self.Coffhdr.pointertosymboltable != 0:
+            self.SymbolStrings = StrTable(self.content[
+                                       self.Coffhdr.pointertosymboltable
+                                       + 18 * self.Coffhdr.numberofsymbols:])
+            self.Symbols = CoffSymbols(self.content,
+                                       self.Coffhdr.pointertosymboltable,
+                                       self.Coffhdr.numberofsymbols,
+                                       self)
+            """
+            # Consistency check
+            if str(self.SymbolStrings) == self.content[
+                                       self.Coffhdr.pointertosymboltable
+                                       + 18 * self.Coffhdr.numberofsymbols:]:
+                print "OK for SymbolStrings"
+            if str(self.Symbols) == self.content[
+                                       self.Coffhdr.pointertosymboltable:
+                                       self.Coffhdr.pointertosymboltable
+                                       + 18 * self.Coffhdr.numberofsymbols]:
+                print "OK for Symbols"
+            """
 
         #print repr(self.Doshdr)
         #print repr(self.Coffhdr)
@@ -473,6 +549,7 @@ class PE(object):
         self.DirReloc.build_content(c)
         self.DirRes.build_content(c)
         s = str(c)
+        # TODO: add symbol table
         if (self.Doshdr.lfanew+len(self.NTsig)+len(self.Coffhdr))%4:
             log.warn("non aligned coffhdr, bad crc calculation")
         crcs = self.patch_crc(s, self.NThdr.CheckSum)
