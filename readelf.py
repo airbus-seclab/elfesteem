@@ -27,7 +27,8 @@ def display_reloc(e, sh):
     print header
     for r in sh.reltab:
         name = r.sym
-        if name == '': name = "."
+        if name == '':
+            name = e.sh[r.parent.linksection.symtab[r.info>>8].shndx].sh.name
         output = format%(r.offset, r.info, names['reloc_names'][e.Ehdr.machine][r.type], r.value, name)
         if sh.sht == elf.SHT_RELA:
             output = output + " + %x"%r.addend
