@@ -12,10 +12,10 @@ def display_reloc(e, sh):
     if not 'rel' in dir(sh):
         return
     print "\nRelocation section %r at offset 0x%x contains %d entries:" % (sh.sh.name, sh.sh.offset, len(sh.reltab))
-    if e.size == 32:
+    if e.wsize == 32:
         header = " Offset     Info    Type            Sym.Value  Sym. Name"
         format = "%08x  %08x %-16s  %08x   %s"
-    elif e.size == 64:
+    elif e.wsize == 64:
         header = "  Offset          Info           Type           Sym. Value     Sym. Name"
         format = "%012x  %012x %-16s  %016x  %s"
     if sh.sht == elf.SHT_RELA:
@@ -39,10 +39,10 @@ def display_reloc(e, sh):
         print output
 
 def display_sections(e):
-    if e.size == 32:
+    if e.wsize == 32:
         header = "  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al"
         format = "  [%2d] %-17s %-15s %08x %06x %06x %02x %3s %2d  %2d %2d"
-    elif e.size == 64:
+    elif e.wsize == 64:
         header = "  [Nr] Name              Type             Address           Offset\n       Size              EntSize          Flags  Link  Info  Align"
         format = "  [%2d] %-17s %-15s  %016x  %08x\n       %016x  %016x %3s      %2d    %2d    %2d"
     print header
@@ -84,10 +84,10 @@ def display_symbols(e, table_name):
         return
     table = e.sh.__dict__[table_name]
     print "Symbol table '.%s' contains %d entries:" % (table_name, len(table.symtab))
-    if e.size == 32:
+    if e.wsize == 32:
         header = "   Num:    Value  Size Type    Bind   Vis      Ndx Name"
         format = "%6d: %08x  %4d %-7s %-6s %-7s  %-3s %s"
-    elif e.size == 64:
+    elif e.wsize == 64:
         header = "   Num:    Value          Size Type    Bind   Vis      Ndx Name"
         format = "%6d: %016x  %4d %-7s %-6s %-7s  %-3s %s"
     print header
