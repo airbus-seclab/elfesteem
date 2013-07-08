@@ -364,7 +364,7 @@ class RelATable(Section):
 
 ### Section List
 
-class SHList:
+class SHList(object):
     def __init__(self, parent, sex, size):
         self.parent = parent
         self.shlist = []
@@ -432,7 +432,7 @@ class SHList:
 ### Program Header List
 
 
-class ProgramHeader:
+class ProgramHeader(object):
     def __init__(self, parent, sex, size, phstr):
         self.parent = parent
         self.ph = WPhdr(self,sex, size, phstr)
@@ -449,7 +449,7 @@ class ProgramHeader:
         self.ph.memsz += diff
         self.parent.resize(sec, diff)
 
-class ProgramHeader64:
+class ProgramHeader64(object):
     def __init__(self, parent, sex, size, phstr):
         self.parent = parent
         self.ph = WPhdr64(self,sex, size, phstr)
@@ -466,7 +466,7 @@ class ProgramHeader64:
         self.ph.memsz += diff
         self.parent.resize(sec, diff)
 
-class PHList:
+class PHList(object):
     def __init__(self, parent, sex, size):
         self.parent = parent
         self.phlist = []
@@ -507,11 +507,14 @@ class PHList:
                 p.ph.paddr += diff
 
 
-class virt:
+class virt(object):
     def __init__(self, x):
         self.parent = x
 
-    def get_rvaitem(self, start, stop = None, step = None, section = None):
+    def get_rvaitem(self, start, stop = None, section = None):
+        if isinstance(start, slice):
+            stop  = start.stop
+            start = start.start
         if stop == None:
             s, s_addr, s_size = self.parent.getparambyvad(start, section)
             return [(s, start-s_addr)]
@@ -531,26 +534,16 @@ class virt:
                 raise ValueError('empty section! %x'%start)
             total_len -= s_len
             start += s_len
-            n_item = slice(s_start, s_stop, step)
+            n_item = slice(s_start, s_stop)
             virt_item.append((s, n_item))
         return virt_item
 
 
-    def item2virtitem(self, item):
-        if not type(item) is slice:#integer
-            return self.get_rvaitem(item)
-        return self.get_rvaitem(item.start, item.stop, item.step)
-
     def __getitem__(self, item):
-        """
-        XXX
-        __getitem__ in python is limited to [0-0x7fffffff]
-        So if a binary has some data mapped in hight memory, getitem is unusable
-        """
         raise ValueError('\n\n**DEPRECATED API**\n\nuse virt(start, [stop, step]) instead of virt[start, [stop, step]]')
 
     def __setitem__(self, item, data):
-        s, n_item = self.item2virtitem(item)
+        s, n_item = self.get_rvaitem(item)
         if n_item == None:
             return
         return s.content.__setitem__(n_item, data)
@@ -558,13 +551,13 @@ class virt:
     def __setitem__(self, item, data):
         if not type(item) is slice:
             item = slice(item, item+len(data), None)
-        virt_item = self.item2virtitem(item)
+        virt_item = self.get_rvaitem(item)
         if not virt_item:
              return
         off = 0
         for s, n_item in virt_item:
             if isinstance(s, ProgBits):
-                i = slice(off, n_item.stop+off-n_item.start, n_item.step)
+                i = slice(off, n_item.stop+off-n_item.start)
 
                 data_slice = data.__getitem__(i)
                 s.content.__setitem__(n_item, data_slice)
@@ -592,23 +585,19 @@ class virt:
     def is_addr_in(self, ad):
         return self.parent.is_in_virt_address(ad)
 
-    def __call__(self, ad_start, ad_stop = None, ad_step = None, section = None):
-        rva_items = self.get_rvaitem(ad_start, ad_stop, ad_step, section)
+    def __call__(self, ad_start, ad_stop = None, section = None):
+        rva_items = self.get_rvaitem(ad_start, ad_stop, section)
         data_out = ""
         for s, n_item in rva_items:
             if not (isinstance(s, ProgramHeader) or isinstance(s, ProgramHeader64)):
-                data_out += s.content.__getitem__(n_item)
+                data_out += s.content[n_item]
                 continue
             if not type(n_item) is slice:
-                n_item = slice(n_item, n_item+1, 1)
+                n_item = slice(n_item, n_item+1)
             start = n_item.start + s.ph.offset
             stop  = n_item.stop + s.ph.offset
-            if n_item.step != None:
-                step  = n_item.step + s.ph.offset
-            else:
-                step = None
-            n_item = slice(start, stop, step)
-            data_out += self.parent.content.__getitem__(n_item)
+            n_item = slice(start, stop)
+            data_out += self.parent.content[n_item]
 
         return data_out
 
