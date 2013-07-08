@@ -511,22 +511,20 @@ class virt(object):
     def __init__(self, x):
         self.parent = x
 
-    def get_rvaitem(self, start, stop = None, section = None):
-        if isinstance(start, slice):
-            stop  = start.stop
-            start = start.start
-        if stop == None:
-            s, s_addr, s_size = self.parent.getparambyvad(start, section)
-            return [(s, start-s_addr)]
+    def get_rvaitem(self, item, section = None):
+        if item.stop == None:
+            s, s_addr, s_size = self.parent.getparambyvad(item.start, section)
+            return [(s, item.start-s_addr)]
 
-        total_len = stop - start
+        total_len = item.stop - item.start
+        start = item.start
         virt_item = []
         while total_len:
             s, s_addr, s_size = self.parent.getparambyvad(start, section)
             if not s:
                 raise ValueError('unknown rva address! %x'%start)
             s_start = start - s_addr
-            s_stop = stop - s_addr
+            s_stop = item.stop - s_addr
             if s_stop > s_size:
                 s_stop =  s_size
             s_len = s_stop - s_start
@@ -539,23 +537,36 @@ class virt(object):
         return virt_item
 
 
-    def __getitem__(self, item):
-        raise ValueError('\n\n**DEPRECATED API**\n\nuse virt(start, [stop, step]) instead of virt[start, [stop, step]]')
+    def __call__(self, ad_start, ad_stop = None, section = None):
+        rva_items = self.get_rvaitem(slice(ad_start, ad_stop), section)
+        return self.rvaitems2binary(rva_items)
 
-    def __setitem__(self, item, data):
-        s, n_item = self.get_rvaitem(item)
-        if n_item == None:
-            return
-        return s.content.__setitem__(n_item, data)
+    def __getitem__(self, item):
+        rva_items = self.get_rvaitem(item)
+        return self.rvaitems2binary(rva_items)
+
+    def rvaitems2binary(self, rva_items):
+        data_out = ""
+        for s, n_item in rva_items:
+            if not (isinstance(s, ProgramHeader) or isinstance(s, ProgramHeader64)):
+                data_out += s.content[n_item]
+                continue
+            if not type(n_item) is slice:
+                n_item = slice(n_item, n_item+1)
+            start = n_item.start + s.ph.offset
+            stop  = n_item.stop + s.ph.offset
+            n_item = slice(start, stop)
+            data_out += self.parent.content[n_item]
+        return data_out
 
     def __setitem__(self, item, data):
         if not type(item) is slice:
-            item = slice(item, item+len(data), None)
+            item = slice(item, item+len(data))
         virt_item = self.get_rvaitem(item)
-        if not virt_item:
+        if not rva_items:
              return
         off = 0
-        for s, n_item in virt_item:
+        for s, n_item in rva_items:
             if isinstance(s, ProgBits):
                 i = slice(off, n_item.stop+off-n_item.start)
 
@@ -584,22 +595,6 @@ class virt(object):
 
     def is_addr_in(self, ad):
         return self.parent.is_in_virt_address(ad)
-
-    def __call__(self, ad_start, ad_stop = None, section = None):
-        rva_items = self.get_rvaitem(ad_start, ad_stop, section)
-        data_out = ""
-        for s, n_item in rva_items:
-            if not (isinstance(s, ProgramHeader) or isinstance(s, ProgramHeader64)):
-                data_out += s.content[n_item]
-                continue
-            if not type(n_item) is slice:
-                n_item = slice(n_item, n_item+1)
-            start = n_item.start + s.ph.offset
-            stop  = n_item.stop + s.ph.offset
-            n_item = slice(start, stop)
-            data_out += self.parent.content[n_item]
-
-        return data_out
 
     def find(self, pattern, offset = 0):
         sections = []
