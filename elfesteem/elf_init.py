@@ -188,6 +188,12 @@ class Section(object):
     def __repr__(self):
         r = "{%(name)s ofs=%(offset)#x sz=%(size)#x addr=%(addr)#010x}" % self.sh
         return r
+    def get_size(self):
+        return self.sh.size
+    size = property(get_size)
+    def get_addr(self):
+        return self.sh.addr
+    addr = property(get_addr)
 
 class NullSection(Section):
     sht = elf.SHT_NULL
@@ -442,6 +448,15 @@ class ProgramHeader(object):
         self.ph.filesz += diff
         self.ph.memsz += diff
         self.parent.resize(sec, diff)
+    # get_rvaitem needs addr and size (same names as in the Shdr class)
+    # Note that we should always have memsz >= filesz unless memsz == 0
+    # Note that paddr is irrelevant for most OS
+    def get_size(self):
+        return self.ph.memsz
+    size = property(get_size)
+    def get_addr(self):
+        return self.ph.vaddr
+    addr = property(get_addr)
 
 class PHList(object):
     def __init__(self, parent, **kargs):
@@ -490,20 +505,20 @@ class virt(object):
 
     def get_rvaitem(self, item, section = None):
         if item.stop == None:
-            s, s_addr, s_size = self.parent.getparambyvad(item.start, section)
-            return [(s, item.start-s_addr)]
+            s = self.parent.getsectionbyvad(item.start, section)
+            return [(s, item.start-s.addr)]
 
         total_len = item.stop - item.start
         start = item.start
         virt_item = []
         while total_len:
-            s, s_addr, s_size = self.parent.getparambyvad(start, section)
+            s = self.parent.getsectionbyvad(start, section)
             if not s:
                 raise ValueError('unknown rva address! %x'%start)
-            s_start = start - s_addr
-            s_stop = item.stop - s_addr
-            if s_stop > s_size:
-                s_stop =  s_size
+            s_start = start - s.addr
+            s_stop = item.stop - s.addr
+            if s_stop > s.size:
+                s_stop =  s.size
             s_len = s_stop - s_start
             if s_len == 0:
                 raise ValueError('empty section! %x'%start)
@@ -539,7 +554,7 @@ class virt(object):
     def __setitem__(self, item, data):
         if not type(item) is slice:
             item = slice(item, item+len(data))
-        virt_item = self.get_rvaitem(item)
+        rva_items = self.get_rvaitem(item)
         if not rva_items:
              return
         off = 0
@@ -630,48 +645,38 @@ class ELF(object):
     def __str__(self):
         return self.build_content()
 
-    def getphbyvad(self, ad):
-        for s in self.ph:
-            if s.ph.vaddr <= ad < s.ph.vaddr+s.ph.memsz:
-                return s
-
-    def getsectionbyvad(self, ad):
-        f = []
-        for s in self.sh:
-            if s.sh.addr <= ad < s.sh.addr+s.sh.size:
-                f.append(s)
-        if len(f) == 1:
-            return f[0]
-        elif len(f) > 1:
-            # ELF relocatable: all sections start at address 0
-            # The priority given to .text is heuristic
-            for s in f:
-                if s.sh.name == '.text':
-                    return s
-            for s in f:
-                if s.sh.name.startswith('.text'):
-                    return s
-            return f[0]
-
-    def getparambyvad(self, ad, section = None):
-        s = None
-        if section:
-            s = self.getsectionbyname(section)
-            if not (s.sh.addr <= ad < s.sh.addr + s.sh.size):
-                s = None
-        if not s:
-            s = self.getsectionbyvad(ad)
-        if s:
-            return s, s.sh.addr, s.sh.size
-        s = self.getphbyvad(ad)
-        if s:
-            return s, s.ph.vaddr, s.ph.filesz
-        return None, 0, 0
-
     def getsectionbyname(self, name):
+        # TODO: many sections may have the same name, e.g. '.group'
         for s in self.sh:
             if s.sh.name.strip('\x00') == name:
                 return s
+        return None
+
+    def getsectionbyvad(self, ad, section = None):
+        if section:
+            s = self.getsectionbyname(section)
+            if s.sh.addr <= ad < s.sh.addr + s.sh.size:
+                return s
+        sh = [ s for s in self.sh if s.addr <= ad < s.addr+s.size ]
+        ph = [ s for s in self.ph if s.addr <= ad < s.addr+s.size ]
+        if len(sh) == 1 and len(ph) == 1:
+            # Executable returns a section and a PH
+            if not sh[0] in ph[0].shlist:
+                raise ValueError("Mismatch: section not in segment")
+            return sh[0]
+        if len(sh) == 0 and len(ph) == 1:
+            # Core returns a PH
+            return ph[0]
+        if len(ph) == 0 and len(sh) > 1:
+            # Relocatable returns many sections, all at address 0
+            # The priority given to .text is heuristic
+            for s in sh:
+                if s.sh.name == '.text':
+                    return s
+            for s in sh:
+                if s.sh.name.startswith('.text'):
+                    return s
+            return sh[0]
         return None
 
 
