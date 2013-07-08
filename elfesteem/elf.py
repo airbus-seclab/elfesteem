@@ -31,7 +31,7 @@ class Shdr(CStruct):
                 ("addralign","ptr"),
                 ("entsize","ptr") ]
 
-class Phdr(CStruct):
+class Phdr32(CStruct):
     _fields = [ ("type","u32"),
                 ("offset","u32"),
                 ("vaddr","u32"),

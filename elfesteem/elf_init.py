@@ -107,8 +107,8 @@ class WDynamic(StructWrapper):
             return self.parent.linksection.get_name(self.cstr.name)
         return self.cstr.name
 
-class WPhdr(StructWrapper):
-    wrapped = elf.Phdr
+class WPhdr32(StructWrapper):
+    wrapped = elf.Phdr32
 
 class WPhdr64(StructWrapper):
     wrapped = elf.Phdr64
@@ -306,18 +306,14 @@ class StrTable(Section):
 class SymTable(Section):
     sht = elf.SHT_SYMTAB
     def parse_content(self):
+        WSym = { 32: WSym32, 64: WSym64 }[self.wsize]
         c = self.content
         self.symtab=[]
         self.symbols={}
         sz = self.sh.entsize
         while c:
             s,c = c[:sz],c[sz:]
-            if   self.wsize == 32:
-                sym = WSym32(self, s)
-            elif self.wsize == 64:
-                sym = WSym64(self, s)
-            else:
-                ValueError('unknown size')
+            sym = WSym(self, s)
             self.symtab.append(sym)
             self.symbols[sym.name] = sym
     def __getitem__(self,item):
@@ -332,12 +328,7 @@ class DynSymTable(SymTable):
 class RelTable(Section):
     sht = elf.SHT_REL
     def parse_content(self):
-        if   self.wsize == 32:
-            WRel = WRel32
-        elif self.wsize == 64:
-            WRel = WRel64
-        else:
-            ValueError('unknown size')
+        WRel = { 32: WRel32, 64: WRel64 }[self.wsize]
         c = self.content
         self.reltab=[]
         self.rel = {}
@@ -351,12 +342,7 @@ class RelTable(Section):
 class RelATable(Section):
     sht = elf.SHT_RELA
     def parse_content(self):
-        if   self.wsize == 32:
-            WRela = WRela32
-        elif self.wsize == 64:
-            WRela = WRela64
-        else:
-            ValueError('unknown size')
+        WRela = { 32: WRela32, 64: WRela64 }[self.wsize]
         c = self.content
         self.reltab=[]
         self.rel = {}
@@ -439,33 +425,16 @@ class SHList(object):
 
 
 class ProgramHeader(object):
-    def __init__(self, parent, phstr, **kargs):
+    def __init__(self, parent, PHtype, phstr, **kargs):
         self.parent = parent
         inherit_sex_wsize(self, parent, kargs)
-        self.ph = WPhdr(self, phstr)
+        self.ph = PHtype(self, phstr)
         self.shlist = []
         for s in self.parent.parent.sh:
             if isinstance(s, NullSection):
                 continue
-            if ( (isinstance(s,NoBitsSection) and s.sh.offset == self.ph.offset+self.ph.filesz)
-                 or  self.ph.offset <= s.sh.offset < self.ph.offset+self.ph.filesz ):
-                s.phparent = self
-                self.shlist.append(s)
-    def resize(self, sec, diff):
-        self.ph.filesz += diff
-        self.ph.memsz += diff
-        self.parent.resize(sec, diff)
-
-class ProgramHeader64(object):
-    def __init__(self, parent, phstr, **kargs):
-        self.parent = parent
-        inherit_sex_wsize(self, parent, kargs)
-        self.ph = WPhdr64(self, phstr)
-        self.shlist = []
-        for s in self.parent.parent.sh:
-            if isinstance(s, NullSection):
-                continue
-            if ( (isinstance(s,NoBitsSection) and s.sh.offset == self.ph.offset+self.ph.filesz)
+            if ( (   isinstance(s,NoBitsSection)
+                     and s.sh.offset == self.ph.offset+self.ph.filesz )
                  or  self.ph.offset <= s.sh.offset < self.ph.offset+self.ph.filesz ):
                 s.phparent = self
                 self.shlist.append(s)
@@ -484,10 +453,9 @@ class PHList(object):
         for i in range(ehdr.phnum):
             of2 = of1+ehdr.phentsize
             phstr = parent[of1:of2]
-            if self.wsize == 32:
-                self.phlist.append(ProgramHeader(self, phstr))
-            else:
-                self.phlist.append(ProgramHeader64(self, phstr))
+            self.phlist.append(ProgramHeader(self,
+                { 32: WPhdr32, 64: WPhdr64 }[self.wsize],
+                phstr))
             of1 = of2
 
     def __getitem__(self, item):
@@ -557,7 +525,7 @@ class virt(object):
     def rvaitems2binary(self, rva_items):
         data_out = ""
         for s, n_item in rva_items:
-            if not (isinstance(s, ProgramHeader) or isinstance(s, ProgramHeader64)):
+            if not isinstance(s, ProgramHeader):
                 data_out += s.content[n_item]
                 continue
             if not type(n_item) is slice:
