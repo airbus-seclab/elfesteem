@@ -288,6 +288,7 @@ PT_NUM =          8               # Number of defined types
 PT_LOOS =         0x60000000L     # Start of OS-specific
 PT_GNU_EH_FRAME = 0x6474e550L     # GCC .eh_frame_hdr segment
 PT_GNU_STACK =    0x6474e551L     # Indicates stack executability
+PT_GNU_RELRO =    0x6474e552L
 PT_LOSUNW =       0x6ffffffaL
 PT_SUNWBSS =      0x6ffffffaL     # Sun Specific segment
 PT_SUNWSTACK =    0x6ffffffbL     # Stack segment
@@ -1533,6 +1534,8 @@ constants = {
   'STB' : {}, # st_info / ST_BIND
   'STT' : {}, # st_info / ST_TYPE
   'EM'  : {}, # e_machine
+  'ET'  : {}, # e_type
+  'PT'  : {}, # p_type
   'R'   : {}, # special case, two levels of dictionary
   }
 for type in constants.keys():
