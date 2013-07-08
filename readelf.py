@@ -29,7 +29,11 @@ def display_reloc(e, sh):
         name = r.sym
         if name == '':
             name = e.sh[r.parent.linksection.symtab[r.info>>8].shndx].sh.name
-        output = format%(r.offset, r.info, names['reloc_names'][e.Ehdr.machine][r.type], r.value, name)
+        machine = elf.constants['EM'][e.Ehdr.machine]
+        if machine == 'SPARC32PLUS': machine = 'SPARC'
+        if machine == 'SPARCV9':     machine = 'SPARC'
+        type = 'R_%s_%s' % (machine, elf.constants['R'][machine][r.type])
+        output = format%(r.offset, r.info, type, r.value, name)
         if sh.sht == elf.SHT_RELA:
             output = output + " + %x"%r.addend
         print output
@@ -64,7 +68,11 @@ def display_sections(e):
             flags += "G"
         if sh.sh.flags & elf.SHF_TLS:
             flags += "T"
-        print format%(i, sh.sh.name, names['sh_types'][sh.sh.type],
+        type = elf.constants['SHT'][sh.sh.type]
+        if type == 'GNU_verdef':   type = 'VERDEF'
+        if type == 'GNU_verneed':  type = 'VERNEED'
+        if type == 'GNU_versym':   type = 'VERSYM'
+        print format%(i, sh.sh.name, type,
                          sh.sh.addr, sh.sh.offset,
                          sh.sh.size, sh.sh.entsize, flags,
                          sh.sh.link, sh.sh.info, sh.sh.addralign)
@@ -84,8 +92,8 @@ def display_symbols(e, table_name):
         format = "%6d: %016x  %4d %-7s %-6s %-7s  %-3s %s"
     print header
     for i, value in enumerate(table.symtab):
-        type = names['sym_type'][value.info&0xf]
-        bind = names['sym_bind'][value.info>>4]
+        type = elf.constants['STT'][value.info&0xf]
+        bind = elf.constants['STB'][value.info>>4]
         if value.shndx>999:  ndx = "ABS"
         elif value.shndx==0: ndx = "UND"
         else:                ndx = "%3d"%value.shndx
@@ -108,7 +116,6 @@ for opt, arg in opts:
     elif opt == '-d':
         options['dynsym'] = True
 
-names = elf_init.compute_elf_constant_names()
 for file in args:
     if len(args) > 1:
         print "\nFile: %s" % file

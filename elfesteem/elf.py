@@ -238,6 +238,7 @@ SHT_GROUP =         17            # Section group
 SHT_SYMTAB_SHNDX =  18            # Extended section indeces
 SHT_NUM =           19            # Number of defined types.
 SHT_LOOS =          0x60000000L   # Start OS-specific
+SHT_GNU_HASH =      0x6ffffff6L
 SHT_GNU_LIBLIST =   0x6ffffff7L   # Prelink library list
 SHT_CHECKSUM =      0x6ffffff8L   # Checksum for DSO content.
 SHT_LOSUNW =        0x6ffffffaL   # Sun-specific low bound.
@@ -1527,6 +1528,26 @@ R_M32R_GOTOFF_LO        = 64      # Low 16 bit offset to GOT
 R_M32R_NUM              = 256     # Keep this the last entry.
 #
 
+constants = {
+  'SHT' : {}, # sh_type
+  'STB' : {}, # st_info / ST_BIND
+  'STT' : {}, # st_info / ST_TYPE
+  'EM'  : {}, # e_machine
+  'R'   : {}, # special case, two levels of dictionary
+  }
+for type in constants.keys():
+    if type == 'R':
+        for val in filter(lambda x:x[:len(type)+1]==type+"_", globals().keys()):
+            subtype = val[len(type)+1:]
+            subtype = subtype[:subtype.index('_')]
+            if not subtype in constants[type]:
+                constants[type][subtype] = {}
+            constants[type][subtype][globals()[val]] = val[len(type)+len(subtype)+2:]
+        continue
+    for val in filter(lambda x:x[:len(type)+1]==type+"_", globals().keys()):
+        if not globals()[val] in constants[type]:
+            constants[type][globals()[val]] = val[len(type)+1:]
+
 if __name__ == "__main__":
     import sys
     ELFFILE = sys.stdin
@@ -1544,10 +1565,3 @@ if __name__ == "__main__":
         ELFFILE.seek(ehdr.shoff+i*ehdr.shentsize)
         shdr = Shdr._from_file(ELFFILE)
         print "%(name)08x %(flags)x %(addr)08x %(offset)08x" % shdr
-
-
-
-
-
-
-
