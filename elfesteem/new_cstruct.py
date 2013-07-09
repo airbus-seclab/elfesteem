@@ -3,34 +3,34 @@
 import struct
 import re
 
-type2realtype = {}
+type_size = {}
 size2type = {}
 size2type_s = {}
 
 for t in 'B', 'H', 'I', 'Q':
     s = struct.calcsize(t)
-    type2realtype[t] = s*8
+    type_size[t] = s*8
     size2type[s*8] = t
 
 for t in 'b', 'h', 'i', 'q':
     s = struct.calcsize(t)
-    type2realtype[t] = s*8
+    type_size[t] = s*8
     size2type_s[s*8] = t
 
-type2realtype['u08'] = size2type[8]
-type2realtype['u16'] = size2type[16]
-type2realtype['u32'] = size2type[32]
-type2realtype['u64'] = size2type[64]
+type_size['u08'] = size2type[8]
+type_size['u16'] = size2type[16]
+type_size['u32'] = size2type[32]
+type_size['u64'] = size2type[64]
 
-type2realtype['s08'] = size2type_s[8]
-type2realtype['s16'] = size2type_s[16]
-type2realtype['s32'] = size2type_s[32]
-type2realtype['s64'] = size2type_s[64]
+type_size['s08'] = size2type_s[8]
+type_size['s16'] = size2type_s[16]
+type_size['s32'] = size2type_s[32]
+type_size['s64'] = size2type_s[64]
 
-type2realtype['d'] = 'd'
-type2realtype['f'] = 'f'
-type2realtype['q'] = 'q'
-type2realtype['ptr'] = 'ptr'
+type_size['d'] = 'd'
+type_size['f'] = 'f'
+type_size['q'] = 'q'
+type_size['ptr'] = 'ptr'
 
 sex_types = {0:'<', 1:'>'}
 
@@ -41,10 +41,10 @@ def fix_size(fields, wsize):
             pass
         elif v == "ptr":
             v = size2type[wsize]
-        elif not v in type2realtype:
+        elif not v in type_size:
             raise ValueError("unkown Cstruct type", v)
         else:
-            v = type2realtype[v]
+            v = type_size[v]
         out.append((name, v))
     fields = out
     return fields
@@ -52,8 +52,8 @@ def fix_size(fields, wsize):
 def real_fmt(fmt, wsize):
     if fmt == "ptr":
         v = size2type[wsize]
-    elif fmt in type2realtype:
-        v = type2realtype[fmt]
+    elif fmt in type_size:
+        v = type_size[fmt]
     else:
         v = fmt
     return v
@@ -101,7 +101,7 @@ class Cstruct_Metaclass(type):
                 fname, ffmt = field
             elif len(field) == 3:
                 fname, ffmt, cpt = field
-            if ffmt in type2realtype or (isinstance(ffmt, str) and re.match(r'\d+s', ffmt)):
+            if ffmt in type_size or (isinstance(ffmt, str) and re.match(r'\d+s', ffmt)):
                 # basic types
                 if cpt:
                     value = []
@@ -193,7 +193,7 @@ class CStruct(object):
                 fname, ffmt, cpt = field
 
             value = getattr(self, fname+self.__class__.field_suffix)
-            if ffmt in type2realtype or (isinstance(ffmt, str) and re.match(r'\d+s', ffmt)):
+            if ffmt in type_size or (isinstance(ffmt, str) and re.match(r'\d+s', ffmt)):
                 # basic types
                 fmt = real_fmt(ffmt, self.wsize)
                 if cpt == None:
@@ -229,11 +229,11 @@ class CStruct(object):
 
         return out
 
-    def __str__(self):
-        return self.pack()
-
     def __len__(self):
         return len(self.pack())
+
+    def __str__(self):
+        return self.pack()
 
     def __repr__(self):
         return "<%s=%s>" % (self.__class__.__name__, "/".join(map(lambda x:repr(getattr(self,x[0])),self._fields)))

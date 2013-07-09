@@ -30,6 +30,8 @@ class Shdr(CStruct):
                 ("info","u32"),
                 ("addralign","ptr"),
                 ("entsize","ptr") ]
+    def get_name(self):
+        return self._parent.parent._shstr.get_name(self._name)
 
 class Phdr32(CStruct):
     _fields = [ ("type","u32"),
@@ -59,6 +61,8 @@ class Sym32(CStruct):
                 ("info","u08"),
                 ("other","u08"),
                 ("shndx","u16") ]
+    def get_name(self):
+        return self._parent.linksection.get_name(self._name)
 
 class Sym64(CStruct):
     _fields = [ ("name","u32"),
@@ -67,6 +71,8 @@ class Sym64(CStruct):
                 ("shndx","u16"),
                 ("value","u64"),
                 ("size","u64") ]
+    def get_name(self):
+        return self._parent.linksection.get_name(self._name)
 
 class Dym(CStruct):
     _fields = [ ("tag","u32"),
@@ -75,17 +81,38 @@ class Dym(CStruct):
 class Rel32(CStruct):
     _fields = [ ("offset","ptr"),
                 ("info","u32") ]
+    @property
+    def type(self):
+        return self._info & 0xff
+    @property
+    def symtab(self):
+        return self._parent.linksection.symtab[self._info>>8]
+    @property
+    def shndx(self):
+        return self.symtab.shndx
+    @property
+    def value(self):
+        return self.symtab.value
+    @property
+    def sym(self):
+        return self.symtab.name
 
-class Rel64(CStruct):
+class Rel64(Rel32):
     _fields = [ ("offset","ptr"),
                 ("info","u64") ]
+    @property
+    def type(self):
+        return self._info & 0xffffffff
+    @property
+    def symtab(self):
+        return self._parent.linksection.symtab[self._info>>32]
 
-class Rela32(CStruct):
+class Rela32(Rel32):
     _fields = [ ("offset","ptr"),
                 ("info","u32"),
                 ("addend","ptr") ]
 
-class Rela64(CStruct):
+class Rela64(Rel64):
     _fields = [ ("offset","ptr"),
                 ("info","u64"),
                 ("addend","ptr") ]
@@ -93,33 +120,37 @@ class Rela64(CStruct):
 class Dynamic(CStruct):
     _fields = [ ("type","u32"),
                 ("name","u32") ]
+    def get_name(self):
+        if self.type == DT_NEEDED:
+            return self._parent.linksection.get_name(self._name)
+        return self._name
 
 
 # Legal values for e_ident (identification indexes)
 
-EI_MAG0	=       0	# File identification
-EI_MAG1	=       1	# File identification
-EI_MAG2	=       2	# File identification
-EI_MAG3	=       3	# File identification
-EI_CLASS =      4	# File class
-EI_DATA	=       5	# Data encoding
-EI_VERSION =    6	# File version
-EI_OSABI =      7	# Operating system/ABI identification
-EI_ABIVERSION = 8	# ABI version
-EI_PAD =        9	# Start of padding bytes
-EI_NIDENT =     16	# Size of e_ident[]
+EI_MAG0 =       0       # File identification
+EI_MAG1 =       1       # File identification
+EI_MAG2 =       2       # File identification
+EI_MAG3 =       3       # File identification
+EI_CLASS =      4       # File class
+EI_DATA =       5       # Data encoding
+EI_VERSION =    6       # File version
+EI_OSABI =      7       # Operating system/ABI identification
+EI_ABIVERSION = 8       # ABI version
+EI_PAD =        9       # Start of padding bytes
+EI_NIDENT =     16      # Size of e_ident[]
 
 # Legal values for e_ident[EI_CLASS]
 
-ELFCLASSNONE =  0	# Invalid class
-ELFCLASS32 =	1	# 32-bit objects
-ELFCLASS64 =    2	# 64-bit objects
+ELFCLASSNONE =  0       # Invalid class
+ELFCLASS32 =    1       # 32-bit objects
+ELFCLASS64 =    2       # 64-bit objects
 
 # Legal values for e_ident[EI_DATA]
 
-ELFDATANONE =	0	# Invalid data encoding
-ELFDATA2LSB =	1	# Least significant byte at lowest address
-ELFDATA2MSB =	2	# Most significant byte at lowest address
+ELFDATANONE =   0       # Invalid data encoding
+ELFDATA2LSB =   1       # Least significant byte at lowest address
+ELFDATA2MSB =   2       # Most significant byte at lowest address
 
 # Legal values for e_type (object file type).
 
@@ -1550,21 +1581,3 @@ for type in constants.keys():
     for val in filter(lambda x:x[:len(type)+1]==type+"_", globals().keys()):
         if not globals()[val] in constants[type]:
             constants[type][globals()[val]] = val[len(type)+1:]
-
-if __name__ == "__main__":
-    import sys
-    ELFFILE = sys.stdin
-    if len(sys.argv) > 1:
-        ELFFILE = open(sys.argv[1])
-    ehdr = Ehdr._from_file(ELFFILE)
-
-    ELFFILE.seek(ehdr.phoff)
-    phdr = Phdr._from_file(ELFFILE)
-
-    ELFFILE.seek(ehdr.shoff)
-    shdr = Shdr._from_file(ELFFILE)
-
-    for i in range(ehdr.shnum):
-        ELFFILE.seek(ehdr.shoff+i*ehdr.shentsize)
-        shdr = Shdr._from_file(ELFFILE)
-        print "%(name)08x %(flags)x %(addr)08x %(offset)08x" % shdr

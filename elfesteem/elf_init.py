@@ -2,7 +2,6 @@
 
 import struct
 
-import cstruct
 import elf
 from strpatchwork import StrPatchwork
 import logging
@@ -12,106 +11,6 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
 log.addHandler(console_handler)
 log.setLevel(logging.WARN)
-
-class test(type):
-    pass
-
-def inherit_sex_wsize(self, parent, kargs):
-    for f in ['sex', 'wsize']:
-        if f in kargs:
-            setattr(self, f, kargs[f])
-            del kargs[f]
-        elif parent != None:
-            setattr(self, f, getattr(parent, f))
-
-class StructWrapper(object):
-    class __metaclass__(type):
-        def __new__(cls, name, bases, dct):
-            wrapped = dct["wrapped"]
-            if wrapped is not None:
-                for fname, ftype in wrapped._fields:
-                    dct[fname] = property(
-                        dct.pop("get_"+fname,
-                            lambda self,fname=fname: getattr(self.cstr,fname)),
-                        dct.pop("set_"+fname,
-                            lambda self,v,fname=fname: setattr(self.cstr,fname,v)),
-                        dct.pop("del_"+fname, None))
-            return type.__new__(cls, name, bases, dct)
-    wrapped = None
-    def __init__(self, parent, *args, **kargs):
-        inherit_sex_wsize(self, parent, kargs)
-        self.cstr = self.wrapped(self.sex, self.wsize, *args, **kargs)
-        self.parent = parent
-    def __getitem__(self, item):
-        return getattr(self,item)
-    def __repr__(self):
-        return "<W-"+repr(self.cstr)[1:]
-    def __str__(self):
-        return str(self.cstr)
-
-
-class WEhdr(StructWrapper):
-    wrapped = elf.Ehdr
-    def set_shstrndx(self, val):
-        self.cstr.shstrndx = val
-
-class WSym32(StructWrapper):
-    wrapped = elf.Sym32
-    def get_name(self):
-        return self.parent.linksection.get_name(self.cstr.name)
-
-class WSym64(StructWrapper):
-    wrapped = elf.Sym64
-    def get_name(self):
-        return self.parent.linksection.get_name(self.cstr.name)
-
-class WRel32(StructWrapper):
-    wrapped = elf.Rel32
-    wrapped._fields.append(("value","u32"))
-    wrapped._fields.append(("sym","u32"))
-    wrapped._fields.append(("type","u08"))
-    def get_value(self):
-        return self.parent.linksection.symtab[self.cstr.info>>8].value
-    def get_sym(self):
-        return self.parent.linksection.symtab[self.cstr.info>>8].name
-    def get_type(self):
-        return self.cstr.info & 0xff
-
-class WRel64(StructWrapper):
-    wrapped = elf.Rel64
-    wrapped._fields.append(("value","u64"))
-    wrapped._fields.append(("sym","u32"))
-    wrapped._fields.append(("type","u32"))
-    def get_value(self):
-        return self.parent.linksection.symtab[self.cstr.info>>32].value
-    def get_sym(self):
-        return self.parent.linksection.symtab[self.cstr.info>>32].name
-    def get_type(self):
-        return self.cstr.info & 0xffffffff
-
-class WRela32(WRel32):
-    wrapped = elf.Rela32
-
-class WRela64(WRel64):
-    wrapped = elf.Rela64
-
-class WShdr(StructWrapper):
-    wrapped = elf.Shdr
-    def get_name(self):
-        return self.parent.parent._shstr.get_name(self.cstr.name)
-
-class WDynamic(StructWrapper):
-    wrapped = elf.Dynamic
-    def get_name(self):
-        if self.type == elf.DT_NEEDED:
-            return self.parent.linksection.get_name(self.cstr.name)
-        return self.cstr.name
-
-class WPhdr32(StructWrapper):
-    wrapped = elf.Phdr32
-
-class WPhdr64(StructWrapper):
-    wrapped = elf.Phdr64
 
 
 class ContentManager(object):
@@ -129,6 +28,14 @@ class ContentManager(object):
 ### Sections
 
 
+def inherit_sex_wsize(self, parent, kargs):
+    for f in ['sex', 'wsize']:
+        if f in kargs:
+            setattr(self, f, kargs[f])
+            del kargs[f]
+        elif parent != None:
+            setattr(self, f, getattr(parent, f))
+
 class Section(object):
     sectypes = {}
     class __metaclass__(type):
@@ -143,12 +50,12 @@ class Section(object):
         def __call__(cls, parent, shstr=None):
             sh = None
             if shstr is not None:
-                sh = WShdr(None, shstr, sex = parent.sex, wsize = parent.wsize)
+                sh = elf.Shdr(parent = None, content = shstr, sex = parent.sex, wsize = parent.wsize)
                 if sh.type in Section.sectypes:
                     cls = Section.sectypes[sh.type]
             i = cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
             if sh is not None:
-                sh.parent=i
+                sh._parent=i
             i.__init__(parent, sh)
             return i
 
@@ -264,7 +171,7 @@ class Dynamic(Section):
         sz = self.sh.entsize
         while c:
             s,c = c[:sz],c[sz:]
-            dyn = WDynamic(self, s)
+            dyn = elf.Dynamic(parent=self, content=s)
             self.dyntab.append(dyn)
             if type(dyn.name) is str:
                 self.dynamic[dyn.name] = dyn
@@ -312,14 +219,14 @@ class StrTable(Section):
 class SymTable(Section):
     sht = elf.SHT_SYMTAB
     def parse_content(self):
-        WSym = { 32: WSym32, 64: WSym64 }[self.wsize]
+        Sym = { 32: elf.Sym32, 64: elf.Sym64 }[self.wsize]
         c = self.content
         self.symtab=[]
         self.symbols={}
         sz = self.sh.entsize
         while c:
             s,c = c[:sz],c[sz:]
-            sym = WSym(self, s)
+            sym = Sym(parent=self, content=s)
             self.symtab.append(sym)
             self.symbols[sym.name] = sym
     def __getitem__(self,item):
@@ -334,30 +241,23 @@ class DynSymTable(SymTable):
 class RelTable(Section):
     sht = elf.SHT_REL
     def parse_content(self):
-        WRel = { 32: WRel32, 64: WRel64 }[self.wsize]
+        if self.__class__.sht == elf.SHT_REL:
+            Rel = { 32: elf.Rel32,  64: elf.Rel64 }[self.wsize]
+        elif self.__class__.sht == elf.SHT_RELA:
+            Rel = { 32: elf.Rela32, 64: elf.Rela64 }[self.wsize]
         c = self.content
         self.reltab=[]
         self.rel = {}
         sz = self.sh.entsize
         while c:
             s,c = c[:sz],c[sz:]
-            rel = WRel(self, s)
+            rel = Rel(parent=self, content=s)
             self.reltab.append(rel)
             self.rel[rel.sym] = rel
 
-class RelATable(Section):
+class RelATable(RelTable):
     sht = elf.SHT_RELA
-    def parse_content(self):
-        WRela = { 32: WRela32, 64: WRela64 }[self.wsize]
-        c = self.content
-        self.reltab=[]
-        self.rel = {}
-        sz = self.sh.entsize
-        while c:
-            s,c = c[:sz],c[sz:]
-            rel = WRela(self, s)
-            self.reltab.append(rel)
-            self.rel[rel.sym] = rel
+
 
 ### Section List
 
@@ -434,7 +334,7 @@ class ProgramHeader(object):
     def __init__(self, parent, PHtype, phstr, **kargs):
         self.parent = parent
         inherit_sex_wsize(self, parent, kargs)
-        self.ph = PHtype(self, phstr)
+        self.ph = PHtype(parent=self, content=phstr)
         self.shlist = []
         for s in self.parent.parent.sh:
             if isinstance(s, NullSection):
@@ -469,7 +369,7 @@ class PHList(object):
             of2 = of1+ehdr.phentsize
             phstr = parent[of1:of2]
             self.phlist.append(ProgramHeader(self,
-                { 32: WPhdr32, 64: WPhdr64 }[self.wsize],
+                { 32: elf.Phdr32, 64: elf.Phdr64 }[self.wsize],
                 phstr))
             of1 = of2
 
@@ -624,10 +524,10 @@ class ELF(object):
     def parse_content(self):
         h = self.content[:8]
         self.wsize = ord(h[4])*32
-        self.sex   = ord(h[5])
-        self.Ehdr = WEhdr(self, self.content)
-        self.sh = SHList(self)
-        self.ph = PHList(self)
+        self.sex   = {1:'<', 2:'>'} [ord(h[5])]
+        self.Ehdr = elf.Ehdr(parent=self, content=self.content)
+        self.sh = SHList(parent=self)
+        self.ph = PHList(parent=self)
     def resize(self, old, new):
         pass
     def __getitem__(self, item):

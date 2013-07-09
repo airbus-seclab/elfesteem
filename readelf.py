@@ -66,7 +66,7 @@ def display_reloc(e, sh):
     for r in sh.reltab:
         name = r.sym
         if name == '':
-            name = e.sh[r.parent.linksection.symtab[r.info>>8].shndx].sh.name
+            name = e.sh[r.shndx].sh.name
         machine = elf.constants['EM'][e.Ehdr.machine]
         if machine == 'SPARC32PLUS': machine = 'SPARC'
         if machine == 'SPARCV9':     machine = 'SPARC'

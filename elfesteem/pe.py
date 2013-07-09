@@ -1713,38 +1713,3 @@ constants = {
 for type in constants.keys():
     for val in filter(lambda x:x[:len(type)+1]==type+"_", globals().keys()):
         constants[type][globals()[val]] = val[len(type)+1:]
-
-
-if __name__ == "__main__":
-    import sys
-    PEFILE = sys.stdin
-    if len(sys.argv) > 1:
-        PEFILE = open(sys.argv[1])
-    dhdr = Doshdr._from_file(PEFILE)
-    print repr(dhdr)
-    print "sigMZ:", hex(dhdr.magic),hex(len(dhdr))
-
-    PEFILE.seek(dhdr.lfanew)
-    nthdr = NThdr._from_file(PEFILE)
-    print repr(nthdr)
-    print "sigPE:", hex(nthdr.signature),hex(len(nthdr))
-
-    PEFILE.seek(dhdr.lfanew+len(nthdr))
-    opthdr = Opthdr._from_file(PEFILE)
-    print repr(opthdr)
-    print "sigHDR:",hex(opthdr.magic),hex(len(opthdr))
-
-    PEFILE.seek(dhdr.lfanew+len(nthdr)+len(opthdr))
-    for i in xrange(opthdr.numberofrvaandsizes):
-        optehdr = Optehdr._from_file(PEFILE)
-        print repr(optehdr)
-
-
-
-    print hex(dhdr.lfanew+len(nthdr)+nthdr.sizeofoptionalheader)
-    PEFILE.seek(dhdr.lfanew+len(nthdr)+nthdr.sizeofoptionalheader)
-    for i in xrange(nthdr.numberofsections):
-        #PEFILE.seek(dhdr.lfanew+len(nthdr))
-        shdr = Shdr._from_file(PEFILE)
-        print repr(shdr)
-        print "name:",shdr.name,hex(len(shdr))

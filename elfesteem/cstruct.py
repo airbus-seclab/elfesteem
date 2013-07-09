@@ -4,102 +4,114 @@ import struct
 
 type_size = {}
 size2type = {}
+size2type_s = {}
+
 for t in 'B', 'H', 'I', 'Q':
     s = struct.calcsize(t)
     type_size[t] = s*8
     size2type[s*8] = t
+
+for t in 'b', 'h', 'i', 'q':
+    s = struct.calcsize(t)
+    type_size[t] = s*8
+    size2type_s[s*8] = t
 
 type_size['u08'] = size2type[8]
 type_size['u16'] = size2type[16]
 type_size['u32'] = size2type[32]
 type_size['u64'] = size2type[64]
 
-def fix_size(fields, wsize):
-    out = []
-    for name, v in fields:
-        if v.endswith("s"):
-            pass
-        elif v == "ptr":
-            v = size2type[wsize]
-        elif not v in type_size:
-            raise ValueError("unkown Cstruct type", v)
-        else:
-            v = type_size[v]
-        out.append((name, v))
-    fields = out
-    return fields
-            
-        
-class Cstruct_Metaclass(type):
-    def __new__(cls, name, bases, dct):
-        o = super(Cstruct_Metaclass, cls).__new__(cls, name, bases, dct)
-        o._packstring =  o._packformat+"".join(map(lambda x:x[1],o._fields))
-        o._size = struct.calcsize(o._packstring)
-        return o
+type_size['s08'] = size2type_s[8]
+type_size['s16'] = size2type_s[16]
+type_size['s32'] = size2type_s[32]
+type_size['s64'] = size2type_s[64]
+
 class CStruct(object):
-    #__metaclass__ = Cstruct_Metaclass
+    """
+    The class CStruct is inherited by classes that simply
+    represent a concatenation of typed fields
+
+    How to create a CStruct:
+      _fields list the pairs (field_name, field_type)
+      unpack creates attributes by unpacking a byte string
+      pack creates a byte string from the object content
+
+    How to use a CStruct:
+      create with the following optional parameters:
+      content: binary stream to initialize the object
+      parent: parent object
+      sex and wsize: endianess and wordsize
+    """
+
+    class __metaclass__(type):
+        def __new__(cls, name, bases, dct):
+            for fname, ftype in dct['_fields']:
+                dct[fname] = property(
+                    dct.pop("get_"+fname,
+                        lambda self,fname=fname:   getattr(self,'_'+fname)),
+                    dct.pop("set_"+fname,
+                        lambda self,v,fname=fname: setattr(self,'_'+fname,v)),
+                    dct.pop("del_"+fname,          None))
+            return type.__new__(cls, name, bases, dct)
+
     _packformat = ""
     _fields = []
 
-    @classmethod
-    def _from_file(cls, f):
-        return cls(f.read(cls._size))
-    
-    def __init__(self, sex, wsize, *args, **kargs):
-        if sex==1:
-            sex = '<'
-        else:
-            sex = '>'
+    def fix_size(self, wsize):
+        out = []
+        for name, v in self._fields:
+            if v.endswith("s"):
+                pass
+            elif v == "ptr":
+                v = size2type[wsize]
+            elif not v in type_size:
+                raise ValueError("unkown Cstruct type", v)
+            else:
+                v = type_size[v]
+            out.append((name, v))
+        return out
+
+    def __init__(self, *args, **kargs):
         #packformat enforce sex
+        self._parent = kargs['parent']
+        del kargs['parent']
+        for f in ['sex', 'wsize']:
+            if f in kargs:
+                setattr(self, f, kargs[f])
+                del kargs[f]
+            elif self._parent != None:
+                setattr(self, f, getattr(self._parent, f))
+        sex = self.sex
+        wsize = self.wsize
         if self._packformat:
             sex = ""
-        pstr = fix_size(self._fields, wsize)
+        pstr = self.fix_size(wsize)
         self._packstring =  sex + self._packformat+"".join(map(lambda x:x[1],pstr))
         self._size = struct.calcsize(self._packstring)
 
         self._names = map(lambda x:x[0], self._fields)
-        if kargs:
-            self.__dict__.update(kargs)
-        else:
-            s=""
-            if args:
-                s = args[0]
+        if 'content' in kargs:
+            s = kargs['content']
             s += "\x00"*self._size
             s = s[:self._size]            
-            self._unpack(s)
+            self.unpack(s)
+            del kargs['content']
+        self.__dict__.update(kargs)
 
-    def _unpack(self,s):
+    def unpack(self,s):
         disas = struct.unpack(self._packstring, s)
         for n,v in zip(self._names,disas):
             setattr(self, n, v)
 
-    def _pack(self):
+    def pack(self):
         return struct.pack(self._packstring,
                            *map(lambda x: getattr(self, x), self._names))
-
-    def _spack(self, superstruct, shift=0):
-        attr0 = map(lambda x: getattr(self, x), self._names)
-        attr = []
-        for s in attr0:
-            if isinstance(s,CStruct):
-                if s in superstruct:
-                    s = reduce(lambda x,y: x+len(y),
-                               superstruct[:superstruct.index(s)],
-                               0)
-                    s += shift
-                else:
-                    raise Exception("%s not un superstructure" % repr(s))
-            attr.append(s)
-        return struct.pack(self._packstring, *attr)
-
-    def _copy(self):
-        return self.__class__(**self.__dict__)
 
     def __len__(self):
         return self._size
 
     def __str__(self):
-        return self._pack()
+        return self.pack()
 
     def __repr__(self):
         return "<%s=%s>" % (self.__class__.__name__, "/".join(map(lambda x:repr(getattr(self,x[0])),self._fields)))
@@ -107,25 +119,3 @@ class CStruct(object):
     def __getitem__(self, item): # to work with format strings
         return getattr(self, item)
 
-    def _show(self):
-        print "##%s:" % self.__class__.__name__
-        fmt = "%%-%is = %%r" % max(map(lambda x:len(x[0]), self._fields))
-        for fn,ft in self._fields:
-            print fmt % (fn,getattr(self,fn))
-
-class CStructStruct:
-    def __init__(self, lst, shift=0):
-        self._lst = lst
-        self._shift = shift
-    def __getattr__(self, attr):
-        return getattr(self._lst, attr)
-    def __str__(self):
-        s = []
-        for a in self._lst:
-            if type(a) is str:
-                s.append(a)
-            else:
-                s.append(a._spack(self._lst, self._shift))
-        return "".join(s)
-        
-        
