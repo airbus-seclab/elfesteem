@@ -476,7 +476,7 @@ class DirImport(CStruct):
             else:
                 d.firstthunk = of1
             d.dlldescname = DescName(self.parent_head, name = d.name)
-            d.originalfirstthunk = True
+            d.originalfirstthunk = 0
             d.originalfirstthunks = struct_array(self, None,
                                                  None,
                                                  Rva)
@@ -928,7 +928,7 @@ class DirDelay(CStruct):
             else:
                 d.firstthunk = of1
             d.dlldescname = DescName(self.parent_head, name = d.name)
-            d.originalfirstthunk = True
+            d.originalfirstthunk = 0
             d.originalfirstthunks = struct_array(self, None,
                                                  None,
                                                  Rva)
