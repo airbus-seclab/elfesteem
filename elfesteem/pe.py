@@ -10,6 +10,9 @@ console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
 log.addHandler(console_handler)
 log.setLevel(logging.WARN)
 
+class InvalidOffset(Exception):
+    pass
+
 class Doshdr(CStruct):
     _fields = [ ("magic", "u16"),
                 ("cblp","u16"),
