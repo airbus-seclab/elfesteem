@@ -31,7 +31,7 @@ class drva:
         if not type(item) is slice:
             return None
         rva_items = self.get_rvaitem(item.start, item.stop, item.step)
-        if not rva_items:
+        if rva_items is None:
              return
         data_out = ""
         for s, n_item in rva_items:
@@ -42,11 +42,11 @@ class drva:
         return data_out
 
     def get_rvaitem(self, start, stop = None, step = None):
-        if not self.parent.SHList:
+        if self.parent.SHList is None:
             return [(None, start)]
         if stop == None:
             s = self.parent.getsectionbyrva(start)
-            if not s:
+            if s is None:
                 return [(None, start)]
             start = start-s.addr
             return [(s, start)]
@@ -63,7 +63,7 @@ class drva:
                 s = None
             else:
                 s = self.parent.getsectionbyrva(start)
-                if not s:
+                if s is None:
                     log.warn('unknown rva address! %x'%start)
                     return []
                 s_max = max(s.size, s.rawsize)
@@ -88,7 +88,7 @@ class drva:
         if not type(item) is slice:
             item = slice(item, item+len(data), None)
         rva_items = self.get_rvaitem(item.start, item.stop, item.step)
-        if not rva_items:
+        if rva_items is None:
              return
         off = 0
         for s, n_item in rva_items:
@@ -201,10 +201,10 @@ class virt:
         rva_items = self.parent.drva.get_rvaitem(ad_start, ad_stop, ad_step)
         data_out = pe.data_empty
         for s, n_item in rva_items:
-            if s:
-                data_out += s.data.__getitem__(n_item)
-            else:
+            if s is None:
                 data_out += self.parent.__getitem__(n_item)
+            else:
+                data_out += s.data.__getitem__(n_item)
 
         return data_out
 
@@ -483,7 +483,7 @@ class PE(object):
         return
 
     def getsectionbyrva(self, rva):
-        if not self.SHList:
+        if self.SHList is None:
             return None
         for s in self.SHList.shlist:
             if s.addr <= rva < s.addr+s.size:
@@ -494,7 +494,7 @@ class PE(object):
         return self.getsectionbyrva(self.virt2rva(vad))
 
     def getsectionbyoff(self, off):
-        if not self.SHList:
+        if self.SHList is None:
             return None
         for s in self.SHList.shlist:
             if s.offset <= off < s.offset+s.rawsize:
@@ -502,7 +502,7 @@ class PE(object):
         return None
 
     def getsectionbyname(self, name):
-        if not self.SHList:
+        if self.SHList is None:
             return None
         for s in self.SHList:
             if s.name.strip('\x00') ==  name:
@@ -511,14 +511,14 @@ class PE(object):
 
     def rva2off(self, rva):
         s = self.getsectionbyrva(rva)
-        if not s:
+        if s is None:
             raise pe.InvalidOffset('cannot get offset for 0x%X'%rva)
             return
         return rva-s.addr+s.offset
 
     def off2rva(self, off):
         s = self.getsectionbyoff(off)
-        if not s:
+        if s is None:
             return
         return off-s.offset+s.addr
 
@@ -627,7 +627,7 @@ class PE(object):
         return self.build_content()
 
     def export_funcs(self):
-        if not self.DirExport:
+        if self.DirExport is None:
             print('no export dir found')
             return None, None
 
@@ -640,7 +640,7 @@ class PE(object):
 
     def reloc_to(self, imgbase):
         offset = imgbase - self.NThdr.ImageBase
-        if not self.DirReloc:
+        if self.DirReloc is None:
             log.warn('no relocation found!')
         for rel in self.DirReloc.reldesc:
             rva = rel.rva
@@ -706,7 +706,7 @@ if __name__ == "__main__":
                ]
     e.DirImport.add_dlldesc(new_dll)
 
-    if not e.DirExport.expdesc:
+    if e.DirExport.expdesc is None:
         e.DirExport.create()
         e.DirExport.add_name("coco")
 
