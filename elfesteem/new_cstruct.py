@@ -152,7 +152,6 @@ class Cstruct_Metaclass(type):
         c, l = cls.unpack_l(s, off = off,
                             parent_head = parent_head, _sex=_sex, _wsize=_wsize)
         return c
-
 class CStruct(object):
     __metaclass__ = Cstruct_Metaclass
     _packformat = ""
