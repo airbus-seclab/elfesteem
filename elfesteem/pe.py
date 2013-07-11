@@ -11,6 +11,10 @@ console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
 log.addHandler(console_handler)
 log.setLevel(logging.WARN)
 
+
+class InvalidOffset(Exception):
+    pass
+
 class Doshdr(CStruct):
     _fields = [ ("magic", "u16"),
                 ("cblp","u16"),
@@ -470,7 +474,7 @@ class DirImport(CStruct):
             else:
                 d.firstthunk = of1
             d.dlldescname = DescName(self.parent_head, name = d.name)
-            d.originalfirstthunk = True
+            d.originalfirstthunk = 0
             d.originalfirstthunks = struct_array(self, None,
                                                  None,
                                                  Rva)
@@ -923,7 +927,7 @@ class DirDelay(CStruct):
             else:
                 d.firstthunk = of1
             d.dlldescname = DescName(self.parent_head, name = d.name)
-            d.originalfirstthunk = True
+            d.originalfirstthunk = 0
             d.originalfirstthunks = struct_array(self, None,
                                                  None,
                                                  Rva)
