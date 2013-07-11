@@ -215,7 +215,10 @@ class virt:
 
 class PE(object):
     content = ContentManager()
-    def __init__(self, pestr = None, loadfrommem=False, parse_resources = True):
+    def __init__(self, pestr = None,
+                 loadfrommem=False,
+                 parse_resources = True,
+                 parse_delay = True):
         self._drva = drva(self)
         self._virt = virt(self)
         if pestr == None:
@@ -282,12 +285,15 @@ class PE(object):
         else:
             self._content = StrPatchwork(pestr)
             self.loadfrommem = loadfrommem
-            self.parse_content(parse_resources = parse_resources)
+            self.parse_content(parse_resources = parse_resources,
+                               parse_delay = parse_delay)
 
     def isPE(self):
         return self.NTsig.signature == 0x4550
 
-    def parse_content(self, parse_resources = True):
+    def parse_content(self,
+                      parse_resources = True,
+                      parse_delay = True):
         of = 0
         self._sex = 0
         self._wsize = 32
@@ -341,25 +347,48 @@ class PE(object):
                 log.warn('unaligned raw section!')
             s.data = StrPatchwork()
             s.data[0] = self.content[raw_off:raw_off+s.rawsize]
-        self.DirImport = pe.DirImport.unpack(self.content,
-                                             self.NThdr.optentries[pe.DIRECTORY_ENTRY_IMPORT].rva,
-                                             self)
-        self.DirExport = pe.DirExport.unpack(self.content,
-                                             self.NThdr.optentries[pe.DIRECTORY_ENTRY_EXPORT].rva,
-                                             self)
+        try:
+            self.DirImport = pe.DirImport.unpack(self.content,
+                                                 self.NThdr.optentries[pe.DIRECTORY_ENTRY_IMPORT].rva,
+                                                 self)
+        except pe.InvalidOffset:
+            log.warning('cannot parse DirImport, skipping')
+            self.DirImport = pe.DirImport(self)
+
+        try:
+            self.DirExport = pe.DirExport.unpack(self.content,
+                                                 self.NThdr.optentries[pe.DIRECTORY_ENTRY_EXPORT].rva,
+                                                 self)
+        except pe.InvalidOffset:
+            log.warning('cannot parse DirExport, skipping')
+            self.DirImport = pe.DirExport(self)
+
         if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_DELAY_IMPORT:
-            self.DirDelay = pe.DirDelay.unpack(self.content,
-                                               self.NThdr.optentries[pe.DIRECTORY_ENTRY_DELAY_IMPORT].rva,
-                                               self)
+            self.DirDelay = pe.DirDelay(self)
+            if parse_delay:
+                try:
+                    self.DirDelay = pe.DirDelay.unpack(self.content,
+                                                       self.NThdr.optentries[pe.DIRECTORY_ENTRY_DELAY_IMPORT].rva,
+                                                       self)
+                except pe.InvalidOffset:
+                    log.warning('cannot parse DirDelay, skipping')
         if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_BASERELOC:
-            self.DirReloc = pe.DirReloc.unpack(self.content,
-                                               self.NThdr.optentries[pe.DIRECTORY_ENTRY_BASERELOC].rva,
-                                               self)
+            self.DirReloc = pe.DirReloc(self)
+            try:
+                self.DirReloc = pe.DirReloc.unpack(self.content,
+                                                   self.NThdr.optentries[pe.DIRECTORY_ENTRY_BASERELOC].rva,
+                                                   self)
+            except pe.InvalidOffset:
+                log.warning('cannot parse DirReloc, skipping')
         if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_RESOURCE:
+            self.DirRes = pe.DirRes(self)
             if parse_resources:
-                self.DirRes = pe.DirRes.unpack(self.content,
-                                               self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
-                                               self)
+                try:
+                    self.DirRes = pe.DirRes.unpack(self.content,
+                                                   self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
+                                                   self)
+                except pe.InvalidOffset:
+                    log.warning('cannot parse DirRes, skipping')
         #self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
 
         #print repr(self.Doshdr)
@@ -410,6 +439,7 @@ class PE(object):
     def rva2off(self, rva):
         s = self.getsectionbyrva(rva)
         if not s:
+            raise pe.InvalidOffset('cannot get offset for 0x%X'%rva)
             return
         return rva-s.addr+s.offset
 
