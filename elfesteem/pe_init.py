@@ -220,13 +220,14 @@ class PE(object):
     def __init__(self, pestr = None,
                  loadfrommem=False,
                  parse_resources = True,
-                 parse_delay = True):
+                 parse_delay = True,
+                 wsize = 32):
         self._drva = drva(self)
         self._virt = virt(self)
         if pestr == None:
             self._content = StrPatchwork()
             self._sex = 0
-            self._wsize = 32
+            self._wsize = wsize
             self.Doshdr = pe.Doshdr(self)
             self.NTsig = pe.NTsig(self)
             self.Coffhdr = pe.Coffhdr(self)
@@ -253,7 +254,13 @@ class PE(object):
             self.Doshdr.lfanew = 0x200
 
 
-            self.Opthdr.magic = 0x10b
+            self.NTsig.signature = 0x4550
+            if wsize == 32:
+                self.Opthdr.magic = 0x10b
+            elif wsize == 64:
+                self.Opthdr.magic = 0x20b
+            else:
+                raise ValueError('unknown pe size %r'%wsize)
             self.Opthdr.majorlinkerversion = 0x7
             self.Opthdr.minorlinkerversion = 0x0
             self.NThdr.filealignment = 0x1000
@@ -279,7 +286,12 @@ class PE(object):
 
 
             self.NTsig.signature = 0x4550
-            self.Coffhdr.machine = 0x14c
+            if wsize == 32:
+                self.Coffhdr.machine = 0x14c
+            elif wsize == 64:
+                self.Coffhdr.machine = 0x8664
+            else:
+                raise ValueError('unknown pe size %r'%wsize)
             self.Coffhdr.sizeofoptionalheader = 0xe0
             self.Coffhdr.characteristics = 0x10f
 
