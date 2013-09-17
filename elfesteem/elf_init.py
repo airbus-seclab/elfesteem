@@ -86,6 +86,9 @@ class Section(object):
         if type(val) is int:
             self.sh.info = val
     infosection = property(get_infosection, set_infosection)
+    def get_shstr(self):
+        return self.parent._shstr
+    shstr = property(get_shstr)
     def __init__(self, parent, sh=None):
         self.parent=parent
         self.phparent=None

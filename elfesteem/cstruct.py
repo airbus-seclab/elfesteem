@@ -44,13 +44,14 @@ class CStruct(object):
     """
 
     class __metaclass__(type):
+        _prefix = "_field_"
         def __new__(cls, name, bases, dct):
             for fname, ftype in dct['_fields']:
                 dct[fname] = property(
                     dct.pop("get_"+fname,
-                        lambda self,fname=fname:   getattr(self,'_'+fname)),
+                        lambda self,fname=fname:   getattr(self,cls._prefix+fname)),
                     dct.pop("set_"+fname,
-                        lambda self,v,fname=fname: setattr(self,'_'+fname,v)),
+                        lambda self,v,fname=fname: setattr(self,cls._prefix+fname,v)),
                     dct.pop("del_"+fname,          None))
             return type.__new__(cls, name, bases, dct)
 
@@ -72,21 +73,18 @@ class CStruct(object):
         return out
 
     def __init__(self, *args, **kargs):
-        #packformat enforce sex
         self._parent = kargs['parent']
-        del kargs['parent']
         for f in ['sex', 'wsize']:
             if f in kargs:
                 setattr(self, f, kargs[f])
-                del kargs[f]
             elif self._parent != None:
                 setattr(self, f, getattr(self._parent, f))
         sex = self.sex
         wsize = self.wsize
         if self._packformat:
-            sex = ""
+            sex = self._packformat
         pstr = self.fix_size(wsize)
-        self._packstring =  sex + self._packformat+"".join(map(lambda x:x[1],pstr))
+        self._packstring =  sex + "".join(map(lambda x:x[1],pstr))
         self._size = struct.calcsize(self._packstring)
 
         self._names = map(lambda x:x[0], self._fields)
@@ -95,7 +93,9 @@ class CStruct(object):
             s += "\x00"*self._size
             s = s[:self._size]            
             self.unpack(s)
-            del kargs['content']
+        kargs = kargs.copy()
+        for f in ['parent', 'sex', 'wsize', 'content']:
+            kargs.pop(f, None)
         self.__dict__.update(kargs)
 
     def unpack(self,s):

@@ -31,7 +31,8 @@ class Shdr(CStruct):
                 ("addralign","ptr"),
                 ("entsize","ptr") ]
     def get_name(self):
-        return self._parent.parent._shstr.get_name(self._name)
+        name = getattr(self, self.__class__._prefix+'name')
+        return self._parent.shstr.get_name(name)
 
 class Phdr32(CStruct):
     _fields = [ ("type","u32"),
@@ -62,17 +63,16 @@ class Sym32(CStruct):
                 ("other","u08"),
                 ("shndx","u16") ]
     def get_name(self):
-        return self._parent.linksection.get_name(self._name)
+        name = getattr(self, self.__class__._prefix+'name')
+        return self._parent.linksection.get_name(name)
 
-class Sym64(CStruct):
+class Sym64(Sym32):
     _fields = [ ("name","u32"),
                 ("info","u08"),
                 ("other","u08"),
                 ("shndx","u16"),
                 ("value","u64"),
                 ("size","u64") ]
-    def get_name(self):
-        return self._parent.linksection.get_name(self._name)
 
 class Dym(CStruct):
     _fields = [ ("tag","u32"),
@@ -83,10 +83,10 @@ class Rel32(CStruct):
                 ("info","u32") ]
     @property
     def type(self):
-        return self._info & 0xff
+        return self.info & 0xff
     @property
     def symtab(self):
-        return self._parent.linksection.symtab[self._info>>8]
+        return self._parent.linksection.symtab[self.info>>8]
     @property
     def shndx(self):
         return self.symtab.shndx
@@ -102,10 +102,10 @@ class Rel64(Rel32):
                 ("info","u64") ]
     @property
     def type(self):
-        return self._info & 0xffffffff
+        return self.info & 0xffffffff
     @property
     def symtab(self):
-        return self._parent.linksection.symtab[self._info>>32]
+        return self._parent.linksection.symtab[self.info>>32]
 
 class Rela32(Rel32):
     _fields = [ ("offset","ptr"),
@@ -121,9 +121,10 @@ class Dynamic(CStruct):
     _fields = [ ("type","u32"),
                 ("name","u32") ]
     def get_name(self):
+        name = getattr(self, self.__class__._prefix+'name')
         if self.type == DT_NEEDED:
-            return self._parent.linksection.get_name(self._name)
-        return self._name
+            return self._parent.linksection.get_name(name)
+        return name
 
 
 # Legal values for e_ident (identification indexes)
