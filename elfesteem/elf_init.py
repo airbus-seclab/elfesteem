@@ -86,9 +86,9 @@ class Section(object):
         if type(val) is int:
             self.sh.info = val
     infosection = property(get_infosection, set_infosection)
-    def get_shstr(self):
-        return self.parent._shstr
-    shstr = property(get_shstr)
+    def get_shstrtab(self):
+        return self.parent._shstrtab
+    shstrtab = property(get_shstrtab)
     def __init__(self, parent, sh=None):
         self.parent=parent
         self.phparent=None
@@ -186,19 +186,6 @@ class Dynamic(Section):
 class StrTable(Section):
     sht = elf.SHT_STRTAB
 
-    def parse_content(self):
-        self.res = {}
-        c = self.content
-        q = 0
-        while c:
-            p = c.find("\0")
-            if p < 0:
-                log.warning("Missing trailing 0 for string [%s]" % c) # XXX
-                p = len(c)
-            self.res[q] = c[:p]
-            q += p+1
-            c = c[p+1:]
-
     def get_name(self, ofs):
         n = self.content[ofs:]
         n = n[:n.find("\0")]
@@ -217,6 +204,12 @@ class StrTable(Section):
             raise ValueError('unknown name', name)
         s = s.replace('\x00'+name+'\x00', '\x00'+new_name+'\x00')
         self.content = s
+        if len(name) != len(new_name):
+            dif = len(new_name) - len(name)
+            idx = s.find(new_name)
+            for sh in self.parent.shlist:
+                if sh.sh.name_idx > idx:
+                    sh.sh.name_idx += dif
         return len(self.content)
 
 class SymTable(Section):
@@ -278,7 +271,7 @@ class SHList(object):
             shstr = parent[of1:of2]
             self.shlist.append( Section(self, shstr=shstr) )
             of1=of2
-        self._shstr = self.shlist[ehdr.shstrndx]
+        self._shstrtab = self.shlist[ehdr.shstrndx]
 
         for s in self.shlist:
             if not isinstance(s, NoBitsSection):
@@ -516,7 +509,7 @@ class ELF(object):
     def __init__(self, elfstr):
         self._content = elfstr
         self.parse_content()
-
+        self.check_coherency()
         self._virt = virt(self)
 
     def get_virt(self):
@@ -544,6 +537,12 @@ class ELF(object):
             c[s.sh.offset] = str(s.content)
         c[self.Ehdr.shoff] = str(self.sh)
         return str(c)
+
+    def check_coherency(self):
+        if self.sh[self.Ehdr.shstrndx].sh.type != elf.SHT_STRTAB:
+            raise ValueError("Section of index shstrndx is of type %d instead of %d"%(self.sh[self.Ehdr.shstrndx].sh.type, elf.SHT_STRTAB))
+        if self.sh[self.Ehdr.shstrndx].sh.name != '.shstrtab':
+            raise ValueError("Section of index shstrndx is of name '%s' instead of '%s'"%(self.sh[self.Ehdr.shstrndx].sh.name, '.shstrtab'))
 
     def __str__(self):
         return self.build_content()

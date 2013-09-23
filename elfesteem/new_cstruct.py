@@ -60,7 +60,7 @@ def real_fmt(fmt, wsize):
 
 all_cstructs = {}
 class Cstruct_Metaclass(type):
-    field_suffix = "_value"
+    _prefix = "_field_"
     def __new__(cls, name, bases, dct):
         for fields in dct['_fields']:
             fname = fields[0]
@@ -68,9 +68,9 @@ class Cstruct_Metaclass(type):
                 raise ValueError('field name will confuse internal structs',
                                  repr(fname))
             dct[fname] = property(dct.pop("get_"+fname,
-                                          lambda self,fname=fname: getattr(self,fname+self.__class__.field_suffix)),
+                                          lambda self,fname=fname: getattr(self,cls._prefix+fname)),
                                   dct.pop("set_"+fname,
-                                          lambda self,v,fname=fname: setattr(self,fname+self.__class__.field_suffix,v)),
+                                          lambda self,v,fname=fname: setattr(self,cls._prefix+fname,v)),
                                   dct.pop("del_"+fname, None))
 
 
@@ -144,7 +144,7 @@ class Cstruct_Metaclass(type):
             else:
                 raise ValueError('unknown class', ffmt)
             of1 = of2
-            setattr(c, fname+c.__class__.field_suffix, value)
+            setattr(c, CStruct._prefix+fname, value)
 
         return c, of2-off
 
@@ -178,10 +178,10 @@ class CStruct(object):
         else:
             self.sex = sex_types[_sex]
         for f in self._fields:
-            setattr(self, f[0]+self.__class__.field_suffix, None)
+            setattr(self, CStruct._prefix+f[0], None)
         if kargs:
             for k, v in kargs.items():
-                self.__dict__[k+self.__class__.field_suffix] = v
+                self.__dict__[CStruct._prefix+k] = v
 
     def pack(self):
         out = ''
@@ -192,7 +192,7 @@ class CStruct(object):
             elif len(field) == 3:
                 fname, ffmt, cpt = field
 
-            value = getattr(self, fname+self.__class__.field_suffix)
+            value = getattr(self, CStruct._prefix+fname)
             if ffmt in type_size or (isinstance(ffmt, str) and re.match(r'\d+s', ffmt)):
                 # basic types
                 fmt = real_fmt(ffmt, self.wsize)

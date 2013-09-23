@@ -149,6 +149,8 @@ if __name__ == '__main__':
     parser.add_argument('-l', dest='options', action='append_const', const='program',   help='Program headers')
     parser.add_argument('file', nargs='+', help='ELF file(s)')
     args = parser.parse_args()
+    if args.options == None:
+        args.options = []
 
     for file in args.file:
         if len(args.file) > 1:

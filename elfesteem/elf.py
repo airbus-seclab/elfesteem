@@ -20,7 +20,7 @@ class Ehdr(CStruct):
 
 
 class Shdr(CStruct):
-    _fields = [ ("name","u32"),
+    _fields = [ ("name_idx","u32"),
                 ("type","u32"),
                 ("flags","ptr"),
                 ("addr","ptr"),
@@ -31,8 +31,11 @@ class Shdr(CStruct):
                 ("addralign","ptr"),
                 ("entsize","ptr") ]
     def get_name(self):
-        name = getattr(self, self.__class__._prefix+'name')
-        return self._parent.shstr.get_name(name)
+        return self._parent.shstrtab.get_name(self.name_idx)
+    def set_name(self, new_name):
+        name = self._parent.shstrtab.get_name(self.name_idx)
+        self._parent.shstrtab.mod_name(name, new_name)
+    name = property(get_name, set_name)
 
 class Phdr32(CStruct):
     _fields = [ ("type","u32"),
@@ -56,18 +59,18 @@ class Phdr64(CStruct):
 
 
 class Sym32(CStruct):
-    _fields = [ ("name","u32"),
+    _fields = [ ("name_idx","u32"),
                 ("value","u32"),
                 ("size","u32"),
                 ("info","u08"),
                 ("other","u08"),
                 ("shndx","u16") ]
-    def get_name(self):
-        name = getattr(self, self.__class__._prefix+'name')
-        return self._parent.linksection.get_name(name)
+    @property
+    def name(self):
+        return self._parent.linksection.get_name(self.name_idx)
 
 class Sym64(Sym32):
-    _fields = [ ("name","u32"),
+    _fields = [ ("name_idx","u32"),
                 ("info","u08"),
                 ("other","u08"),
                 ("shndx","u16"),
@@ -119,12 +122,12 @@ class Rela64(Rel64):
 
 class Dynamic(CStruct):
     _fields = [ ("type","u32"),
-                ("name","u32") ]
-    def get_name(self):
-        name = getattr(self, self.__class__._prefix+'name')
+                ("name_idx","u32") ]
+    @property
+    def name(self):
         if self.type == DT_NEEDED:
-            return self._parent.linksection.get_name(name)
-        return name
+            return self._parent.linksection.get_name(self.name_idx)
+        return self.name_idx
 
 
 # Legal values for e_ident (identification indexes)
