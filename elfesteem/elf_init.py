@@ -539,6 +539,22 @@ class ELF(object):
         return str(c)
 
     def check_coherency(self):
+        if self.Ehdr.version != 1:
+            raise ValueError("Ehdr version is %d instead of 1"%self.Ehdr.version)
+        symtab_count, dynsym_count, hash_count = 0, 0, 0
+        for sh in self.sh:
+            if sh.sh.type == elf.SHT_SYMTAB:
+                symtab_count += 1
+            if sh.sh.type == elf.SHT_DYNSYM:
+                dynsym_count += 1
+            if sh.sh.type == elf.SHT_HASH:
+                hash_count += 1
+        if symtab_count > 1:
+            raise ValueError("Has more than one (%d) sections SYMTAB"% symtab_count)
+        if dynsym_count > 1:
+            raise ValueError("Has more than one (%d) sections DYNSYM"% dynsym_count)
+        if hash_count > 1:
+            raise ValueError("Has more than one (%d) sections HASH"% hash_count)
         if self.sh[self.Ehdr.shstrndx].sh.type != elf.SHT_STRTAB:
             raise ValueError("Section of index shstrndx is of type %d instead of %d"%(self.sh[self.Ehdr.shstrndx].sh.type, elf.SHT_STRTAB))
         if self.sh[self.Ehdr.shstrndx].sh.name != '.shstrtab':
