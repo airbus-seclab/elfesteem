@@ -501,7 +501,7 @@ class PHList:
     def __repr__(self):
         r = ["   offset filesz vaddr    memsz"]
         for i,p in enumerate(self.phlist):
-            l = "%(offset)07x %(filesz)06x %(vaddr)08x %(memsz)07x %(type)02x"%p.ph
+            l = "%(offset)07x %(filesz)06x %(vaddr)08x %(memsz)07x %(type)02x %(flags)01x"%p.ph
             l = ("%2i " % i)+l
             r.append(l)
             r.append("   "+" ".join([s.sh.name for s in p.shlist]))
