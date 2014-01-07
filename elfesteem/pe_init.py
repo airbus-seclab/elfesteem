@@ -432,7 +432,12 @@ class PE(object):
         if self.SHList is None:
             return None
         for s in self.SHList.shlist:
-            if s.addr <= rva < s.addr+s.size:
+            """
+            TODO CHECK:
+            some binaries have import rva outside section, but addresses
+            seems to be rounded
+            """
+            if s.addr <= rva < (s.addr+s.size+0xfff) & 0xFFFFF000:
                 return s
         return None
 
