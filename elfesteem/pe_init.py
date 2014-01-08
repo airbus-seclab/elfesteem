@@ -364,6 +364,9 @@ class PE(object):
         self.Doshdr = pe.Doshdr.unpack(self.content, of, self)
         #print(repr(self.Doshdr))
         of = self.Doshdr.lfanew
+        if of > len(self.content):
+            log.warn('ntsig after eof!')
+            return
         self.NTsig = pe.NTsig.unpack(self.content,
                                      of, self)
         self.DirImport = None
@@ -374,6 +377,7 @@ class PE(object):
 
 
         if self.NTsig.signature != 0x4550:
+            log.warn('not a valid pe!')
             return
         of += len(self.NTsig)
         self.Coffhdr, l = pe.Coffhdr.unpack_l(self.content,
