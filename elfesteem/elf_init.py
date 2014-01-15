@@ -582,6 +582,10 @@ class ELF(object):
             if not sh[0] in ph[0].shlist:
                 raise ValueError("Mismatch: section not in segment")
             return sh[0]
+        if len(sh) == 1 and len(ph) > 1:
+            # Executable may also return a section and many PH
+            # e.g. the start of the .got section
+            return sh[0]
         if len(sh) == 0 and len(ph) == 1:
             # Core returns a PH
             return ph[0]
