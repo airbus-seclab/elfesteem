@@ -527,6 +527,9 @@ class PE(object):
                 return s
         return None
 
+    def is_rva_ok(self, rva):
+        return  self.getsectionbyrva(rva) is not None
+
     def rva2off(self, rva):
         s = self.getsectionbyrva(rva)
         if s is None:
