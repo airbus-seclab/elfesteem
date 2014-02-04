@@ -379,7 +379,7 @@ class PE(object):
                                                  self)
         except pe.InvalidOffset:
             log.warning('cannot parse DirExport, skipping')
-            self.DirImport = pe.DirExport(self)
+            self.DirExport = pe.DirExport(self)
 
         if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_DELAY_IMPORT:
             self.DirDelay = pe.DirDelay(self)
@@ -459,6 +459,9 @@ class PE(object):
             if s.name.strip('\x00') ==  name:
                 return s
         return None
+
+    def is_rva_ok(self, rva):
+        return  self.getsectionbyrva(rva) is not None
 
     def rva2off(self, rva):
         s = self.getsectionbyrva(rva)

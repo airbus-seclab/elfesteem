@@ -307,21 +307,21 @@ class DirImport(CStruct):
 
         for i, d in enumerate(out):
             d.dlldescname = DescName.unpack(s, d.name, self.parent_head)
-            if d.originalfirstthunk:
+            if d.originalfirstthunk and self.parent_head.is_rva_ok(d.originalfirstthunk):
                 d.originalfirstthunks = struct_array(self, s,
                                                      self.parent_head.rva2off(d.originalfirstthunk),
                                                      Rva)
             else:
                 d.originalfirstthunks = None
 
-            if d.firstthunk:
+            if d.firstthunk and self.parent_head.is_rva_ok(d.firstthunk):
                 d.firstthunks = struct_array(self, s,
                                              self.parent_head.rva2off(d.firstthunk), 
                                              Rva)
             else:
                 d.firstthunks = None
             d.impbynames = []
-            if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
+            if d.originalfirstthunk and self.parent_head.is_rva_ok(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
