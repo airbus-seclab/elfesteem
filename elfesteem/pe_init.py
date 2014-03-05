@@ -221,6 +221,7 @@ class PE(object):
                  loadfrommem=False,
                  parse_resources = True,
                  parse_delay = True,
+                 parse_reloc = True,
                  wsize = 32):
         self._drva = drva(self)
         self._virt = virt(self)
@@ -300,14 +301,16 @@ class PE(object):
             self._content = StrPatchwork(pestr)
             self.loadfrommem = loadfrommem
             self.parse_content(parse_resources = parse_resources,
-                               parse_delay = parse_delay)
+                               parse_delay = parse_delay,
+                               parse_reloc = parse_reloc)
 
     def isPE(self):
         return self.NTsig.signature == 0x4550
 
     def parse_content(self,
                       parse_resources = True,
-                      parse_delay = True):
+                      parse_delay = True,
+                      parse_reloc = True):
         of = 0
         self._sex = 0
         self._wsize = 32
@@ -392,12 +395,13 @@ class PE(object):
                     log.warning('cannot parse DirDelay, skipping')
         if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_BASERELOC:
             self.DirReloc = pe.DirReloc(self)
-            try:
-                self.DirReloc = pe.DirReloc.unpack(self.content,
+            if parse_reloc:
+                try:
+                    self.DirReloc = pe.DirReloc.unpack(self.content,
                                                    self.NThdr.optentries[pe.DIRECTORY_ENTRY_BASERELOC].rva,
                                                    self)
-            except pe.InvalidOffset:
-                log.warning('cannot parse DirReloc, skipping')
+                except pe.InvalidOffset:
+                    log.warning('cannot parse DirReloc, skipping')
         if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_RESOURCE:
             self.DirRes = pe.DirRes(self)
             if parse_resources:
