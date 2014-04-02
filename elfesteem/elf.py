@@ -120,7 +120,7 @@ class Rela64(Rel64):
                 ("info","u64"),
                 ("addend","ptr") ]
 
-class Dynamic(CStruct):
+class Dyn32(CStruct):
     _fields = [ ("type","u32"),
                 ("name_idx","u32") ]
     @property
@@ -129,6 +129,9 @@ class Dynamic(CStruct):
             return self._parent.linksection.get_name(self.name_idx)
         return self.name_idx
 
+class Dyn64(Dyn32):
+    _fields = [ ("type","u64"),
+                ("name_idx","u64") ]
 
 # Legal values for e_ident (identification indexes)
 

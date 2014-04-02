@@ -168,13 +168,14 @@ class NoteSection(Section):
 class Dynamic(Section):
     sht = elf.SHT_DYNAMIC
     def parse_content(self):
+        Dyn = { 32: elf.Dyn32, 64: elf.Dyn64 }[self.wsize]
         c = self.content
         self.dyntab = []
         self.dynamic = {}
         sz = self.sh.entsize
         while c:
             s,c = c[:sz],c[sz:]
-            dyn = elf.Dynamic(parent=self, content=s)
+            dyn = Dyn(parent=self, content=s)
             self.dyntab.append(dyn)
             if type(dyn.name) is str:
                 self.dynamic[dyn.name] = dyn
