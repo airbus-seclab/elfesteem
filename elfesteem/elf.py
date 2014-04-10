@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-from cstruct import CStruct
+from elfesteem.cstruct import CStruct
 
 class Ehdr(CStruct):
     _fields = [ ("ident","16s"),
@@ -167,10 +167,10 @@ ET_EXEC =         2               # Executable file
 ET_DYN =          3               # Shared object file
 ET_CORE =         4               # Core file
 ET_NUM =          5               # Number of defined types
-ET_LOOS =         0xfe00L         # OS-specific range start
-ET_HIOS =         0xfeffL         # OS-specific range end
-ET_LOPROC =       0xff00L         # Processor-specific range start
-ET_HIPROC =       0xffffL         # Processor-specific range end
+ET_LOOS =         0xfe00          # OS-specific range start
+ET_HIOS =         0xfeff          # OS-specific range end
+ET_LOPROC =       0xff00          # Processor-specific range start
+ET_HIPROC =       0xffff          # Processor-specific range end
 
 # Legal values for e_machine (architecture).
 
@@ -275,23 +275,23 @@ SHT_PREINIT_ARRAY = 16            # Array of pre-constructors
 SHT_GROUP =         17            # Section group
 SHT_SYMTAB_SHNDX =  18            # Extended section indeces
 SHT_NUM =           19            # Number of defined types.
-SHT_LOOS =          0x60000000L   # Start OS-specific
-SHT_GNU_HASH =      0x6ffffff6L
-SHT_GNU_LIBLIST =   0x6ffffff7L   # Prelink library list
-SHT_CHECKSUM =      0x6ffffff8L   # Checksum for DSO content.
-SHT_LOSUNW =        0x6ffffffaL   # Sun-specific low bound.
-SHT_SUNW_move =     0x6ffffffaL
-SHT_SUNW_COMDAT =   0x6ffffffbL
-SHT_SUNW_syminfo =  0x6ffffffcL
-SHT_GNU_verdef =    0x6ffffffdL   # Version definition section.
-SHT_GNU_verneed =   0x6ffffffeL   # Version needs section.
-SHT_GNU_versym =    0x6fffffffL   # Version symbol table.
-SHT_HISUNW =        0x6fffffffL   # Sun-specific high bound.
-SHT_HIOS =          0x6fffffffL   # End OS-specific type
-SHT_LOPROC =        0x70000000L   # Start of processor-specific
-SHT_HIPROC =        0x7fffffffL   # End of processor-specific
-SHT_LOUSER =        0x80000000L   # Start of application-specific
-SHT_HIUSER =        0x8fffffffL   # End of application-specific
+SHT_LOOS =          0x60000000    # Start OS-specific
+SHT_GNU_HASH =      0x6ffffff6 
+SHT_GNU_LIBLIST =   0x6ffffff7    # Prelink library list
+SHT_CHECKSUM =      0x6ffffff8    # Checksum for DSO content.
+SHT_LOSUNW =        0x6ffffffa    # Sun-specific low bound.
+SHT_SUNW_move =     0x6ffffffa 
+SHT_SUNW_COMDAT =   0x6ffffffb 
+SHT_SUNW_syminfo =  0x6ffffffc 
+SHT_GNU_verdef =    0x6ffffffd    # Version definition section.
+SHT_GNU_verneed =   0x6ffffffe    # Version needs section.
+SHT_GNU_versym =    0x6fffffff    # Version symbol table.
+SHT_HISUNW =        0x6fffffff    # Sun-specific high bound.
+SHT_HIOS =          0x6fffffff    # End OS-specific type
+SHT_LOPROC =        0x70000000    # Start of processor-specific
+SHT_HIPROC =        0x7fffffff    # End of processor-specific
+SHT_LOUSER =        0x80000000    # Start of application-specific
+SHT_HIUSER =        0x8fffffff    # End of application-specific
 
 # Legal values for sh_flags (section flags).
 
@@ -305,8 +305,8 @@ SHF_LINK_ORDER =       (1 << 7)   # Preserve order after combining
 SHF_OS_NONCONFORMING = (1 << 8)   # Non-standard OS specific handling required
 SHF_GROUP =           (1 << 9)    # Section is member of a group.
 SHF_TLS =             (1 << 10)   # Section hold thread-local data.
-SHF_MASKOS =          0x0ff00000L # OS-specific.
-SHF_MASKPROC =        0xf0000000L # Processor-specific
+SHF_MASKOS =          0x0ff00000  # OS-specific.
+SHF_MASKPROC =        0xf0000000  # Processor-specific
 
 # Section group handling.
 
@@ -323,25 +323,25 @@ PT_SHLIB =        5               # Reserved
 PT_PHDR =         6               # Entry for header table itself
 PT_TLS =          7               # Thread-local storage segment
 PT_NUM =          8               # Number of defined types
-PT_LOOS =         0x60000000L     # Start of OS-specific
-PT_GNU_EH_FRAME = 0x6474e550L     # GCC .eh_frame_hdr segment
-PT_GNU_STACK =    0x6474e551L     # Indicates stack executability
-PT_GNU_RELRO =    0x6474e552L
-PT_LOSUNW =       0x6ffffffaL
-PT_SUNWBSS =      0x6ffffffaL     # Sun Specific segment
-PT_SUNWSTACK =    0x6ffffffbL     # Stack segment
-PT_HISUNW =       0x6fffffffL
-PT_HIOS =         0x6fffffffL     # End of OS-specific
-PT_LOPROC =       0x70000000L     # Start of processor-specific
-PT_HIPROC =       0x7fffffffL     # End of processor-specific
+PT_LOOS =         0x60000000      # Start of OS-specific
+PT_GNU_EH_FRAME = 0x6474e550      # GCC .eh_frame_hdr segment
+PT_GNU_STACK =    0x6474e551      # Indicates stack executability
+PT_GNU_RELRO =    0x6474e552 
+PT_LOSUNW =       0x6ffffffa 
+PT_SUNWBSS =      0x6ffffffa      # Sun Specific segment
+PT_SUNWSTACK =    0x6ffffffb      # Stack segment
+PT_HISUNW =       0x6fffffff 
+PT_HIOS =         0x6fffffff      # End of OS-specific
+PT_LOPROC =       0x70000000      # Start of processor-specific
+PT_HIPROC =       0x7fffffff      # End of processor-specific
 
 # Legal values for p_flags (segment flags).
 
 PF_X =            (1 << 0)        # Segment is executable
 PF_W =            (1 << 1)        # Segment is writable
 PF_R =            (1 << 2)        # Segment is readable
-PF_MASKOS =       0x0ff00000L     # OS-specific
-PF_MASKPROC =     0xf0000000L     # Processor-specific
+PF_MASKOS =       0x0ff00000      # OS-specific
+PF_MASKPROC =     0xf0000000      # Processor-specific
 
 # Legal values for note segment descriptor types for core files.
 
@@ -1567,6 +1567,20 @@ R_M32R_GOTOFF_LO        = 64      # Low 16 bit offset to GOT
 R_M32R_NUM              = 256     # Keep this the last entry.
 #
 
+def enumerate_constants(constants, globs):
+    for type in constants.keys():
+        if type == 'R':
+            for val in filter(lambda x:x[:len(type)+1]==type+"_", globs.keys()):
+                subtype = val[len(type)+1:]
+                subtype = subtype[:subtype.index('_')]
+                if not subtype in constants[type]:
+                    constants[type][subtype] = {}
+                constants[type][subtype][globs[val]] = val[len(type)+len(subtype)+2:]
+            continue
+        for val in filter(lambda x:x[:len(type)+1]==type+"_", globs.keys()):
+            if not globs[val] in constants[type]:
+                constants[type][globs[val]] = val[len(type)+1:]
+
 constants = {
   'SHT' : {}, # sh_type
   'STB' : {}, # st_info / ST_BIND
@@ -1576,15 +1590,4 @@ constants = {
   'PT'  : {}, # p_type
   'R'   : {}, # special case, two levels of dictionary
   }
-for type in constants.keys():
-    if type == 'R':
-        for val in filter(lambda x:x[:len(type)+1]==type+"_", globals().keys()):
-            subtype = val[len(type)+1:]
-            subtype = subtype[:subtype.index('_')]
-            if not subtype in constants[type]:
-                constants[type][subtype] = {}
-            constants[type][subtype][globals()[val]] = val[len(type)+len(subtype)+2:]
-        continue
-    for val in filter(lambda x:x[:len(type)+1]==type+"_", globals().keys()):
-        if not globals()[val] in constants[type]:
-            constants[type][globals()[val]] = val[len(type)+1:]
+enumerate_constants(constants, globals())

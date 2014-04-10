@@ -2,7 +2,7 @@
 import getopt, sys, os.path, struct
 
 if sys.version_info[0] == 2 and sys.version_info[1] < 5:
-    print >> sys.stderr, "python version older than 2.5 is not supported"
+    sys.stderr.write("python version older than 2.5 is not supported\n")
     exit(1)
 
 from elfesteem import macho_init, macho, intervals
@@ -11,7 +11,7 @@ options = {}
 opts, args = getopt.getopt(sys.argv[1:], "h", ["help"])
 for opt, arg in opts:
     if opt == '-h':
-        print >> sys.stderr, "Usage: readelf.py [-hSrsd] elf-file(s)"
+        sys.stderr.write("Usage: readelf.py [-hSrsd] elf-file(s)\n")
         sys.exit(1)
 
 def display_file_content(e):

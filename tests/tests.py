@@ -3,7 +3,7 @@ import getopt, sys, os, os.path, struct, subprocess
 sys.path[0:0] = ['..']
 
 if sys.version_info[0] == 2 and sys.version_info[1] < 5:
-    print >> sys.stderr, "python version older than 2.5 is not supported"
+    sys.stderr.write("python version older than 2.5 is not supported\n")
     exit(1)
 
 from elfesteem import macho_init, macho, intervals

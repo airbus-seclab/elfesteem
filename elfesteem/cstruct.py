@@ -2,6 +2,10 @@
 
 import struct
 
+# To be compatible with python 2 and python 3
+data_empty = struct.pack("")
+data_null = struct.pack("B",0)
+
 type_size = {}
 size2type = {}
 size2type_s = {}
@@ -87,10 +91,10 @@ class CStruct(object):
         self._packstring =  sex + "".join(map(lambda x:x[1],pstr))
         self._size = struct.calcsize(self._packstring)
 
-        self._names = map(lambda x:x[0], self._fields)
+        self._names = [x[0] for x in self._fields]
         if 'content' in kargs:
             s = kargs['content']
-            s += "\x00"*self._size
+            s += data_null*self._size
             s = s[:self._size]            
             self.unpack(s)
         kargs = kargs.copy()
@@ -104,14 +108,14 @@ class CStruct(object):
             setattr(self, n, v)
 
     def pack(self):
-        return struct.pack(self._packstring,
-                           *map(lambda x: getattr(self, x), self._names))
+        fields = [getattr(self, x) for x in self._names]
+        return struct.pack(self._packstring, *fields)
 
     def __len__(self):
         return self._size
 
     def __str__(self):
-        return self.pack()
+        raise AttributeError("Use pack() instead of str()")
 
     def __repr__(self):
         return "<%s=%s>" % (self.__class__.__name__, "/".join(map(lambda x:repr(getattr(self,x[0])),self._fields)))

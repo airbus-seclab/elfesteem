@@ -1,3 +1,7 @@
+import sys
+if sys.version_info[0] >= 3:
+    from functools import reduce
+
 class Intervals(object):
     '''
     Represent a subset of the integers, to be used to detect which parts
@@ -77,30 +81,30 @@ class Intervals(object):
 if __name__ == "__main__":
     i = Intervals()
     i.add(0, 100)
-    print i
+    print(i)
     i.delete(8, 25)
-    print i
-    print i.contains(18, 30)
-    print i.contains(30, 50)
-    print i.excludes(10, 20)
-    print i.excludes(10, 30)
+    print(i)
+    print(i.contains(18, 30))
+    print(i.contains(30, 50))
+    print(i.excludes(10, 20))
+    print(i.excludes(10, 30))
     i.add(12, 16)
-    print i
+    print(i)
     i.add(11, 14)
-    print i
+    print(i)
     i.add(1, 11)
-    print i
+    print(i)
     i.delete(8, 15)
-    print i
+    print(i)
     i.add(10, 30)
-    print i
+    print(i)
     i.delete(0, 100)
-    print i
-    print i.contains(18, 30)
-    print i.excludes(10, 30)
+    print(i)
+    print(i.contains(18, 30))
+    print(i.excludes(10, 30))
     i.add(10, 30)
-    print i
+    print(i)
     i.delete(14, 27)
-    print i
+    print(i)
     for k in i:
-        print k
+        print(k)

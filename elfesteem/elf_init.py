@@ -2,8 +2,8 @@
 
 import struct
 
-import elf
-from strpatchwork import StrPatchwork
+from elfesteem import elf
+from elfesteem.strpatchwork import StrPatchwork
 import logging
 
 log = logging.getLogger("elfparse")
@@ -11,7 +11,6 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
 log.addHandler(console_handler)
 log.setLevel(logging.WARN)
-
 
 class ContentManager(object):
     def __get__(self, owner, x):
@@ -36,28 +35,32 @@ def inherit_sex_wsize(self, parent, kargs):
         elif parent != None:
             setattr(self, f, getattr(parent, f))
 
-class Section(object):
+class SectionMetaclass(type):
     sectypes = {}
-    class __metaclass__(type):
-        def __new__(cls, name, bases, dct):
-            o = type.__new__(cls, name, bases, dct)
-            if name != "Section":
-                Section.register(o)
-            return o
-        def register(cls, o):
-            if o.sht is not None:
-                cls.sectypes[o.sht] = o
-        def __call__(cls, parent, shstr=None):
+    def __new__(cls, name, bases, dct):
+        o = type.__new__(cls, name, bases, dct)
+        if name != "SectionBase" and o.sht is not None:
+            SectionMetaclass.sectypes[o.sht] = o
+        return o
+
+SectionBase = SectionMetaclass('SectionBase', (object,), {})
+
+class Section(SectionBase):
+    sht = None
+    @classmethod
+    def create(cls, parent, shstr=None):
+        if shstr == None:
             sh = None
-            if shstr is not None:
-                sh = elf.Shdr(parent = None, content = shstr, sex = parent.sex, wsize = parent.wsize)
-                if sh.type in Section.sectypes:
-                    cls = Section.sectypes[sh.type]
-            i = cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
-            if sh is not None:
-                sh._parent=i
-            i.__init__(parent, sh)
-            return i
+        else:
+            sh = elf.Shdr(parent = None, content = shstr, sex = parent.sex, 
+wsize = parent.wsize)
+            if sh.type in SectionMetaclass.sectypes:
+                cls = SectionMetaclass.sectypes[sh.type]
+        i = cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
+        if sh is not None:
+            sh._parent=i
+        i.__init__(parent, sh)
+        return i
 
     content = ContentManager()
     def resize(self, old, new):
@@ -184,11 +187,17 @@ class Dynamic(Section):
             return self.dynamic[item]
         return self.dyntab[item]
 
+import sys
+if sys.version_info[0] < 3:
+    bytes_to_name = lambda s: s
+else:
+    bytes_to_name = lambda s: s.decode(encoding="latin1")
+
 class StrTable(Section):
     sht = elf.SHT_STRTAB
 
     def get_name(self, ofs):
-        n = self.content[ofs:]
+        n = bytes_to_name(self.content[ofs:])
         n = n[:n.find("\0")]
         return n
 
@@ -270,7 +279,7 @@ class SHList(object):
         for i in range(ehdr.shnum):
             of2 = of1+ehdr.shentsize
             shstr = parent[of1:of2]
-            self.shlist.append( Section(self, shstr=shstr) )
+            self.shlist.append( Section.create(self, shstr=shstr) )
             of1=of2
         self._shstrtab = self.shlist[ehdr.shstrndx]
 
@@ -505,6 +514,14 @@ class virt(object):
             offset = 0
         return -1
 
+import sys
+if sys.version_info[0] < 3:
+    def py23_ord(v):
+        return ord(v)
+else:
+    def py23_ord(v):
+        return v
+
 # ELF object
 class ELF(object):
     def __init__(self, elfstr):
@@ -520,8 +537,8 @@ class ELF(object):
     content = ContentManager()
     def parse_content(self):
         h = self.content[:8]
-        self.wsize = ord(h[4])*32
-        self.sex   = {1:'<', 2:'>'} [ord(h[5])]
+        self.wsize = py23_ord(h[4])*32
+        self.sex   = {1:'<', 2:'>'} [py23_ord(h[5])]
         self.Ehdr = elf.Ehdr(parent=self, content=self.content)
         self.sh = SHList(parent=self)
         self.ph = PHList(parent=self)
@@ -615,5 +632,5 @@ if __name__ == "__main__":
     readline.parse_and_bind("tab: complete")
 
     e = ELF(open("/bin/ls").read())
-    print repr(e)
+    print (repr(e))
     #o = ELF(open("/tmp/svg-main.o").read())

@@ -2,10 +2,13 @@
 
 import struct
 
-import cstruct
-import macho
-from strpatchwork import StrPatchwork
-import intervals, copy
+from elfesteem import cstruct
+from elfesteem import macho
+from elfesteem.macho import data_bytes
+from elfesteem.cstruct import data_empty, data_null
+from elfesteem.strpatchwork import StrPatchwork
+from elfesteem import intervals
+import copy
 #import traceback
 
 def inherit_sex_wsize(self, parent, kargs):
@@ -38,47 +41,51 @@ def type_to_format(type, val):
         'u64': '%.8X',
         }[type] % val
 
-class Loader(object):
+class LoaderMetaclass(type):
     loadtypes = {}
-    class __metaclass__(type):
-        def __new__(cls,name,bases,dct):
-            for fname, ftype in macho.Lhdr._fields:
-                dct[fname] = property(dct.pop("get_"+fname,
-                                              lambda self, fname=fname: getattr(self.lh,fname)),
-                                      dct.pop("set_"+fname,
-                                              lambda self,v, fname=fname: setattr(self.lh,fname,v)),
-                                      dct.pop("del_"+fname, None))
-            if 'lhc' in dct:
-                lhc = dct['lhc']
-            else:
-                for b in bases:
-                    if 'lhc' in b.__dict__:
-                        lhc = b.__dict__['lhc']
-                        break
-            if lhc is not None:
-                for fname, ftype in lhc._fields:
-                    dct[fname] = property(dct.pop("get_"+fname,
-                                                  lambda self, fname=fname: getattr(self.lhc,fname)),
-                                          dct.pop("set_"+fname,
-                                                  lambda self,v, fname=fname: setattr(self.lhc,fname,v)),
-                                          dct.pop("del_"+fname, None))
-            o = type.__new__(cls, name, bases, dct)
-            if 'lht' in dct:
-                Loader.loadtypes[o.lht] = o
-            return o
-        def __call__(cls, **kargs):
-            if not 'content' in kargs:
-                lh = macho.Lhdr(content="",**kargs)
-                lh.cmd = cls.lht
-            else:
-                lh = macho.Lhdr(**kargs)
-            if lh.cmd in Loader.loadtypes:
-                cls = Loader.loadtypes[lh.cmd]
-            i = cls.__new__(cls,cls.__name__,cls.__bases__,cls.__dict__)
-            kargs['parent'] = lh
-            i.__init__(**kargs)
-            return i
+    def __new__(cls,name,bases,dct):
+        dct_glob = {}
+        for d in reversed([dct]+[b.__dict__ for b in bases]):
+            dct_glob.update(d)
+        for fname, ftype in macho.Lhdr._fields:
+            dct[fname] = property(
+                dct_glob.pop("get_"+fname,
+                    lambda self, fname=fname: getattr(self.lh,fname)),
+                dct_glob.pop("set_"+fname,
+                    lambda self,v, fname=fname: setattr(self.lh,fname,v)),
+                dct_glob.pop("del_"+fname, None))
+        lhc = dct_glob.pop('lhc', None)
+        if name != "LoaderBase" and lhc is not None:
+            for fname, ftype in lhc._fields:
+                dct[fname] = property(
+                    dct_glob.pop("get_"+fname,
+                        lambda self, fname=fname: getattr(self.lhc,fname)),
+                    dct_glob.pop("set_"+fname,
+                        lambda self,v, fname=fname: setattr(self.lhc,fname,v)),
+                    dct_glob.pop("del_"+fname, None))
+        o = type.__new__(cls, name, bases, dct)
+        if 'lht' in dct:
+            LoaderMetaclass.loadtypes[o.lht] = o
+        return o
+
+LoaderBase = LoaderMetaclass('LoaderBase', (object,), {})
+
+class Loader(LoaderBase):
     lhc = None
+    @classmethod
+    def create(cls, **kargs):
+        if not 'content' in kargs:
+            lh = macho.Lhdr(content=data_empty,**kargs)
+            lh.cmd = cls.lht
+        else:
+            lh = macho.Lhdr(**kargs)
+        if lh.cmd in LoaderMetaclass.loadtypes:
+            cls = LoaderMetaclass.loadtypes[lh.cmd]
+        i = cls.__new__(cls,cls.__name__,cls.__bases__,cls.__dict__)
+        kargs['parent'] = lh
+        i.__init__(**kargs)
+        return i
+
     content = ContentManager()
     def parse_content(self, **kargs):
         if self.__class__.lhc == None:
@@ -96,20 +103,21 @@ class Loader(object):
         else :
             raise ValueError("No lh given in Loader __init__")
         inherit_sex_wsize(self, self.parent, kargs)
-        #print "LC is", self.__class__.__name__
-        self._content = ""
+        self._content = StrPatchwork()
         self.parse_content(**kargs)
     def __repr__(self):
         return "<" + self.__class__.__name__ + " " + ' '.join(map(lambda f:f[0]+" "+type_to_format(f[1],getattr(self,f[0])),self._repr_fields)) + ">"
-    def __str__(self):
-        s = str(self.lh)
-        if self.lhc != None: s += str(self.lhc)
+    def pack(self):
+        s = self.lh.pack()
+        if self.lhc != None: s += self.lhc.pack()
         if hasattr(self,'_str_additional_data'):
             s += self._str_additional_data()
         if self.__class__.__name__ == "Loader":
             s += str(self.content)
         self.lh.cmdsize = len(s)
         return s
+    def __str__(self):
+        raise AttributeError("Use pack() instead of str()")
     def changeOffsets(self, decalage, min_offset=None):
         pass
 
@@ -128,18 +136,18 @@ class LoaderLinkEditDataCommand(Loader):
             self.sect.append(self.sect_class(self,c, type='data'))
         return self.sect
 
-class LoaderSegment(Loader):
-    lht = macho.LC_SEGMENT
-    lhc = macho.segment_command
+class LoaderSegmentBase(Loader):
     def _parse_content(self):
         self.sh = []
-        a = len(str(self.lhc))
-        b = 68
-        #print "self.lhc.nsects",self.lhc.nsects
+        a = len(self.lhc.pack())
+        b = self.lh_size
         for i in range(self.lhc.nsects):
-            self.sh.append(macho.sectionHeader(parent=self,content=self.content[a+b*i:a+b*(i+1)]))
+            self.sh.append(self.sh_type(parent=self,content=self.content[a+b*i:a+b*(i+1)]))
     def _str_additional_data(self):
-        return ''.join([str(sh) for sh in self.sh])
+        data = data_empty
+        for sh in self.sh:
+            data += sh.pack()
+        return data
     def addSH(self, s):
         maxoff = self.fileoff
         if not hasattr(self, 'sect'):
@@ -180,7 +188,7 @@ class LoaderSegment(Loader):
         self.sect = []
         for sh in self.sh:
             if sh.type == macho.S_ZEROFILL:
-                c = ""
+                c = data_empty
             else :
                 c = raw[sh.offset:sh.offset+sh.size]
             if sh.type == macho.S_SYMBOL_STUBS:
@@ -191,7 +199,6 @@ class LoaderSegment(Loader):
                 cls = LASymbolPtrList
             else:
                 cls = Section
-            #print "content size", sh.size
             sh.sect = cls(self, sh=sh, content=c)
             self.sect.append(sh.sect)
         for sh in self.sh:
@@ -201,136 +208,27 @@ class LoaderSegment(Loader):
                 self.sect.append(sh.reloc)
         return self.sect
     def get_segname(self):
-        return self.lhc.segname.strip('\0')
+        return self.lhc.segname.strip(data_null)
     def set_segname(self, val):
-        padding = len(str(self.lhc.segname)) - len(val)
+        padding = len(self.lhc.segname) - len(val)
         if (padding < 0) : raise ValueError("segname is too long for the structure")
-        self.lhc.segname = val +'\0'*padding
+        self.lhc.segname = val + data_null*padding
         for sh in self.sh:
             sh.segname = val
-    segname = property(get_segname, set_segname)
-    def get_filesize(self):
-        return self.lhc.filesize
-    def set_filesize(self, val):
-        self.lhc.filesize = val
-    filesize = property(get_filesize, set_filesize)
-    def get_fileoff(self):
-        return self.lhc.fileoff
-    def set_fileoff(self, val):
-        self.lhc.fileoff = val
-    fileoff = property(get_fileoff, set_fileoff)
-    def get_vmaddr(self):
-        return self.lhc.vmaddr
-    def set_vmaddr(self, val):
-        self.lhc.vmaddr = val
-    vmaddr = property(get_vmaddr, set_vmaddr)
-    def get_vmsize(self):
-        return self.lhc.vmsize
-    def set_vmsize(self, val):
-        self.lhc.vmsize = val
-    vmsize = property(get_vmsize, set_vmsize)
+    def is_text_segment(self):
+        return self.segname == data_bytes("__TEXT")
 
+class LoaderSegment(LoaderSegmentBase):
+    lht = macho.LC_SEGMENT
+    lhc = macho.segment_command
+    sh_type = macho.sectionHeader
+    lh_size = 68
 
-class LoaderSegment_64(Loader):
+class LoaderSegment_64(LoaderSegmentBase):
     lht = macho.LC_SEGMENT_64
     lhc = macho.segment_command_64
-    def _parse_content(self):
-        self.sh = []
-        a = len(str(self.lhc))
-        b = 80
-        for i in range(self.lhc.nsects):
-            self.sh.append(macho.sectionHeader_64(parent=self,content=self.content[a+b*i:a+b*(i+1)]))
-    def _str_additional_data(self):
-        return ''.join([str(sh) for sh in self.sh])
-    def addSH(self, s):
-        maxoff = self.fileoff
-        if not hasattr(self, 'sect'):
-            self.sect = []
-            offset = 0
-            size = 0 
-        if len(self.sect)>0:
-            offset = 0
-            size = 0
-            for se in self.sect:
-                if offset < se.offset :
-                    offset = se.offset
-                    size = se.size
-            maxoff = offset + size
-        self.nsects += 1
-        self.cmdsize += len(str(s.sh))
-        s.sh.parent = self
-        s.sh.offset = maxoff 
-        s.sh.addr = self.vmaddr - self.fileoff + s.sh.offset
-        s.sh.align = 4
-        # Values and positions by default
-        self.sh.append(s.sh)
-        self.sect.append(s)
-        s.sh.size = len(str(s))
-        s.sh.offset = maxoff
-        if offset + size > self.fileoff + self.filesize :
-            raise ValueError("not enough space in segment")
-            #self.parent.extendSegment(self, 0x1000*(s.sh.size/0x1000 +1))
-        else :
-            self.filesize += len(str(s))
-            self.vmsize += len(str(s))
-    def changeOffsets(self, decalage, min_offset=None):
-        for sh in self.sh:
-            sh.changeOffsets(decalage, min_offset)
-        if isOffsetChangeable(self.fileoff, min_offset):
-            self.fileoff += decalage
-    def sectionsToAdd(self, raw):
-        self.sect = []
-        for sh in self.sh:
-            if sh.type == macho.S_ZEROFILL:
-                c = ""
-            else :
-                c = raw[sh.offset:sh.offset+sh.size]
-            if sh.type == macho.S_SYMBOL_STUBS:
-                cls = SymbolStubList
-            elif sh.type == macho.S_NON_LAZY_SYMBOL_POINTERS:
-                cls = NLSymbolPtrList
-            elif sh.type == macho.S_LAZY_SYMBOL_POINTERS:
-                cls = LASymbolPtrList
-            else:
-                cls = Section
-            sh.sect = cls(self, sh=sh, content=c)
-            self.sect.append(sh.sect)
-        for sh in self.sh:
-            if sh.reloff != 0:
-                c = raw[sh.reloff:sh.reloff+sh.nreloc*8]
-                sh.reloc = Reloc(self, sh=sh,content=c)
-                self.sect.append(sh.reloc)
-        return self.sect
-    def get_segname(self):
-        return self.lhc.segname.strip('\0')
-    def set_segname(self, val):
-        padding = len(str(self.lhc.segname)) - len(val)
-        if (padding < 0) : raise ValueError("segname is too long for the structure")
-        self.lhc.segname = val +'\0'*padding
-        for sh in self.sh:
-            sh.segname = val
-    segname = property(get_segname, set_segname)
-    def get_filesize(self):
-        return self.lhc.filesize
-    def set_filesize(self, val):
-        self.lhc.filesize = val
-    filesize = property(get_filesize, set_filesize)
-    def get_fileoff(self):
-        return self.lhc.fileoff
-    def set_fileoff(self, val):
-        self.lhc.fileoff = val
-    fileoff = property(get_fileoff, set_fileoff)
-    def get_vmaddr(self):
-        return self.lhc.vmaddr
-    def set_vmaddr(self, val):
-        self.lhc.vmaddr = val
-    vmaddr = property(get_vmaddr, set_vmaddr)
-    def get_vmsize(self):
-        return self.lhc.vmsize
-    def set_vmsize(self, val):
-        self.lhc.vmsize = val
-    vmsize = property(get_vmsize, set_vmsize)
-
+    sh_type = macho.sectionHeader_64
+    lh_size = 80
 
 class LoaderSymTab(Loader):
     lht = macho.LC_SYMTAB
@@ -382,49 +280,39 @@ class LoaderDysymTab(Loader):
                 self.sect.append(DySymbolTable(self,c, type=type))
         return self.sect
 
-class LoaderLoadDylib(Loader):
+class LoaderLib(Loader):
+    def _parse_content(self):
+        self.name = self.content[self.lhc.stroffset-8:].strip(data_null)
+        self.padding = self.lh.cmdsize - len(self.lh.pack()) - len(self.lhc.pack()) - len(self.name)
+        self._repr_fields[0] = ("name", "s")
+    def _str_additional_data(self):
+        return self.name+data_null*self.padding
+
+class LoaderLoadDylib(LoaderLib):
     lht = macho.LC_LOAD_DYLIB
     lhc = macho.dylib_command
-    def _parse_content(self):
-        self.name = self.content[self.lhc.stroffset-8:].strip('\0')
-        self.padding = self.lh.cmdsize - len(str(self.lh)) - len(str(self.lhc)) - len(self.name)
-        self._repr_fields[0] = ("name", "s")
-    def _str_additional_data(self):
-        return str(self.name)+'\0'*self.padding
 
-class LoaderIDDylib(Loader):
+class LoaderIDDylib(LoaderLib):
     lht = macho.LC_ID_DYLIB
     lhc = macho.dylib_command
-    def _parse_content(self):
-        self.name = self.content[self.lhc.stroffset-8:].strip('\0')
-        self.padding = self.lh.cmdsize - len(str(self.lh)) - len(str(self.lhc)) - len(self.name)
-        self._repr_fields[0] = ("name", "s")
-    def _str_additional_data(self):
-        return str(self.name)+'\0'*self.padding
 
-class LoaderDylinker(Loader):
+class LoaderDylinker(LoaderLib):
     lht = macho.LC_LOAD_DYLINKER
     lhc = macho.dylinker_command
-    def _parse_content(self):
-        self.name = self.content[self.lhc.stroffset-8:].strip('\0')
-        self.padding = self.lh.cmdsize - len(str(self.lh)) - len(str(self.lhc)) - len(self.name)
-        self._repr_fields[0] = ("name", "s")
-    def _str_additional_data(self):
-        return str(self.name)+'\0'*self.padding
 
 class LoaderUUID(Loader):
     lht = macho.LC_UUID
     lhc = None
     def _parse_content(self):
-        if self.content == "": data = "\0" * 16
-        else:                  data = str(self.content)
+        data = self.content.pack()
+        if data == data_empty: data = data_null * 16
         self.uuid = struct.unpack(">IHHHHI", data)
     def _str_additional_data(self):
         return struct.pack(">IHHHHI", *self.uuid)
     def __repr__(self):
         return '<LoaderUUID %.8X-%.4X-%.4X-%.4X-%.4X%.8X>' % self.uuid
     def changeUUID(self, uuid):
-        s = struct.pack("B"*16, *[int(uuid[2*i:2*i+2],16) for i in range(len(uuid)/2)])
+        s = struct.pack("B"*16, *[int(uuid[2*i:2*i+2],16) for i in range(int(len(uuid)/2))])
         self.uuid = struct.unpack(">IHHHHI", s)
 
 class LoaderTwoLevelHints(Loader):
@@ -534,7 +422,7 @@ threadStateParameters = { # flavor, count, regsize in 32-bit words
 class LoaderUnixthread(Loader):
     lht = macho.LC_UNIXTHREAD
     lhc = macho.unixthread_command
-    data = ""
+    data = data_empty
     def set_entrypoint(self, val):
         registerInstructionPointer = {
             macho.CPU_TYPE_I386: 10,
@@ -545,10 +433,10 @@ class LoaderUnixthread(Loader):
     def _parse_content(self):
         if type(self.parent._parent) == dict: self.cputype = self.parent._parent['cputype']
         else:                                self.cputype = self.parent._parent.parent.Mhdr.cputype
-        if self.content == "":
+        if self.content == data_empty:
             self.lhc.flavor, self.lhc.count, self.regsize = threadStateParameters[self.cputype]
             self.lh.cmdsize += self.lhc.count*4
-            data = "\0" * (self.lhc.count*4)
+            data = data_null * (self.lhc.count*4)
         else:
             flavor, count, self.regsize = threadStateParameters[self.cputype]
             if self.lhc.flavor != flavor: FLAVOR_ERROR
@@ -557,7 +445,7 @@ class LoaderUnixthread(Loader):
         #print "THREAD_STATE %d COUNT %d" % (self.lhc.flavor, self.lhc.count)
         self.packstring = "%s%d%s" % (
             self.sex,
-            self.lhc.count/self.regsize,
+            int(self.lhc.count/self.regsize),
             "Q" if self.regsize == 2 else "I",
             )
         self.data = list(struct.unpack(self.packstring, data))
@@ -573,26 +461,26 @@ class LHList(object):
         inherit_sex_wsize(self, parent, kargs)
         self.lhlist = []
         mhdr = self.parent.Mhdr
-        of = len(str(mhdr))
+        of = len(mhdr.pack())
         for i in range(mhdr.ncmds):
             lhstr = parent[of:of+8]
-            lh = Loader(parent=self, content=lhstr)
+            lh = Loader.create(parent=self, content=lhstr)
             lh._content = StrPatchwork(parent[of+8:of+lh.lh.cmdsize])
             lh.parse_content(parent=self, content=lh._content)
             self.lhlist.append(lh)
             if parent.interval is not None :
-                if not parent.interval.contains(of,of+len(str(lh))):
+                if not parent.interval.contains(of,of+len(lh.pack())):
                     raise ValueError("This part of file has already been parsed")
                 #print "LHList interval before", parent.interval
                 #print " ---- to delete ---",of,"-",of+len(str(lh)),"/",hex(of),"-",hex(of+len(str(lh)))
-                parent.interval.delete(of,of+len(str(lh)))
+                parent.interval.delete(of,of+len(lh.pack()))
             of += lh.lh.cmdsize
         #print "LHList interval after", parent.interval
         #print "'''''''''''''''''''''''''''''''''''''''''"
     def append(self, lh):
         self.lhlist.append(lh)
         self.parent.Mhdr.ncmds += 1
-        self.parent.Mhdr.sizeofcmds += len(str(lh))
+        self.parent.Mhdr.sizeofcmds += len(lh.pack())
     def getpos(self, lht):
         poslist = []
         for lc in self.lhlist:
@@ -600,7 +488,7 @@ class LHList(object):
                 poslist.append(self.lhlist.index(lc))
         return poslist
     def removepos(self, pos):
-        self.parent.Mhdr.sizeofcmds -= len(str(self.lhlist[pos]))
+        self.parent.Mhdr.sizeofcmds -= len(self.lhlist[pos].pack())
         self.parent.Mhdr.ncmds-=1
         self.lhlist.remove(self.lhlist[pos])
     def changeOffsets(self, decalage, min_offset=None):
@@ -620,10 +508,12 @@ class LHList(object):
     def __getitem__(self, item):
         return self.lhlist[item]
     def __str__(self):
-        c = []
+        raise AttributeError("Use pack() instead of str()")
+    def pack(self):
+        data = data_empty
         for lc in self.lhlist:
-            c.append(str(lc))
-        return "".join(c)
+            data += lc.pack()
+        return data
     def extendSegment(self,lc,size):
         if lc.maxprot == 0:
             raise ValueError('Maximum Protection is 0')
@@ -647,7 +537,7 @@ class LHList(object):
     def findlctext(self):
         for lc in self.lhlist:
             if lc.cmd == macho.LC_SEGMENT or lc.cmd == macho.LC_SEGMENT_64:
-                if lc.segname.strip('\0')== "__TEXT":
+                if lc.is_text_segment():
                     return lc
 
 
@@ -736,23 +626,30 @@ class Section(MachoData):
     addr = property(get_addr, set_addr)
     size = property(get_size)
     def get_segname(self):
-        return self.sh.segname.strip('\0')
+        return self.sh.segname.strip(data_null)
     def set_segname(self, val):
         padding = len(str(self.sh.segname)) - len(val)
         if (padding < 0) : raise ValueError("segname is too long for the structure")
-        self.sh.segname = val +'\0'*padding
+        self.sh.segname = val + data_null*padding
     segname = property(get_segname, set_segname)
     def _parsecontent(self):
         pass
+    def pack(self):
+        return self.content.pack()
     def __str__(self):
-        return str(self.content)
+        raise AttributeError("Use pack() instead of str()")
 
-class SymbolStub(object):
+class BaseSymbol(object):
+    def pack(self):
+        return self.content
+    def __str__(self):
+        NEVER
+
+class SymbolStub(BaseSymbol):
     def __init__(self, content, address, len_stub, sizeofstubs, adoff_64=0):
         self.content = content
         self.addr = address
-        #print "content", repr(self.content)
-        if self.content[0:2] == '\xff\x25':
+        if self.content[0:2] == struct.pack("BB",0xFF,0x25):
             self.off, = struct.unpack("<I",self.content[2:6])
             self.off += adoff_64
     def get_address(self):
@@ -766,77 +663,57 @@ class SymbolStub(object):
             raise ValueError("Cannot find link between symbol stub and lazy symbol pointers")        
     address = property(get_address, set_address)
     offset = property(get_offset)
-    def __str__(self):
-        return self.content
 
-class NLSymbolPtr(object):
+class NLSymbolPtr(BaseSymbol):
     def __init__(self, parent, content, off):
         self.content = content
         self.offset = off
-    def __str__(self):
-        return self.content
 
-class LASymbolPtr(object):
+class LASymbolPtr(BaseSymbol):
     def __init__(self, parent, content, off):
         self.content = content
         self.offset = off
-    def __str__(self):
-        return self.content
 
-class SymbolStubList(Section):
+class SymbolList(Section):
+    def __getitem__(self, off):
+        for sy in self.list:
+            if sy.offset == off:
+                return sy
+        raise ValueError("Cannot find symbol with the offset")
+    def __iter__(self):
+        return self.list.__iter__()
+    def pack(self):
+        data = data_empty
+        for x in self.list:
+            data += x.pack()
+        return data
+
+class SymbolStubList(SymbolList):
     def _parsecontent(self):
         self.list = []
         len_stub=self.sh.reserved2
         #print "self.content", repr(self.content)
-        for i in range(self.sh.size/len_stub):
+        for i in range(int(self.sh.size/len_stub)):
             addr = self.sh.addr + i*len_stub
             if self.wsize == 32:
                 self.list.append(SymbolStub(self.content[i*len_stub:(i+1)*len_stub], addr, len_stub, self.sh.size))
             elif self.wsize == 64: #FF25 is an indirect relative jump for 64 bits
                 off_next_stub = self.sh.offset + (i+1)*len_stub + self.sh._parent.vmaddr - self.sh._parent.fileoff #function off2addr
                 self.list.append(SymbolStub(self.content[i*len_stub:(i+1)*len_stub], addr, len_stub, self.sh.size, off_next_stub))
-    def __getitem__(self, off):
-        for sy in self.list:
-            #print "sy.offset", hex(sy.offset), "off", hex(off)
-            if sy.offset == off:
-                return sy
-        raise ValueError("Cannot find symbol with the offset")
-    def __iter__(self):
-        return self.list.__iter__()
-    def __str__(self):
-        return ''.join([str(x) for x in self.list])
 
-class NLSymbolPtrList(Section):
+class NLSymbolPtrList(SymbolList):
     def _parsecontent(self):
         self.list = []
         len_ptr={32: 4, 64: 8}[self.wsize]
-        for i in range(self.sh.size/len_ptr):
+        for i in range(int(self.sh.size/len_ptr)):
             self.list.append(NLSymbolPtr(self, self.content[i*len_ptr:(i+1)*len_ptr], self.sh.offset + i*len_ptr))
-    def __getitem__(self, off):
-        for sy in self.list:
-            #print "sy.offset", hex(sy.offset), "off", hex(off)
-            if sy.offset == off:
-                return sy
-        raise ValueError("Cannot find symbol with this offset")
-    def __iter__(self):
-        return self.list.__iter__()
-    def __str__(self):
-        return ''.join([str(x) for x in self.list])
 
-class LASymbolPtrList(Section):
+class LASymbolPtrList(SymbolList):
     def _parsecontent(self):
         self.list = []
         len_ptr={32: 4, 64: 8}[self.wsize]
-        for i in range(self.sh.size/len_ptr):
+        for i in range(int(self.sh.size/len_ptr)):
             self.list.append(LASymbolPtr(self, self.content[i*len_ptr:(i+1)*len_ptr], self.sh.offset + i*len_ptr))
-    def __getitem__(self, off):
-        for sy in self.list:
-            #print "sy.offset", hex(sy.offset), "off", hex(off)
-            if sy.offset == off:
-                return sy
-        raise ValueError("Cannot find symbol with this offset")
-    def __str__(self):
-        return ''.join([str(x) for x in self.list])
 
 class Reloc(Section):
     def _parsecontent(self):
@@ -852,16 +729,16 @@ class Reloc(Section):
     def set_offset(self, val):
         self.sh.reloff = val
     offset = property(get_offset, set_offset)
-    def __str__(self):
-        c = StrPatchwork()
+    def pack(self):
+        data = StrPatchwork()
         for s in self.reloclist:
-            c[s.offset] = str(s)
-        return str(c)
+            data[s.offset] = s
+        return data.pack()
 
 class LinkEditSection(MachoData):
     def __init__(self, parent, c, type = None):
         inherit_sex_wsize(self, parent, {})
-        self.content = c
+        self.content = StrPatchwork(c)
         self.lc = parent
         self.type = type
         self._parsecontent()
@@ -877,8 +754,10 @@ class LinkEditSection(MachoData):
     def set_size(self, val):
         setattr(self.lc,self.type+'_size', val)
     size = property(get_size, set_size)
+    def pack(self):
+        return self.content.pack()
     def __str__(self):
-        return str(self.content)
+        raise AttributeError("Use pack() instead of str()")
 
 """
 class BindSymbolOpcode(object):
@@ -913,7 +792,7 @@ class SymbolOpcode(object):
             self.opsize += 1
         self.flags,  = struct.unpack("B",content[self.opsize:self.opsize+1])
         self.opsize += 1
-        self.name = content[self.opsize:self.opsize+content[self.opsize:].find('\0')]
+        self.name = content[self.opsize:self.opsize+content[self.opsize:].find(data_null)]
         self.opsize += len(self.name)+1
         self.doBind,self.done, = struct.unpack("BB",content[self.opsize:self.opsize+2])
         self.opsize += 2
@@ -932,20 +811,23 @@ class SymbolOpcode(object):
         return "<" + self.__class__.__name__ + " " + " -- ".join([x + " " + hex(getattr(self,x)) for x in fields]) + " -- " + "name" + " " + self.name + ">"
 
     def __str__(self):
+        NEVER
+
+    def pack(self):
         val = self.offset
-        uleb = ""
+        uleb = data_empty
         uleb128termination = False
         while not uleb128termination:
             byte = val%128
-            val /= 128
+            val = int(val/128)
             uleb128termination = (val == 0)
             if not uleb128termination:
                 byte += 128
-            uleb += struct.pack("B", byte)[0]
+            uleb += struct.pack("B", byte)
         if hasattr(self, 'libraryOrdinal'):
-            return struct.pack("B",self.segment) + uleb + struct.pack("B",self.dylib) + struct.pack("B",self.libraryOrdinal) + struct.pack("B",self.flags) + self.name+'\0' + struct.pack("B",self.doBind) + struct.pack("B",self.done)
+            return struct.pack("B",self.segment) + uleb + struct.pack("B",self.dylib) + struct.pack("B",self.libraryOrdinal) + struct.pack("B",self.flags) + self.name+data_null + struct.pack("B",self.doBind) + struct.pack("B",self.done)
         else:
-            return struct.pack("B",self.segment) + uleb + struct.pack("B",self.dylib) + struct.pack("B",self.flags) + self.name+'\0' + struct.pack("B",self.doBind) + struct.pack("B",self.done)
+            return struct.pack("B",self.segment) + uleb + struct.pack("B",self.dylib) + struct.pack("B",self.flags) + self.name+data_null + struct.pack("B",self.doBind) + struct.pack("B",self.done)
     def __len__(self):
         return self.opsize
 
@@ -964,7 +846,7 @@ class DynamicLoaderInfo(LinkEditSection):
                     self.BindSymbolOpcodeList.append(bindSymbolOpcode)
                     offset += len(bindSymbolOpcode)
                     bindSymbolOpcode = BindSymbolOpcode(self.content[offset:])
-                print self.BindSymbolOpcodeList
+                print(self.BindSymbolOpcodeList)
         """
         if self.type == 'lazy_bind':
             #print self.type
@@ -974,7 +856,7 @@ class DynamicLoaderInfo(LinkEditSection):
                 self.SymbolOpcodeList = []
                 #print "self.content", repr(self.content)
                 offset = 0
-                size = len(str(self.content))
+                size = len(self.content.pack())
                 symbolOpcode = SymbolOpcode(self.content, self)
                 while symbolOpcode:
                     self.SymbolOpcodeList.append(symbolOpcode)
@@ -982,17 +864,20 @@ class DynamicLoaderInfo(LinkEditSection):
                     offset += len(symbolOpcode)
                     symbolOpcode = SymbolOpcode(self.content[offset:], self)
                 #print "self.SymbolOpcodeList", self.SymbolOpcodeList
-    def __str__(self):
+    def pack(self):
         if self.type == 'lazy_bind':
-            return ''.join([str(x) for x in self.SymbolOpcodeList])
+            data = data_empty
+            for x in self.SymbolOpcodeList:
+                data += x.pack()
+            return data
         else:
-            return str(self.content)
+            return self.content.pack()
 
 class SymbolTable(LinkEditSection):
     def _parsecontent(self):
         self.symbols = []
         of = 0
-        one_sym_size = self.lc.sym_size/self.lc.nsyms
+        one_sym_size = int(self.lc.sym_size/self.lc.nsyms)
         if self.wsize == 32:
             symbol_type = macho.symbol
         elif self.wsize == 64 :
@@ -1003,20 +888,18 @@ class SymbolTable(LinkEditSection):
             self.symbols.append(symbol)
             of += one_sym_size
     def __getitem__(self, idx):
-        if type(idx) == str:
-            for symbol in self.symbols:
-                #print "symbol.name", symbol.name
-                if symbol.name == idx.strip('\0'):
-                    return symbol
-        elif type(idx) == int:
+        if type(idx) == int:
             return self.symbols[idx]
-        print "idx", idx
-        raise ValueError("Cannot find symbol with this index")
-    def __str__(self):
-        c = StrPatchwork()
+        else:
+            for symbol in self.symbols:
+                if symbol.name == idx.strip(data_null):
+                    return symbol
+        raise ValueError("Cannot find symbol with index %r"%idx)
+    def pack(self):
+        data = StrPatchwork()
         for s in self.symbols:
-            c[s.offset] = str(s)
-        return str(c)
+            data[s.offset] = s.pack()
+        return data.pack()
 
 class StringTable(LinkEditSection):
     def _parsecontent(self):
@@ -1024,20 +907,20 @@ class StringTable(LinkEditSection):
         c = self.content
         q = 0
         while c:
-            p = c.find("\0")
+            p = c.find(data_null)
             if p < 0:
                 log.warning("Missing trailing 0 for string [%s]" % c) # XXX
                 p = len(c)
             self.res[q] = c[:p]
             q += p+1
             c = c[p+1:]
-
-    def __str__(self):
-        c = StrPatchwork()
-        for i,name in self.res.items():
-            c[i] = name
-        padding = self.lc.str_size - len(str(c))
-        return str(c)+'\0'*padding
+    def pack(self):
+        data = StrPatchwork()
+        for i, name in self.res.items():
+            data[i] = name
+        data = data.pack()
+        padding = self.lc.str_size - len(data)
+        return data + data_null*padding
 
 class DySymbolTable(LinkEditSection):
     pass
@@ -1110,14 +993,14 @@ class SectionList(object):
                     for s in list:
                         if not (hasattr(s, 'sh') and s.sh.type == macho.S_ZEROFILL):
                             if s.__class__.__name__== 'Encryption':
-                                if parent.verbose == True : print "Some encrypted text is not parsed with the section headers of LC_SEGMENT(__TEXT)"
+                                if parent.verbose == True : print("Some encrypted text is not parsed with the section headers of LC_SEGMENT(__TEXT)")
                             else:
                                 #print "SectionList interval before", parent.interval
                                 #print "-- section --", s.__class__.__name__
                                 #print " ---- to delete ---",s.offset,"-",s.offset+len(str(s)),"/",hex(s.offset),"-",hex(s.offset+len(str(s)))
-                                if not parent.interval.contains(s.offset,s.offset+len(str(s))):
+                                if not parent.interval.contains(s.offset,s.offset+len(s.pack())):
                                     raise ValueError("This part of file has already been parsed")
-                                parent.interval.delete(s.offset,s.offset+len(str(s)))
+                                parent.interval.delete(s.offset,s.offset+len(s.pack()))
     def add(self, s):
         # looking in s.lc to know where to insert
         pos = 0
@@ -1200,7 +1083,7 @@ class virt(object):
                 s_stop =  s.size
             s_len = s_stop - s_start
             if s_len == 0:
-                print "GETRVAITEM", repr(s), hex(s.addr), s.size
+                print("GETRVAITEM %r %s %s" % (s, hex(s.addr), s.size))
                 raise ValueError('empty section at address 0x%x'%start)
             total_len -= s_len
             start += s_len
@@ -1255,12 +1138,12 @@ class MACHO(object):
             self.sex = '<' if magic == macho.FAT_MAGIC else '>'
             self.wsize = 0
             self.Fhdr = macho.Fhdr(parent=self, content=self.content)
-            if self.verbose: print "FHDR is", repr(self.Fhdr)
+            if self.verbose: print("FHDR is %r" % self.Fhdr)
             self.fh = FarchList(self)
             self.arch = MachoList(self)
             self.rawdata = []
             return
-        if self.verbose: print "MHDR is", repr(self.Mhdr)
+        if self.verbose: print("MHDR is %r" % self.Mhdr)
         self.lh = LHList(self)
         self.sect = SectionList(self)
         self.rawdata = []
@@ -1269,41 +1152,45 @@ class MACHO(object):
         lctext = self.lh.findlctext()
         if self.Mhdr.cputype == macho.CPU_TYPE_I386 or self.Mhdr.cputype == macho.CPU_TYPE_X86_64:
             if lctext != None and lctext.flags == macho.SG_PROTECTED_VERSION_1:
-                if self.verbose: print "cannot parse dynamic symbols because of encryption"
+                if self.verbose: print("cannot parse dynamic symbols because of encryption")
             else:
                 self.parse_dynamic_symbols()
         else:
-            if self.verbose: print "parse_dynamic_symbols() can only be used with x86 architectures"
+            if self.verbose: print("parse_dynamic_symbols() can only be used with x86 architectures")
 
     def __getitem__(self, item):
         return self.content[item]
     
-    def __str__(self):
+    def pack(self):
         if hasattr(self,'Mhdr'):
             c = StrPatchwork()
-            c[0] = str(self.Mhdr)
-            offset = len(str(self.Mhdr))
-            c[offset] = str(self.lh)
+            mhdr = self.Mhdr.pack()
+            c[0] = mhdr
+            offset = len(mhdr)
+            c[offset] = self.lh.pack()
             for s in self.sect.sect:
                 if not s.__class__.__name__== 'Encryption':
-                    c[s.offset] = str(s)
+                    c[s.offset] = s.pack()
             for offset, data in self.rawdata:
-                c[offset] = str(data)
-            return str(c)
+                c[offset] = data
+            return c.pack()
         elif hasattr(self,'Fhdr'):
             c = StrPatchwork()
-            c[0] = str(self.Fhdr)
-            offset = len(str(self.Fhdr))
-            c[offset] = str(self.fh)
+            fhdr = self.Fhdr.pack()
+            c[0] = fhdr
+            offset = len(fhdr)
+            c[offset] = self.fh.pack()
             for macho in self.arch.macholist:
-                c[macho.offset]=str(macho)
+                c[macho.offset] = macho.pack()
             for offset, data in self.rawdata:
-                c[offset] = str(data)
-            return str(c)
+                c[offset] = data
+            return c.pack()
+    def __str__(self):
+        raise AttributeError("Use pack() instead of str()")
     
     def getsectbyname(self, name):
         for s in self.sect.sect:
-            if s.sectname.strip('\x00') == name:
+            if s.sectname.strip(data_null) == name:
                 return s
         return None
 
@@ -1347,11 +1234,11 @@ class MACHO(object):
                 return
             if isinstance(s, Section):
                 if not self.lh.addSH(s):
-                    print "s.content", s.content
-                    print "s.sex", s.sex
-                    print "s.wsize", s.wsize
-                    print "s.sh", repr(s.sh)
-                    print "s.sh.segname", repr(s.sh.segname)
+                    print("s.content %s" % s.content)
+                    print("s.sex %s" % s.sex)
+                    print("s.wsize %s" % s.wsize)
+                    print("s.sh %r" % s.sh)
+                    print("s.sh.segname %r" % s.sh.segname)
                     raise ValueError('addSH failed')
                 if not s.sh.size == len(str(s)) : raise ValueError("s.sh.size and len(str(s)) differ")
                 self.sect.add(s)
@@ -1387,7 +1274,7 @@ class MACHO(object):
             else:
                 wsize= self.wsize
             type = kargs['type']
-            nwlc = Loader(parent=parent,sex=sex,wsize=wsize, content=struct.pack("<II",type.lht,0))
+            nwlc = Loader.create(parent=parent,sex=sex,wsize=wsize, content=struct.pack("<II",type.lht,0))
             if 'segname' in kargs :
                 nwlc.segname = kargs['segname']
             else:
@@ -1417,19 +1304,18 @@ class MACHO(object):
     def incompletedPosVal(self):
         result = []
         if hasattr(self,'Fhdr'):
-            for macho in self.arch.macholist:
-                result.extend([(pos+macho.offset, val) for (pos, val) in macho.incompletedPosVal()])
+            for arch in self.arch.macholist:
+                result.extend([(pos+macho.offset, val) for (pos, val) in arch.incompletedPosVal()])
             return result
         if hasattr(self,'Mhdr'):
             for lc in self.lh.lhlist:
-                if hasattr(lc,'segname'):
-                    if lc.lht == 0x19 and lc.segname =='__TEXT':
-                        for s in lc.sh:
-                            if s.sectname.strip('\0') == '__text' :
-                                if s.size%2 == 1 :
-                                    pos, val = s.offset+s.size, '\x90'
-                                    if self[pos]==val:
-                                        result.append((pos,val))
+                if lc.cmd == macho.LC_SEGMENT_64 and lc.is_text_segment():
+                    for s in lc.sh:
+                        if s.is_text_section():
+                            if s.size%2 == 1 :
+                                pos, val = s.offset+s.size, struct.pack("B",0x90)
+                                if struct.pack("B",self[pos])==val:
+                                    result.append((pos,val))
             return result
 
     def checkParsedCompleted(self, **kargs):
@@ -1437,8 +1323,9 @@ class MACHO(object):
             raise ValueError("No interval argument in macho_init call")
         result = []
         for i in self.interval :
-            if not self._content[i] == '\0' :
-                result.append((i, self._content[i]))
+            data = self._content[i:i+1]
+            if data != data_null :
+                result.append((i, data))
         if 'detect_nop' in kargs and kargs['detect_nop']:
             for pos, val in self.incompletedPosVal():
                 if (pos,val) in result:
@@ -1512,10 +1399,7 @@ class MACHO(object):
                     break
         if hasDyldLazy :
             for symbol in dynamic_loader_info_lazy.SymbolOpcodeList:
-                #print "symbol.name", symbol.name
-                #print "symbol.realoffset", hex(symbol.realoffset)
                 symbol.pointer = la_symbol_ptr[symbol.realoffset]
-                #print "symbol.realoffset", hex(symbol.realoffset)
                 la_symbol_ptr[symbol.realoffset].binding = symbol
                 symbol.stub = symbol_stub[symbol.addr]
                 symbol_stub[symbol.addr].binding = symbol

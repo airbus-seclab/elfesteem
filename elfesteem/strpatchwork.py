@@ -1,12 +1,20 @@
 from array import array
-from sys import maxint
-class StrPatchwork:
-    def __init__(self, s="", paddingbyte="\x00"):
-        self.s = array("B",str(s))
+# To be compatible with python 2 and python 3
+import struct
+data_null = struct.pack("B",0)
+data_empty = struct.pack("")
+
+class StrPatchwork(object):
+    def __init__(self, s=data_empty, paddingbyte=data_null):
+        if s == None: s = data_empty
+        if isinstance(s, StrPatchwork): s = s.pack()
+        self.s = array("B",s)
         # cache s to avoid rebuilding str after each find
         self.s_cache = s
         self.paddingbyte=paddingbyte
     def __str__(self):
+        FAIL
+    def pack(self):
         return self.s.tostring()
 
     def __getitem__(self, item):
@@ -14,7 +22,7 @@ class StrPatchwork:
         if type(item) is slice:
             end = item.stop
             l = len(s)
-            if l < end and end != maxint: #XXX hack [x:] give 2GB limit
+            if end != None and l < end:
                 # This is inefficient but avoids complicated maths if step is not 1
                 s = s[:]
                 s.extend(array("B",self.paddingbyte*(end-l)))
