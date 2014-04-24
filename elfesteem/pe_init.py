@@ -303,7 +303,7 @@ class PE(object):
             self.DirRes = pe.DirRes(self)
 
             self.Doshdr.magic = 0x5a4d
-            self.Doshdr.lfanew = 0x200
+            self.Doshdr.lfanew = 0xe0
 
             if wsize == 32:
                 self.Opthdr.magic = 0x10b
@@ -322,7 +322,7 @@ class PE(object):
             self.NThdr.MinorImageVersion = 0x1
             self.NThdr.majorsubsystemversion = 0x4
             self.NThdr.minorsubsystemversion = 0x0
-            self.NThdr.subsystem = 0x2
+            self.NThdr.subsystem = 0x3
             self.NThdr.dllcharacteristics = 0x8000
 
             #for createthread
@@ -343,9 +343,12 @@ class PE(object):
                 self.Coffhdr.machine = 0x8664
             else:
                 raise ValueError('unknown pe size %r'%wsize)
-            self.Coffhdr.sizeofoptionalheader = 0xe0
-            self.Coffhdr.characteristics = 0x10f
-
+            if wsize == 32:
+                self.Coffhdr.characteristics = 0x10f
+                self.Coffhdr.sizeofoptionalheader = 0xe0
+            else:
+                self.Coffhdr.characteristics = 0x22
+                self.Coffhdr.sizeofoptionalheader = 0xf0
 
         else:
             self._content = StrPatchwork(pestr)
@@ -355,6 +358,8 @@ class PE(object):
                                parse_reloc = parse_reloc)
 
     def isPE(self):
+        if self.NTsig is None:
+            return False
         return self.NTsig.signature == 0x4550
 
     def parse_content(self,
@@ -369,6 +374,7 @@ class PE(object):
         of = self.Doshdr.lfanew
         if of > len(self.content):
             log.warn('ntsig after eof!')
+            self.NTsig = None
             return
         self.NTsig = pe.NTsig.unpack(self.content,
                                      of, self)
