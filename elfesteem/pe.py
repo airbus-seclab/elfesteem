@@ -519,6 +519,11 @@ class DirImport(CStruct):
                 self.impdesc.append(d)
 
     def get_funcrva(self, f):
+        if self.parent_head._wsize == 32:
+            mask_ptr = 0x80000000-1
+        elif self.parent_head._wsize == 64:
+            mask_ptr = 0x8000000000000000L-1
+
         for i, d in enumerate(self.impdesc):
             if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
@@ -530,12 +535,12 @@ class DirImport(CStruct):
                 for j, imp in enumerate(d.impbynames):
                     if isinstance(imp, ImportByName):
                         if f == imp.name:
-                            return d.firstthunk+j*4
+                            return d.firstthunk+j*self.parent_head._wsize/8
             elif type(f) in (int, long):
                 for j, imp in enumerate(d.impbynames):
                     if not isinstance(imp, ImportByName):
-                        if tmp_thunk[j].rva&0x7FFFFFFF == f:
-                            return d.firstthunk+j*4
+                        if tmp_thunk[j].rva&mask_ptr == f:
+                            return d.firstthunk+j*self.parent_head._wsize/8
             else:
                 raise ValueError('unknown func tpye %s'%str(f))
     def get_funcvirt(self, f):
