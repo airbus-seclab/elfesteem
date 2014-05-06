@@ -59,7 +59,8 @@ class CStruct(object):
                     dct.pop("del_"+fname,          None))
             return type.__new__(cls, name, bases, dct)
 
-    _packformat = ""
+    _packformat = None
+    _ptrsize = None
     _fields = []
 
     def fix_size(self, wsize):
@@ -78,17 +79,10 @@ class CStruct(object):
 
     def __init__(self, *args, **kargs):
         self._parent = kargs.get('parent', None)
-        for f in ['sex', 'wsize']:
-            if f in kargs:
-                setattr(self, f, kargs[f])
-            elif self._parent != None:
-                setattr(self, f, getattr(self._parent, f))
-        sex = self.sex
-        wsize = self.wsize
-        if self._packformat:
-            sex = self._packformat
-        pstr = self.fix_size(wsize)
-        self._packstring =  sex + "".join(map(lambda x:x[1],pstr))
+        self.sex   = kargs.get('sex',   getattr(self._parent, 'sex', self._packformat))
+        self.wsize = kargs.get('wsize', getattr(self._parent, 'wsize', self._ptrsize))
+        pstr = self.fix_size(self.wsize)
+        self._packstring =  self.sex + "".join(map(lambda x:x[1],pstr))
         self._size = struct.calcsize(self._packstring)
 
         self._names = [x[0] for x in self._fields]
