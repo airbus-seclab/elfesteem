@@ -77,7 +77,7 @@ class CStruct(object):
         return out
 
     def __init__(self, *args, **kargs):
-        self._parent = kargs['parent']
+        self._parent = kargs.get('parent', None)
         for f in ['sex', 'wsize']:
             if f in kargs:
                 setattr(self, f, kargs[f])
@@ -106,6 +106,7 @@ class CStruct(object):
         disas = struct.unpack(self._packstring, s)
         for n,v in zip(self._names,disas):
             setattr(self, n, v)
+        return self
 
     def pack(self):
         fields = [getattr(self, x) for x in self._names]
