@@ -377,7 +377,12 @@ class PE(object):
             if raw_off != s.offset:
                 log.warn('unaligned raw section!')
             s.data = StrPatchwork()
-            s.data[0] = self.content[raw_off:raw_off+s.rawsize]
+            # min section is 0x1000???
+            if s.rawsize == 0:
+                mm = 0
+            else:
+                mm = max(s.rawsize, 0x1000)
+            s.data[0] = self.content[raw_off:raw_off+mm]
         try:
             self.DirImport = pe.DirImport.unpack(self.content,
                                                  self.NThdr.optentries[pe.DIRECTORY_ENTRY_IMPORT].rva,
