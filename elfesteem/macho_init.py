@@ -1359,24 +1359,29 @@ class MACHO(object):
     def parse_dynamic_symbols(self):
         if not len(self.sect.sect):
             return
-        nl_symbol_ptr = None
         for s in self.sect.sect:
             if hasattr(s, 'sh'):
                 if s.sh.type == macho.S_NON_LAZY_SYMBOL_POINTERS:
                     nl_symbol_ptr = s
                     break
+        else:
+            nl_symbol_ptr = None
 
         for s in self.sect.sect:
             if hasattr(s, 'sh'):
                 if s.sh.type == macho.S_LAZY_SYMBOL_POINTERS:
                     la_symbol_ptr = s
                     break
+        else:
+            la_symbol_ptr = None
 
         for s in self.sect.sect:
             if hasattr(s, 'sh') :
                 if s.sh.type == macho.S_SYMBOL_STUBS:
                     symbol_stub = s
                     break
+        else:
+            symbol_stub = None
 
         hasDyldLazy = 0
         for s in self.sect.sect:
@@ -1422,16 +1427,15 @@ class MACHO(object):
             """
     
         else :
+            indstubIndex = 0
             if nl_symbol_ptr is not None :
-                indstubIndex = 0
                 for indstub in nl_symbol_ptr:
                     symbol_table[indstubIndex].stub = indstub
                     indstubIndex += 1
+            if symbol_stub is not None :
                 for indstub in symbol_stub:
                     symbol_table[indstubIndex].stub = indstub
                     indstubIndex += 1
-            else:
-                pass #should be implemented
 
     def get_sym_value(self, name):
         for s in self.sect.sect:
