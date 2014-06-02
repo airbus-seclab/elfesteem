@@ -256,7 +256,7 @@ def print_symbols(e):
     for sect in e.sect.sect:
         if type(sect) != macho_init.SymbolTable:
             continue
-        print("%-50s %-4s %-10s %s"%("Symbol","Type","Value","Description"))
+        print("%-35s %-15s %-4s %-10s %s"%("Symbol","Section","Type","Value","Description"))
         for value in sect.symbols:
             n_type = {
                 macho.N_UNDF: 'U',
@@ -270,7 +270,12 @@ def print_symbols(e):
             if value.type & macho.N_STAB:
                 n_type += 'D'
             desc = value.description
-            print("%-50s %-4s 0x%08x %04x"%(value.name,n_type,value.value,desc))
+            if value.sectionindex == 0:
+                section = "NO_SECT"
+            else:
+                section = e.sect.sect[value.sectionindex-1]
+                section = "%s,%s"%(section.sh.segname,section.sh.sectname)
+            print("%-35s %-15s %-4s 0x%08x %04x"%(value.name,section,n_type,value.value,desc))
 
 
 
