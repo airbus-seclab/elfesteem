@@ -632,6 +632,7 @@ class Section(MachoData):
         if (padding < 0) : raise ValueError("segname is too long for the structure")
         self.sh.segname = val + data_null*padding
     segname = property(get_segname, set_segname)
+    name = property(lambda self:"%s,%s"%(self.sh.segname,self.sh.sectname))
     def _parsecontent(self):
         pass
     def pack(self):
