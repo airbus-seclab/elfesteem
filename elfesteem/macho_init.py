@@ -1033,8 +1033,8 @@ class virt(object):
     def __init__(self, x):
         self.parent = x
 
-    def __call__(self, ad_start, ad_stop = None, section_name = None):
-        rva_items = self.get_rvaitem(slice(ad_start, ad_stop), section_name)
+    def __call__(self, ad_start, ad_stop = None, section = None):
+        rva_items = self.get_rvaitem(slice(ad_start, ad_stop), section)
         data_out = ""
         for s, n_item in rva_items:
             data_out += s.content[n_item]
