@@ -8,7 +8,7 @@ import platform
 import sys
 
 parser = OptionParser(usage = "usage: %prog [options] file")
-parser.add_option('-L', "--loadcommands", action="store_true",dest="loadcommands",default=False,help="print the load commands")
+parser.add_option('-l', "--loadcommands", action="store_true",dest="loadcommands",default=False,help="print the load commands")
 parser.add_option('-H', "--header", action="store_true", dest="header", default=False, help="print the mach header")
 parser.add_option('-A', "--arch", dest="architectures", help="enable the choice of a fat architecture")
 (options, args) = parser.parse_args()

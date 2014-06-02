@@ -732,7 +732,7 @@ class Reloc(Section):
     def pack(self):
         data = StrPatchwork()
         for s in self.reloclist:
-            data[s.offset] = s
+            data[s.offset] = s.pack()
         return data.pack()
 
 class LinkEditSection(MachoData):
