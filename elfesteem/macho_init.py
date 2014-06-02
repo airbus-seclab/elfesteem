@@ -1033,7 +1033,7 @@ class virt(object):
         self.parent = x
 
     def __call__(self, ad_start, ad_stop = None, section = None):
-        rva_items = self.get_rvaitem(slice(ad_start, ad_stop), section)
+        rva_items = self.get_rvaitem(slice(ad_start, ad_stop), section = section)
         data_out = ""
         for s, n_item in rva_items:
             data_out += s.content[n_item]
@@ -1059,11 +1059,11 @@ class virt(object):
             #print "s.content[n_item]", s.content[n_item]
             off = i.stop
     
-    def get_rvaitem(self, item, section_name = None):
+    def get_rvaitem(self, item, section = None):
         if item.step != None:
             raise ValueError("pas de step")
         if item.stop == None:
-            s = self.parent.getsectbyvad(item.start, section_name)
+            s = self.parent.getsectbyvad(item.start, section = section)
             if not s:
                 raise ValueError('unknown rva address! 0x%x'%item.start)
             s_start = item.start - s.addr
@@ -1073,7 +1073,7 @@ class virt(object):
         virt_item = []
         start = item.start
         while total_len:
-            s = self.parent.getsectbyvad(start, section_name)
+            s = self.parent.getsectbyvad(start, section = section)
             if not s:
                 raise ValueError('unknown rva address! 0x%x'%start)
             s_start = start - s.addr
@@ -1198,9 +1198,9 @@ class MACHO(object):
                 return s
         return None
 
-    def getsectbyvad(self, ad, section_name = None):
-        if section_name:
-            s = self.getsectbyname(section_name)
+    def getsectbyvad(self, ad, section = None):
+        if section:
+            s = self.getsectbyname(section)
             if s.addr <= ad < s.addr+s.size:
                 return s
         f = []
