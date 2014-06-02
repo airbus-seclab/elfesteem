@@ -357,6 +357,20 @@ class symbol_64(CStruct):
             return self._parent.parent.parent._parent.parent.get_stringtable().res[self.strtabindex]
     name = property(get_name)
 
+# Cf. /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk/usr/include/mach-o/nlist.h
+# The 'n_type' aka. 'type' field
+N_STAB  = 0xe0  # if any of these bits set, a symbolic debugging entry
+N_PEXT  = 0x10  # private external symbol bit
+N_TYPE  = 0x0e  # mask for the type bits
+N_EXT   = 0x01  # external symbol bit, set for external symbols
+# Values for N_TYPE bits of the n_type field.
+N_UNDF  = 0x0   # undefined, n_sect == NO_SECT
+N_ABS   = 0x2   # absolute, n_sect == NO_SECT
+N_SECT  = 0xe   # defined in section number n_sect
+N_PBUD  = 0xc   # prebound undefined (defined in a dylib)
+N_INDR  = 0xa   # indirect
+
+
 class relocationSymbol(CStruct):
     _fields = [ ("relocaddr","u32"),
                 ("relocsym","u32")]

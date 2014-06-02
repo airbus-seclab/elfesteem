@@ -113,7 +113,7 @@ class Loader(LoaderBase):
         if hasattr(self,'_str_additional_data'):
             s += self._str_additional_data()
         if self.__class__.__name__ == "Loader":
-            s += str(self.content)
+            s += self.content.pack()
         self.lh.cmdsize = len(s)
         return s
     def __str__(self):
@@ -546,7 +546,7 @@ class FarchList(object):
         inherit_sex_wsize(self, parent, kargs)
         self.farchlist = []
         fhdr = self.parent.Fhdr
-        of = len(str(fhdr))
+        of = len(fhdr.pack())
         for i in range(fhdr.nfat_arch):
             fhstr = parent[of+20*i:of+20*(i+1)]
             farch = macho.Farch(parent=self, content=fhstr)
@@ -876,6 +876,7 @@ class DynamicLoaderInfo(LinkEditSection):
 class SymbolTable(LinkEditSection):
     def _parsecontent(self):
         self.symbols = []
+        self.symbols_from_name = {}
         of = 0
         one_sym_size = int(self.lc.sym_size/self.lc.nsyms)
         if self.wsize == 32:
@@ -891,9 +892,7 @@ class SymbolTable(LinkEditSection):
         if type(idx) == int:
             return self.symbols[idx]
         else:
-            for symbol in self.symbols:
-                if symbol.name == idx.strip(data_null):
-                    return symbol
+            return self.symbols_from_name[idx.strip(data_null)]
         raise ValueError("Cannot find symbol with index %r"%idx)
     def pack(self):
         data = StrPatchwork()
@@ -1146,6 +1145,11 @@ class MACHO(object):
         if self.verbose: print("MHDR is %r" % self.Mhdr)
         self.lh = LHList(self)
         self.sect = SectionList(self)
+        for sect in self.sect.sect:
+            if type(sect) != SymbolTable:
+                continue
+            for symbol in sect.symbols:
+                sect.symbols_from_name[symbol.name] = symbol
         self.rawdata = []
 
     def parse_symbols(self):

@@ -10,6 +10,7 @@ import sys
 parser = OptionParser(usage = "usage: %prog [options] file")
 parser.add_option('-l', "--loadcommands", action="store_true",dest="loadcommands",default=False,help="print the load commands")
 parser.add_option('-H', "--header", action="store_true", dest="header", default=False, help="print the mach header")
+parser.add_option('-b', "--symbols", action="store_true", dest="symbols", default=False, help="print the symbols")
 parser.add_option('-A', "--arch", dest="architectures", help="enable the choice of a fat architecture")
 (options, args) = parser.parse_args()
 
@@ -251,6 +252,28 @@ def print_lc(e):
                 print("  version %u.%u" %(aa, bb))
 
 
+def print_symbols(e):
+    for sect in e.sect.sect:
+        if type(sect) != macho_init.SymbolTable:
+            continue
+        print("%-50s %-4s %-10s %s"%("Symbol","Type","Value","Description"))
+        for value in sect.symbols:
+            n_type = {
+                macho.N_UNDF: 'U',
+                macho.N_ABS : 'A',
+                macho.N_SECT: 'S',
+                macho.N_PBUD: 'P',
+                macho.N_INDR: 'I',
+                }[value.type & macho.N_TYPE]
+            n_type += [ ' ', 'X' ] [value.type & macho.N_EXT]
+            n_type += [ ' ', 'X' ] [(value.type & macho.N_PEXT)>>4]
+            if value.type & macho.N_STAB:
+                n_type += 'D'
+            desc = value.description
+            print("%-50s %-4s 0x%08x %04x"%(value.name,n_type,value.value,desc))
+
+
+
 if not args:
     parser.print_help()
     sys.exit(0)
@@ -289,8 +312,6 @@ for file in args:
     raw = open(file, 'rb').read()
     filesize = os.path.getsize(file)
     e = macho_init.MACHO(raw, interval=intervals.Intervals().add(0,filesize), parseSymbols = False)
-    header = options.header
-    loadcommands = options.loadcommands
     architectures = options.architectures
 
     if architectures == None and hasattr(e, 'Fhdr'):
@@ -315,20 +336,22 @@ for file in args:
                 pass
                 #raise ValueError("Cannot find architecture in FAT file")
 
-    if header:
-        if hasattr(e, 'Fhdr'):
-            for mach in e.arch:
-                print("%s (architecture %s):" %(file, archi[(mach.Mhdr.cputype, mach.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK)]))
-                print_header(mach)
-        else :
-            print("%s:" %file)
-            print_header(e)
+    functions = []
 
-    if loadcommands:
-        if hasattr(e, 'Fhdr'):
-            for mach in e.arch:
-                print("%s (architecture %s):" %(file, archi[(mach.Mhdr.cputype, mach.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK)]))
-                print_lc(mach)
-        else :
-            print("%s:" %file)
-            print_lc(e)
+    if options.header:
+        functions.append(print_header)
+    if options.loadcommands:
+        functions.append(print_lc)
+    if options.symbols:
+        functions.append(print_symbols)
+
+    if hasattr(e, 'Fhdr'):
+        for mach in e.arch:
+            print("%s (architecture %s):" %(file, archi[(mach.Mhdr.cputype, mach.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK)]))
+            for f in functions:
+                f(mach)
+    else :
+        print("%s:" %file)
+        for f in functions:
+            f(e)
+
