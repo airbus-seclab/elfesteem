@@ -32,7 +32,7 @@ class drva:
         if not type(item) is slice:
             return None
         rva_items = self.get_rvaitem(item.start, item.stop, item.step)
-        if not rva_items:
+        if rva_items is None:
              return
         data_out = ""
         for s, n_item in rva_items:
@@ -43,11 +43,11 @@ class drva:
         return data_out
 
     def get_rvaitem(self, start, stop = None, step = None):
-        if not self.parent.SHList:
+        if self.parent.SHList is None:
             return [(None, start)]
         if stop == None:
             s = self.parent.getsectionbyrva(start)
-            if not s:
+            if s is None:
                 return [(None, start)]
             start = start-s.addr
             return [(s, start)]
@@ -64,7 +64,7 @@ class drva:
                 s = None
             else:
                 s = self.parent.getsectionbyrva(start)
-                if not s:
+                if s is None:
                     log.warn('unknown rva address! %x'%start)
                     return []
                 s_max = max(s.size, s.rawsize)
@@ -89,7 +89,7 @@ class drva:
         if not type(item) is slice:
             item = slice(item, item+len(data), None)
         rva_items = self.get_rvaitem(item.start, item.stop, item.step)
-        if not rva_items:
+        if rva_items is None:
              return
         off = 0
         for s, n_item in rva_items:
@@ -118,6 +118,8 @@ class virt:
         return slice(start, stop, step)
 
     def __getitem__(self, item):
+        raise DeprecationWarning("xx(start, [stop, step])")
+        print 'ii'
         rva_item = self.item_virt2rva(item)
         return self.parent.drva.__getitem__(rva_item)
 
@@ -165,10 +167,10 @@ class virt:
         rva_items = self.parent.drva.get_rvaitem(ad_start, ad_stop, ad_step)
         data_out = ""
         for s, n_item in rva_items:
-            if s:
-                data_out += s.data.__getitem__(n_item)
-            else:
+            if s is None:
                 data_out += self.parent.__getitem__(n_item)
+            else:
+                data_out += s.data.__getitem__(n_item)
 
         return data_out
 
@@ -176,14 +178,18 @@ class virt:
 
 class PE(object):
     content = ContentManager()
-    def __init__(self, pestr = None, loadfrommem=False, parse_resources = True,
-                 **kargs):
+    def __init__(self, pestr = None,
+                 loadfrommem=False,
+                 parse_resources = True,
+                 parse_delay = True,
+                 parse_reloc = True,
+                 wsize = 32):
         self._drva = drva(self)
         self._virt = virt(self)
         if pestr == None:
             self._content = StrPatchwork()
             self._sex = 0
-            self._wsize = 32
+            self._wsize = wsize
             self.Doshdr = pe.Doshdr(self)
             self.NTsig = pe.NTsig(self)
             self.Coffhdr = pe.Coffhdr(self)
@@ -207,10 +213,16 @@ class PE(object):
             self.DirRes = pe.DirRes(self)
 
             self.Doshdr.magic = 0x5a4d
-            self.Doshdr.lfanew = 0x200
+            self.Doshdr.lfanew = 0xe0
 
 
-            self.Opthdr.magic = 0x10b
+            self.NTsig.signature = 0x4550
+            if wsize == 32:
+                self.Opthdr.magic = 0x10b
+            elif wsize == 64:
+                self.Opthdr.magic = 0x20b
+            else:
+                raise ValueError('unknown pe size %r'%wsize)
             self.Opthdr.majorlinkerversion = 0x7
             self.Opthdr.minorlinkerversion = 0x0
             self.NThdr.filealignment = 0x1000
@@ -221,8 +233,12 @@ class PE(object):
             self.NThdr.MinorImageVersion = 0x1
             self.NThdr.majorsubsystemversion = 0x4
             self.NThdr.minorsubsystemversion = 0x0
-            self.NThdr.subsystem = 0x2
-            self.NThdr.dllcharacteristics = 0x8000
+            self.NThdr.subsystem = 0x3
+            if wsize == 32:
+                self.NThdr.dllcharacteristics = 0x8000
+            else:
+                self.NThdr.dllcharacteristics = 0x8000
+
 
             #for createthread
             self.NThdr.sizeofstackreserve = 0x200000
@@ -236,26 +252,45 @@ class PE(object):
 
 
             self.NTsig.signature = 0x4550
-            self.Coffhdr.machine = 0x14c
-            self.Coffhdr.sizeofoptionalheader = 0xe0
-            self.Coffhdr.characteristics = 0x10f
-
+            if wsize == 32:
+                self.Coffhdr.machine = 0x14c
+            elif wsize == 64:
+                self.Coffhdr.machine = 0x8664
+            else:
+                raise ValueError('unknown pe size %r'%wsize)
+            if wsize == 32:
+                self.Coffhdr.characteristics = 0x10f
+                self.Coffhdr.sizeofoptionalheader = 0xe0
+            else:
+                self.Coffhdr.characteristics = 0x22#0x2f
+                self.Coffhdr.sizeofoptionalheader = 0xf0
 
         else:
             self._content = StrPatchwork(pestr)
             self.loadfrommem = loadfrommem
-            self.parse_content(parse_resources = parse_resources)
+            self.parse_content(parse_resources = parse_resources,
+                               parse_delay = parse_delay,
+                               parse_reloc = parse_reloc)
 
     def isPE(self):
+        if self.NTsig is None:
+            return False
         return self.NTsig.signature == 0x4550
 
-    def parse_content(self, parse_resources = True):
+    def parse_content(self,
+                      parse_resources = True,
+                      parse_delay = True,
+                      parse_reloc = True):
         of = 0
         self._sex = 0
         self._wsize = 32
         self.Doshdr = pe.Doshdr.unpack(self.content, of, self)
         #print repr(self.Doshdr)
         of = self.Doshdr.lfanew
+        if of > len(self.content):
+            log.warn('ntsig after eof!')
+            self.NTsig = None
+            return
         self.NTsig = pe.NTsig.unpack(self.content,
                                      of, self)
         self.DirImport = None
@@ -266,6 +301,7 @@ class PE(object):
 
 
         if self.NTsig.signature != 0x4550:
+            log.warn('not a valid pe!')
             return
         of += len(self.NTsig)
         self.Coffhdr, l = pe.Coffhdr.unpack_l(self.content,
@@ -302,28 +338,56 @@ class PE(object):
             if raw_off != s.offset:
                 log.warn('unaligned raw section!')
             s.data = StrPatchwork()
-            s.data[0] = self.content[raw_off:raw_off+s.rawsize]
-        self.DirImport = pe.DirImport.unpack(self.content,
-                                             self.NThdr.optentries[pe.DIRECTORY_ENTRY_IMPORT].rva,
-                                             self)
-        self.DirExport = pe.DirExport.unpack(self.content,
-                                             self.NThdr.optentries[pe.DIRECTORY_ENTRY_EXPORT].rva,
-                                             self)
-        if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_DELAY_IMPORT:
-            self.DirDelay = pe.DirDelay.unpack(self.content,
-                                               self.NThdr.optentries[pe.DIRECTORY_ENTRY_DELAY_IMPORT].rva,
-                                               self)
-        if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_BASERELOC:
-            self.DirReloc = pe.DirReloc.unpack(self.content,
-                                               self.NThdr.optentries[pe.DIRECTORY_ENTRY_BASERELOC].rva,
-                                               self)
-        if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_RESOURCE:
-            if parse_resources:
-                self.DirRes = pe.DirRes.unpack(self.content,
-                                               self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
-                                               self)
+            # min section is 0x1000???
+            if s.rawsize == 0:
+                mm = 0
             else:
+                mm = max(s.rawsize, 0x1000)
+            s.data[0] = self.content[raw_off:raw_off+mm]
+        try:
+            self.DirImport = pe.DirImport.unpack(self.content,
+                                                 self.NThdr.optentries[pe.DIRECTORY_ENTRY_IMPORT].rva,
+                                                 self)
+        except pe.InvalidOffset:
+            log.warning('cannot parse DirImport, skipping')
+            self.DirImport = pe.DirImport(self)
+
+        try:
+            self.DirExport = pe.DirExport.unpack(self.content,
+                                                 self.NThdr.optentries[pe.DIRECTORY_ENTRY_EXPORT].rva,
+                                                 self)
+        except pe.InvalidOffset:
+            log.warning('cannot parse DirExport, skipping')
+            self.DirExport = pe.DirExport(self)
+
+        if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_DELAY_IMPORT:
+            self.DirDelay = pe.DirDelay(self)
+            if parse_delay:
+                try:
+                    self.DirDelay = pe.DirDelay.unpack(self.content,
+                                                       self.NThdr.optentries[pe.DIRECTORY_ENTRY_DELAY_IMPORT].rva,
+                                                       self)
+                except pe.InvalidOffset:
+                    log.warning('cannot parse DirDelay, skipping')
+        if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_BASERELOC:
+            self.DirReloc = pe.DirReloc(self)
+            if parse_reloc:
+                try:
+                    self.DirReloc = pe.DirReloc.unpack(self.content,
+                                                   self.NThdr.optentries[pe.DIRECTORY_ENTRY_BASERELOC].rva,
+                                                   self)
+                except pe.InvalidOffset:
+                    log.warning('cannot parse DirReloc, skipping')
+        if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_RESOURCE:
+            self.DirRes = pe.DirRes(self)
+            if parse_resources:
                 self.DirRes = pe.DirRes(self)
+                try:
+                    self.DirRes = pe.DirRes.unpack(self.content,
+                                                   self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
+                                                   self)
+                except pe.InvalidOffset:
+                    log.warning('cannot parse DirRes, skipping')
         #self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
 
         #print repr(self.Doshdr)
@@ -345,10 +409,15 @@ class PE(object):
         return
 
     def getsectionbyrva(self, rva):
-        if not self.SHList:
+        if self.SHList is None:
             return None
         for s in self.SHList.shlist:
-            if s.addr <= rva < s.addr+s.size:
+            """
+            TODO CHECK:
+            some binaries have import rva outside section, but addresses
+            seems to be rounded
+            """
+            if s.addr <= rva < (s.addr+s.size+0xfff) & 0xFFFFF000:
                 return s
         return None
 
@@ -356,7 +425,7 @@ class PE(object):
         return self.getsectionbyrva(self.virt2rva(vad))
 
     def getsectionbyoff(self, off):
-        if not self.SHList:
+        if self.SHList is None:
             return None
         for s in self.SHList.shlist:
             if s.offset <= off < s.offset+s.rawsize:
@@ -364,22 +433,26 @@ class PE(object):
         return None
 
     def getsectionbyname(self, name):
-        if not self.SHList:
+        if self.SHList is None:
             return None
         for s in self.SHList:
             if s.name.strip('\x00') ==  name:
                 return s
         return None
 
+    def is_rva_ok(self, rva):
+        return  self.getsectionbyrva(rva) is not None
+
     def rva2off(self, rva):
         s = self.getsectionbyrva(rva)
-        if not s:
+        if s is None:
+            raise pe.InvalidOffset('cannot get offset for 0x%X'%rva)
             return
         return rva-s.addr+s.offset
 
     def off2rva(self, off):
         s = self.getsectionbyoff(off)
-        if not s:
+        if s is None:
             return
         return off-s.offset+s.addr
 
@@ -487,7 +560,7 @@ class PE(object):
         return self.build_content()
 
     def export_funcs(self):
-        if not self.DirExport:
+        if self.DirExport is None:
             print 'no export dir found'
             return None, None
 
@@ -500,7 +573,7 @@ class PE(object):
 
     def reloc_to(self, imgbase):
         offset = imgbase - self.NThdr.ImageBase
-        if not self.DirReloc:
+        if self.DirReloc is None:
             log.warn('no relocation found!')
         for rel in self.DirReloc.reldesc:
             rva = rel.rva
@@ -566,7 +639,7 @@ if __name__ == "__main__":
                ]
     e.DirImport.add_dlldesc(new_dll)
 
-    if not e.DirExport.expdesc:
+    if e.DirExport.expdesc is None:
         e.DirExport.create()
         e.DirExport.add_name("coco")
 
