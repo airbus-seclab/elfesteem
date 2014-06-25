@@ -1208,6 +1208,7 @@ class MACHO(object):
         for s in self.sect.sect:
             if s.addr <= ad < s.addr+s.size:
                 f.append(s)
+        if len(f) == 0: return None
         return f[0]
 
     def getsegment_byoffset(self, of):

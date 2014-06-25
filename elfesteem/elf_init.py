@@ -320,9 +320,11 @@ class SHList(object):
             rep.append(l)
         return "\n".join(rep)
     def __str__(self):
+        raise AttributeError("Use pack() instead of str()")
+    def pack(self):
         c = []
         for s in self.shlist:
-            c.append(str(s.sh))
+            c.append(s.sh.pack())
         return "".join(c)
     def resize(self, sec, diff):
         for s in self.shlist:
@@ -391,9 +393,11 @@ class PHList(object):
             r.append("   "+" ".join([s.sh.name for s in p.shlist]))
         return "\n".join(r)
     def __str__(self):
+        raise AttributeError("Use pack() instead of str()")
+    def pack(self):
         c = []
         for p in self.phlist:
-            c.append(str(p.ph))
+            c.append(p.ph.pack())
         return "".join(c)
     def resize(self, sec, diff):
         for p in self.phlist:
@@ -549,12 +553,14 @@ class ELF(object):
 
     def build_content(self):
         c = StrPatchwork()
-        c[0] = str(self.Ehdr)
-        c[self.Ehdr.phoff] = str(self.ph)
+        c[0] = self.Ehdr.pack()
+        c[self.Ehdr.phoff] = self.ph.pack()
         for s in self.sh:
-            c[s.sh.offset] = str(s.content)
-        c[self.Ehdr.shoff] = str(self.sh)
-        return str(c)
+            data = s.content
+            if type(data) != str: data = data.pack()
+            c[s.sh.offset] = data
+        c[self.Ehdr.shoff] = self.sh.pack()
+        return c.pack()
 
     def check_coherency(self):
         if self.Ehdr.version != 1:
@@ -579,6 +585,8 @@ class ELF(object):
             raise ValueError("Section of index shstrndx is of name '%s' instead of '%s'"%(self.sh[self.Ehdr.shstrndx].sh.name, '.shstrtab'))
 
     def __str__(self):
+        raise AttributeError("Use pack() instead of str()")
+    def pack(self):
         return self.build_content()
 
     def getsectionbyname(self, name):
