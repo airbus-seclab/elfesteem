@@ -579,10 +579,13 @@ class ELF(object):
             raise ValueError("Has more than one (%d) sections DYNSYM"% dynsym_count)
         if hash_count > 1:
             raise ValueError("Has more than one (%d) sections HASH"% hash_count)
-        if self.sh[self.Ehdr.shstrndx].sh.type != elf.SHT_STRTAB:
-            raise ValueError("Section of index shstrndx is of type %d instead of %d"%(self.sh[self.Ehdr.shstrndx].sh.type, elf.SHT_STRTAB))
-        if self.sh[self.Ehdr.shstrndx].sh.name != '.shstrtab':
-            raise ValueError("Section of index shstrndx is of name '%s' instead of '%s'"%(self.sh[self.Ehdr.shstrndx].sh.name, '.shstrtab'))
+        if self.Ehdr.shstrndx == elf.SHN_UNDEF:
+            log.warn("No section (e.g. core file)")
+        else:
+            if self.sh[self.Ehdr.shstrndx].sh.type != elf.SHT_STRTAB:
+                raise ValueError("Section of index shstrndx is of type %d instead of %d"%(self.sh[self.Ehdr.shstrndx].sh.type, elf.SHT_STRTAB))
+            if self.sh[self.Ehdr.shstrndx].sh.name != '.shstrtab':
+                raise ValueError("Section of index shstrndx is of name '%s' instead of '%s'"%(self.sh[self.Ehdr.shstrndx].sh.name, '.shstrtab'))
 
     def __str__(self):
         raise AttributeError("Use pack() instead of str()")
