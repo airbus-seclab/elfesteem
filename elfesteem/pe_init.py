@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 
 import struct, array
-import pe
-from strpatchwork import StrPatchwork
+from . import pe
+from .strpatchwork import StrPatchwork
 import logging
 from collections import defaultdict
 log = logging.getLogger("peparse")
@@ -70,12 +70,12 @@ class drva:
                 s_max = max(s.size, s.rawsize)
                 s_start = start - s.addr
                 s_stop = stop - s.addr
-            #print hex(s_stop), hex(s_start)
+            #print("%x %x"%(s_stop,s_start))
             if s_stop >s_max:
-                #print 'yy'
+                #print('yy')
                 #raise ValueError('lack data %d, %d'%(stop, s_max))
                 s_stop = s_max
-            #print hex(s_start), hex(s_stop)
+            #print("%x %x"%(s_start,s_stop))
             s_len = s_stop - s_start
             total_len -= s_len
             start += s_len
@@ -163,7 +163,7 @@ class virt:
             ad_stop = self.parent.virt2rva(ad_stop)
 
         rva_items = self.parent.drva.get_rvaitem(ad_start, ad_stop, ad_step)
-        data_out = ""
+        data_out = pe.data_empty
         for s, n_item in rva_items:
             if s:
                 data_out += s.data.__getitem__(n_item)
@@ -179,7 +179,7 @@ class StrTable(object):
         self.trail = ""
         self.len = 0
         while c:
-            p = c.find("\0")
+            p = c.find(pe.data_null)
             if p < 0:
                 self.trail = c
                 break
@@ -309,7 +309,7 @@ class PE(object):
         self._sex = 0
         self._wsize = 32
         self.Doshdr = pe.Doshdr.unpack(self.content, of, self)
-        #print repr(self.Doshdr)
+        #print(repr(self.Doshdr))
         of = self.Doshdr.lfanew
         self.NTsig = pe.NTsig.unpack(self.content,
                                      of, self)
@@ -338,12 +338,12 @@ class PE(object):
             Opthdr = pe.Opthdr64
 
         self.Opthdr, l = Opthdr.unpack_l(self.content, of, self)
-        #print hex(of+len(self.Opthdr))
+        #print(hex(of+len(self.Opthdr)))
         self.NThdr = pe.NThdr.unpack(self.content, of+l, self)
-        #print repr(self.NThdr.optentries)
+        #print(repr(self.NThdr.optentries))
         of += self.Coffhdr.sizeofoptionalheader
         self.SHList = pe.SHList.unpack(self.content, of, self)
-        #print repr(self.SHList)
+        #print(repr(self.SHList))
 
         # load section data
         filealignment = self.NThdr.filealignment
@@ -353,7 +353,7 @@ class PE(object):
             if filealignment ==0:
                 raw_off = s.offset
             else:
-                raw_off = filealignment*(s.offset/filealignment)
+                raw_off = int(filealignment*(s.offset/filealignment))
             if raw_off != s.offset:
                 log.warn('unaligned raw section!')
             s.data = StrPatchwork()
@@ -390,23 +390,23 @@ class PE(object):
             if str(self.SymbolStrings) == self.content[
                                        self.Coffhdr.pointertosymboltable
                                        + 18 * self.Coffhdr.numberofsymbols:]:
-                print "OK for SymbolStrings"
+                print("OK for SymbolStrings")
             if str(self.Symbols) == self.content[
                                        self.Coffhdr.pointertosymboltable:
                                        self.Coffhdr.pointertosymboltable
                                        + 18 * self.Coffhdr.numberofsymbols]:
-                print "OK for Symbols"
+                print("OK for Symbols")
             """
 
-        #print repr(self.Doshdr)
-        #print repr(self.Coffhdr)
-        #print repr(self.Opthdr)
-        #print repr(self.SHList)
+        #print(repr(self.Doshdr))
+        #print(repr(self.Coffhdr))
+        #print(repr(self.Opthdr))
+        #print(repr(self.SHList))
 
-        #print repr(self.DirImport)
-        #print repr(self.DirExport)
-        #print repr(self.DirReloc)
-        #print repr(self.DirRes)
+        #print(repr(self.DirImport))
+        #print(repr(self.DirExport))
+        #print(repr(self.DirReloc))
+        #print(repr(self.DirRes))
 
     def resize(self, old, new):
         pass
@@ -491,7 +491,7 @@ class PE(object):
     virt = property(get_virt)
 
     def patch_crc(self, c, olds):
-        s = 0L
+        s = 0
         data = c[:]
         l = len(data)
         if len(c)%2:
@@ -561,7 +561,7 @@ class PE(object):
 
     def export_funcs(self):
         if not self.DirExport:
-            print 'no export dir found'
+            print('no export dir found')
             return None, None
 
         all_func = {}
@@ -605,11 +605,11 @@ if __name__ == "__main__":
     readline.parse_and_bind("tab: complete")
 
     e = PE(open(sys.argv[1]).read())
-    print repr(e.DirImport)
-    print repr(e.DirExport)
-    print repr(e.DirDelay)
-    print repr(e.DirReloc)
-    print repr(e.DirRes)
+    print(repr(e.DirImport))
+    print(repr(e.DirExport))
+    print(repr(e.DirDelay))
+    print(repr(e.DirReloc))
+    print(repr(e.DirRes))
 
     # XXX patch boundimport /!\
     e.NThdr.optentries[pe.DIRECTORY_ENTRY_BOUND_IMPORT].rva = 0
@@ -666,17 +666,17 @@ if __name__ == "__main__":
         e.DirRes.set_rva(s_myres.addr)
 
     e_str = str(e)
-    print "f1", e.DirImport.get_funcvirt('LoadStringW')
-    print "f2", e.DirExport.get_funcvirt('SetUserGeoID')
+    print("f1 %s" % e.DirImport.get_funcvirt('LoadStringW'))
+    print("f2 %s" % e.DirExport.get_funcvirt('SetUserGeoID'))
     open('out.bin', 'wb').write(e_str)
     #o = Coff(open('main.obj').read())
-    #print repr(o.Coffhdr)
-    #print repr(o.Opthdr)
-    #print repr(o.SHList)
-    #print 'numsymb', hex(o.Coffhdr.Coffhdr.numberofsymbols)
-    #print 'offset', hex(o.Coffhdr.Coffhdr.pointertosymboltable)
+    #print(repr(o.Coffhdr))
+    #print(repr(o.Opthdr))
+    #print(repr(o.SHList))
+    #print('numsymb %x'%o.Coffhdr.Coffhdr.numberofsymbols)
+    #print('offset %x'%o.Coffhdr.Coffhdr.pointertosymboltable)
     #
-    #print repr(o.Symbols)
+    #print(repr(o.Symbols))
 
     f = PE()
     open('uu.bin', 'w').write(str(f))

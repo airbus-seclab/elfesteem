@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
-from new_cstruct import CStruct
-from strpatchwork import StrPatchwork
+from .new_cstruct import CStruct, data_null, data_empty
+from .strpatchwork import StrPatchwork
 import struct
 import logging
 from collections import defaultdict
@@ -108,7 +108,7 @@ class NThdr(CStruct):
 
 
 class Shdr(CStruct):
-    _fields = [ ("name","8s"),
+    _fields = [ ("name_data","8s"),
                 ("size","u32"),
                 ("addr","u32"),
                 ("rawsize","u32"),
@@ -118,6 +118,12 @@ class Shdr(CStruct):
                 ("numberofrelocations","u16"),
                 ("numberoflinenumbers","u16"),
                 ("flags","u32") ]
+    def get_name(self):
+        if type(self.name_data) == str: return self.name_data
+        return str(self.name_data, encoding='latin1')
+    def set_name(self, value):
+        TODO
+    name = property(get_name, set_name)
 
 
 class SHList(CStruct):
@@ -139,7 +145,7 @@ class SHList(CStruct):
                     s_last = s
             offset = s_last.offset+s_last.rawsize
         else:
-            s_null = str(Shdr.unpack(0x100*"\x00"))
+            s_null = str(Shdr.unpack(0x100*data_null))
             offset = self.parent_head.Doshdr.lfanew+len(self.parent_head.NTsig)+len(self.parent_head.Coffhdr)+self.parent_head.Coffhdr.sizeofoptionalheader + len(str(self.parent_head.SHList)+s_null)
             addr = 0x2000
         #round addr
@@ -161,7 +167,7 @@ class SHList(CStruct):
         s.data = data
 
         if s.rawsize > len(data):
-            s.data = s.data+'\x00'*(s.rawsize-len(data))
+            s.data = s.data+data_null*(s.rawsize-len(data))
             s.size = s.rawsize
         c = StrPatchwork()
         c[0] = s.data
@@ -198,7 +204,7 @@ class SHList(CStruct):
     def __repr__(self):
         rep = ["#  section         offset   size   addr     flags   rawsize  "]
         for i,s in enumerate(self):
-            l = "%-15s"%s.name.strip('\x00')
+            l = "%-15s"%s.name.strip(data_null)
             l+="%(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x" % s
             l = ("%2i " % i)+ l
             rep.append(l)
@@ -226,7 +232,7 @@ class DescName(CStruct):
             ofname = of
         else:
             ofname = self.parent_head.rva2off(of)
-        name = self.parent_head[ofname:self.parent_head._content.find('\x00', ofname)]
+        name = self.parent_head[ofname:self.parent_head._content.find(data_null, ofname)]
         return name, of+len(name)+1
     def sets(self, value):
         return str(value)+"\x00"
@@ -260,8 +266,8 @@ class struct_array(object):
                                  c.parent_head._sex,
                                  c.parent_head._wsize)
             if num == None:
-                if s[of:of+l] == '\x00'*l:
-                    self.end = '\x00'*l
+                if s[of:of+l] == data_null*l:
+                    self.end = data_null*l
                     break
             self.l.append(e)
             of += l
@@ -295,7 +301,7 @@ class DirImport(CStruct):
         if self.parent_head._wsize == 32:
             mask_ptr = 0x80000000
         elif self.parent_head._wsize == 64:
-            mask_ptr = 0x8000000000000000L
+            mask_ptr = 0x8000000000000000
 
         for i, d in enumerate(out):
             d.dlldescname = DescName.unpack(s, d.name, self.parent_head)
@@ -319,7 +325,7 @@ class DirImport(CStruct):
                 tmp_thunk = d.firstthunks
             else:
                 raise ValueError("no thunk!!")
-            for i in xrange(len(tmp_thunk)):
+            for i in range(len(tmp_thunk)):
                 if tmp_thunk[i].rva&mask_ptr == 0:
                     try:
                         n = ImportByName.unpack(s,
@@ -451,7 +457,7 @@ class DirImport(CStruct):
         if self.parent_head._wsize == 32:
             mask_ptr = 0x80000000
         elif self.parent_head._wsize == 64:
-            mask_ptr = 0x8000000000000000L
+            mask_ptr = 0x8000000000000000
         new_impdesc = []
         of1 = None
         for nd, fcts in new_dll:
@@ -761,7 +767,7 @@ class DirDelay(CStruct):
         if self.parent_head._wsize == 32:
             mask_ptr = 0x80000000
         elif self.parent_head._wsize == 64:
-            mask_ptr = 0x8000000000000000L
+            mask_ptr = 0x8000000000000000
 
         parent = self.parent_head
         for i, d in enumerate(out):
@@ -792,8 +798,7 @@ class DirDelay(CStruct):
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
             else:
-                print  ValueError("no thunk in delay dir!! ")
-                return
+                raise ValueError("no thunk in delay dir!! ")
             for i in xrange(len(tmp_thunk)):
                 if tmp_thunk[i].rva&mask_ptr == 0:
                     n = ImportByName.unpack(s,
@@ -802,7 +807,7 @@ class DirDelay(CStruct):
                     d.impbynames.append(n)
                 else:
                     d.impbynames.append(isfromva(tmp_thunk[i].rva&(mask_ptr-1)))
-                    #print repr(d[-1])
+                    #print(repr(d[-1]))
                     #raise ValueError('XXX to check')
         return out, of
 
@@ -903,7 +908,7 @@ class DirDelay(CStruct):
         if self.parent_head._wsize == 32:
             mask_ptr = 0x80000000
         elif self.parent_head._wsize == 64:
-            mask_ptr = 0x8000000000000000L
+            mask_ptr = 0x8000000000000000
         new_impdesc = []
         of1 = None
         for nd, fcts in new_dll:
@@ -1148,7 +1153,7 @@ class DirReloc(CStruct):
             while i < len(rel.rels):
                 r = rel.rels[i]
                 if r.rel[0] != 0 and r.rel[1]+of1 in taboffset:
-                    print 'del reloc', hex(r.rel[1]+of1)
+                    print('del reloc %x' % r.rel[1]+of1)
                     del rel.rels[i]
                     rel.size-=Reloc._size
                 else:
@@ -1401,7 +1406,7 @@ class ResEntry(CStruct):
     def setn(self, v):
         name = v
         if self.name_s:
-            name=(self.name-self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_RESOURCE].rva)+0x80000000L
+            name=(self.name-self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_RESOURCE].rva)+0x80000000
         return struct.pack('I', name)
 
     def geto(self, s, of):
@@ -1459,17 +1464,18 @@ class CoffSymbol(CStruct):
                          lambda c, value:c.setaux(value))) ]
     def getname(self, s, of):
         name = s[of:of+8]
-        if name[0:4] == '\0\0\0\0':
+        if name[0:4] == data_null*4:
             name = self.parent_head.parent_head.SymbolStrings.getby_offset(struct.unpack('<I', name[4:8])[0])
         else:
-            name = name.strip('\0')
+            name = name.strip(data_null)
+        if type(name) != str: name = str(name, encoding='latin1')
         return name, of+8
     def setname(self, value):
         if len(value) > 8:
             of = self.parent_head.parent_head.SymbolStrings.add(value)
             return struct.pack("<II", 0, of)
         else:
-            value += '\0\0\0\0\0\0\0\0'
+            value += data_null*8
             return value[0:8]
     def getaux(self, s, of):
         aux = []
@@ -1516,17 +1522,18 @@ class SymbolAuxFile(CStruct):
                           lambda c, value:c.setname(value)))]
     def getname(self, s, of):
         name = s[of:of+18]
-        if name[0:4] == '\0\0\0\0':
+        if name[0:4] == data_null*4:
             name = self.parent_head.parent_head.SymbolStrings.getby_offset(struct.unpack('<I', name[4:8])[0])
         else:
-            name = name.strip('\0')
+            name = name.strip(data_null)
+        if type(name) != str: name = str(name, encoding='latin1')
         return name, of+18
     def setname(self, value):
         if len(value) > 18:
             of = self.parent_head.parent_head.SymbolStrings.add(value)
             return struct.pack("<IIIIH", 0, of, 0, 0, 0)
         else:
-            value += '\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0'
+            value += data_null*18
             return value[0:18]
 
 class SymbolAuxFunc(CStruct):
@@ -1710,6 +1717,6 @@ constants = {
   'IMAGE_SYM_TYPE'  : {},
   'IMAGE_SYM_DTYPE' : {},
   }
-for type in constants.keys():
-    for val in filter(lambda x:x[:len(type)+1]==type+"_", globals().keys()):
-        constants[type][globals()[val]] = val[len(type)+1:]
+for t in constants.keys():
+    for v in [v for v in globals().keys() if v[:len(t)+1]==t+"_"]:
+        constants[t][globals()[v]] = v[len(t)+1:]

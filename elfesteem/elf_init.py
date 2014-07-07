@@ -96,7 +96,7 @@ wsize = parent.wsize)
         self.parent=parent
         self.phparent=None
         self.sh=sh
-        self._content=""
+        self._content=StrPatchwork()
         inherit_sex_wsize(self, parent, {})
     def __repr__(self):
         r = "{%(name)s ofs=%(offset)#x sz=%(size)#x addr=%(addr)#010x}" % self.sh
@@ -448,7 +448,7 @@ class virt(object):
         return self.rvaitems2binary(rva_items)
 
     def rvaitems2binary(self, rva_items):
-        data_out = ""
+        data_out = struct.pack("")
         for s, n_item in rva_items:
             if not isinstance(s, ProgramHeader):
                 data_out += s.content[n_item]

@@ -3,6 +3,10 @@
 import struct
 import re
 
+# To be compatible with python 2 and python 3
+data_empty = struct.pack("")
+data_null = struct.pack("B",0)
+
 type_size = {}
 size2type = {}
 size2type_s = {}
@@ -62,6 +66,9 @@ all_cstructs = {}
 class Cstruct_Metaclass(type):
     _prefix = "_field_"
     def __new__(cls, name, bases, dct):
+        if name == 'CStructBase':
+            o = type.__new__(cls, name, bases, dct)
+            return o
         for fields in dct['_fields']:
             fname = fields[0]
             if fname in ['parent', 'parent_head']:
@@ -117,7 +124,7 @@ class Cstruct_Metaclass(type):
                     of2 = of1+struct.calcsize(fmt)
                     value = struct.unpack(c.sex+fmt, s[of1:of2])[0]
             elif ffmt == "sz": # null terminated special case
-                of2 = s.find('\x00', of1)
+                of2 = s.find(data_null, of1)
                 if of2 == -1:
                     raise ValueError('no null char in string!')
                 of2 += 1
@@ -153,8 +160,8 @@ class Cstruct_Metaclass(type):
                             parent_head = parent_head, _sex=_sex, _wsize=_wsize)
         return c
 
-class CStruct(object):
-    __metaclass__ = Cstruct_Metaclass
+CStructBase = Cstruct_Metaclass('CStructBase', (object,), {})
+class CStruct(CStructBase):
     _packformat = ""
     _fields = []
 
@@ -184,7 +191,7 @@ class CStruct(object):
                 self.__dict__[CStruct._prefix+k] = v
 
     def pack(self):
-        out = ''
+        out = data_empty
         for field in self._fields:
             cpt = None
             if len(field) == 2:
@@ -198,19 +205,19 @@ class CStruct(object):
                 fmt = real_fmt(ffmt, self.wsize)
                 if cpt == None:
                     if value == None:
-                        o = struct.calcsize(fmt)*"\x00"
+                        o = struct.calcsize(fmt)*data_null
                     else:
                         o = struct.pack(self.sex+fmt, value)
                 else:
                     o = ""
                     for v in value:
                         if value == None:
-                            o += struct.calcsize(fmt)*"\x00"
+                            o += struct.calcsize(fmt)*data_null
                         else:
                             o += struct.pack(self.sex+fmt, v)
 
             elif ffmt == "sz": # null terminated special case
-                o = value+'\x00'
+                o = value+data_null
             elif ffmt in all_cstructs:
                 # sub structures
                 if cpt == None:
@@ -307,24 +314,24 @@ if __name__ == "__main__":
                    ("k", "u16"),
                    ]
 
-    print all_cstructs
+    print(all_cstructs)
 
     s1 = struct.pack('HHI', 1111, 2222, 333333333)
     c = c1.unpack(s1)
-    print repr(c)
+    print(repr(c))
     assert len(c) == 8
     s2 = str(c)
     assert s1 == s2
-    print repr(s2)
-    print repr(c1.unpack(s2))
+    print(repr(s2))
+    print(repr(c1.unpack(s2)))
 
     s3 = struct.pack('HHI', 4444, 5555, 666666666)+s2
-    print repr(s3)
+    print(repr(s3))
     assert len(s3) == 16
     c = c2.unpack(s3)
-    print repr(c)
+    print(repr(c))
     s4 = str(c)
-    print repr(s3), repr(s4)
+    print("%r %r"%(s3,s4))
     assert s3 == s4
     assert c.c2_c.parent_head == c
 
@@ -332,13 +339,13 @@ if __name__ == "__main__":
     s5 = struct.pack('HHH', 2, 5555, 6666)+s1*2+struct.pack('H', 9999)
     c = c3.unpack(s5)
     assert len(c) == 24
-    print repr(c)
-    print c.b
-    print c.c
-    print c.c[0].c1_field1
+    print(repr(c))
+    print(c.b)
+    print(c.c)
+    print(c.c[0].c1_field1)
 
     s6 = str(c)
-    print repr(s5), repr(s6)
+    print("%r %r"%(s5,s6))
     assert s5 == s6
 
     c = c1()
@@ -349,23 +356,23 @@ if __name__ == "__main__":
 
     s7 = struct.pack('H', 8888)+"fffff\x00"+struct.pack('H', 9999)
     c = c4.unpack(s7)
-    print repr(c)
-    print repr(c.e)
-    print repr(c.f)
+    print(repr(c))
+    print(repr(c.e))
+    print(repr(c.f))
 
-    print repr(s7)
-    print repr(str(c))
+    print(repr(s7))
+    print(repr(str(c)))
     assert s7 == str(c)
 
     s8 = struct.pack('H4s', 8888, "abcd")
     c = c5.unpack(s8)
-    print repr(c)
+    print(repr(c))
     assert s8 == str(c)
 
 
     s9 = struct.pack('H', 9999)+ "toto\x00" + struct.pack('H', 1010)
-    print repr(s9)
+    print(repr(s9))
     c = c6.unpack(s9)
-    print repr(c), repr(str(c))
+    print("%r %r"%(c,str(c)))
     assert s9 == str(c)
 
