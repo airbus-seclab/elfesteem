@@ -1,5 +1,6 @@
 from array import array
 # To be compatible with python 2 and python 3
+import sys
 import struct
 data_null = struct.pack("B",0)
 data_empty = struct.pack("")
@@ -37,6 +38,8 @@ class StrPatchwork(object):
     def __setitem__(self, item, val):
         if val == None:
             return
+        if sys.version_info[0] >= 3 and type(val) == str:
+            val = val.encode(encoding="latin1")
         val = array("B",val)
         if type(item) is not slice:
             item = slice(item, item+len(val))
@@ -53,7 +56,7 @@ class StrPatchwork(object):
     def __len__(self):
         return len(self.s)
     def __contains__(self, val):
-        return val in str(self)
+        return val in self.pack()
     def __iadd__(self, other):
         self.s.extend(array("B", other))
         return self

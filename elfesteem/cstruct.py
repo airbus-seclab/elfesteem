@@ -50,7 +50,7 @@ class CStruct(object):
     class __metaclass__(type):
         _prefix = "_field_"
         def __new__(cls, name, bases, dct):
-            for fname, ftype in dct['_fields']:
+            for fname, ftype in dct.get('_fields',[]):
                 dct[fname] = property(
                     dct.pop("get_"+fname,
                         lambda self,fname=fname:   getattr(self,cls._prefix+fname)),
@@ -86,15 +86,15 @@ class CStruct(object):
         self._size = struct.calcsize(self._packstring)
 
         self._names = [x[0] for x in self._fields]
-        if 'content' in kargs:
-            s = kargs['content']
-            s += data_null*self._size
-            s = s[:self._size]            
-            self.unpack(s)
+        s = kargs.get('content', data_null)
+        s += data_null*self._size
+        s = s[:self._size]            
+        self.unpack(s)
         kargs = kargs.copy()
         for f in ['parent', 'sex', 'wsize', 'content']:
             kargs.pop(f, None)
-        self.__dict__.update(kargs)
+        for n, v in kargs.items():
+            setattr(self, n, v)
 
     def unpack(self,s):
         disas = struct.unpack(self._packstring, s)

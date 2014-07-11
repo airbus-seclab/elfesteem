@@ -18,8 +18,17 @@ class Ehdr(CStruct):
                 ("shnum","u16"),
                 ("shstrndx","u16") ]
 
+class CStructWithStrTable(CStruct):
+    def get_name(self):
+        return self.strtab.get_name(self.name_idx)
+    def set_name(self, name):
+        if self.name_idx == 0:
+            self.name_idx = self.strtab.add_name(name)
+        else:
+            self.strtab.mod_name(self.name_idx, name)
+    name = property(get_name, set_name)
 
-class Shdr(CStruct):
+class Shdr(CStructWithStrTable):
     _fields = [ ("name_idx","u32"),
                 ("type","u32"),
                 ("flags","ptr"),
@@ -30,12 +39,9 @@ class Shdr(CStruct):
                 ("info","u32"),
                 ("addralign","ptr"),
                 ("entsize","ptr") ]
-    def get_name(self):
-        return self._parent.shstrtab.get_name(self.name_idx)
-    def set_name(self, new_name):
-        name = self._parent.shstrtab.get_name(self.name_idx)
-        self._parent.shstrtab.mod_name(name, new_name)
-    name = property(get_name, set_name)
+    @property
+    def strtab(self):
+        return self._parent.shstrtab
 
 class Phdr32(CStruct):
     _fields = [ ("type","u32"),
@@ -57,8 +63,7 @@ class Phdr64(CStruct):
                 ("memsz","ptr"),
                 ("align","ptr") ]
 
-
-class Sym32(CStruct):
+class Sym32(CStructWithStrTable):
     _fields = [ ("name_idx","u32"),
                 ("value","u32"),
                 ("size","u32"),
@@ -66,8 +71,8 @@ class Sym32(CStruct):
                 ("other","u08"),
                 ("shndx","u16") ]
     @property
-    def name(self):
-        return self._parent.linksection.get_name(self.name_idx)
+    def strtab(self):
+        return self._parent.linksection
 
 class Sym64(Sym32):
     _fields = [ ("name_idx","u32"),

@@ -70,6 +70,10 @@ wsize = parent.wsize)
             self.phparent.resize(self, new-old)
     def parse_content(self):
         pass
+    def pack(self):
+        data = self.content
+        if type(data) != str: data = data.pack()
+        return data
     def get_linksection(self):
         return self.parent[self.sh.link]
     def set_linksection(self, val):
@@ -92,12 +96,14 @@ wsize = parent.wsize)
     def get_shstrtab(self):
         return self.parent._shstrtab
     shstrtab = property(get_shstrtab)
-    def __init__(self, parent, sh=None):
+    def __init__(self, parent, sh=None, **kargs):
         self.parent=parent
         self.phparent=None
+        inherit_sex_wsize(self, parent, {})
+        if sh is None:
+            sh = elf.Shdr(parent=self, type=self.sht, **kargs)
         self.sh=sh
         self._content=StrPatchwork()
-        inherit_sex_wsize(self, parent, {})
     def __repr__(self):
         r = "{%(name)s ofs=%(offset)#x sz=%(size)#x addr=%(addr)#010x}" % self.sh
         return r
@@ -190,37 +196,48 @@ class Dynamic(Section):
 import sys
 if sys.version_info[0] < 3:
     bytes_to_name = lambda s: s
+    name_to_bytes = lambda s: s
 else:
     bytes_to_name = lambda s: s.decode(encoding="latin1")
+    name_to_bytes = lambda s: s.encode(encoding="latin1")
+data_null = struct.pack("B",0)
 
 class StrTable(Section):
     sht = elf.SHT_STRTAB
 
-    def get_name(self, ofs):
-        n = bytes_to_name(self.content[ofs:])
-        n = n[:n.find("\0")]
-        return n
+    def get_name(self, idx):
+        n = self.content[idx:]
+        n = n[:n.find(data_null)]
+        return bytes_to_name(n)
 
     def add_name(self, name):
-        if name in self.content:
+        name = name_to_bytes(name)
+        if data_null+name+data_null in self.content:
             return self.content.find(name)
-        n = len(self.content)
-        self.content = str(self.content)+name+"\0"
-        return n
+        data = self.content
+        if type(data) != str: data = data.pack()
+        idx = len(data)
+        self.content = data+name+data_null
+        for sh in self.parent.shlist:
+            if sh.sh.offset > self.sh.offset:
+                sh.sh.offset += len(name)+1
+        return idx
 
-    def mod_name(self, name, new_name):
-        s = str(self.content)
-        if not name in s:
-            raise ValueError('unknown name', name)
-        s = s.replace('\x00'+name+'\x00', '\x00'+new_name+'\x00')
-        self.content = s
-        if len(name) != len(new_name):
-            dif = len(new_name) - len(name)
-            idx = s.find(new_name)
+    def mod_name(self, idx, name):
+        name = name_to_bytes(name)
+        n = self.content[idx:]
+        n = n[:n.find(data_null)]
+        data = self.content
+        if type(data) != str: data = data.pack()
+        data = data[:idx]+name+data[idx+len(n):]
+        dif = len(name) - len(n)
+        if dif != 0:
             for sh in self.parent.shlist:
                 if sh.sh.name_idx > idx:
                     sh.sh.name_idx += dif
-        return len(self.content)
+                if sh.sh.offset > self.sh.offset:
+                    sh.sh.offset += dif
+        return idx
 
 class SymTable(Section):
     sht = elf.SHT_SYMTAB
@@ -239,6 +256,18 @@ class SymTable(Section):
         if type(item) is str:
             return self.symbols[item]
         return self.symtab[item]
+    def __setitem__(self,item,val):
+        if not isinstance(val, elf.Sym32):
+            raise ValueError("Cannot set SymTable item to %r"%val)
+        if not hasattr(self, 'symtab'):
+            self.symtab=[]
+        if item >= len(self.symtab):
+            self.symtab.extend([None for i in range(item+1-len(self.symtab))])
+        self.symtab[item] = val
+        self.content[item*self.sh.entsize] = val.pack()
+        if val.info>>4 == elf.STB_LOCAL and item >= self.sh.info:
+            # One greater than the symbol table index of the last local symbol
+            self.sh.info = item+1
 
 class DynSymTable(SymTable):
     sht = elf.SHT_DYNSYM
@@ -322,10 +351,10 @@ class SHList(object):
     def __str__(self):
         raise AttributeError("Use pack() instead of str()")
     def pack(self):
-        c = []
+        c = struct.pack("")
         for s in self.shlist:
-            c.append(s.sh.pack())
-        return "".join(c)
+            c += s.sh.pack()
+        return c
     def resize(self, sec, diff):
         for s in self.shlist:
             if s.sh.offset > sec.sh.offset:
@@ -395,10 +424,10 @@ class PHList(object):
     def __str__(self):
         raise AttributeError("Use pack() instead of str()")
     def pack(self):
-        c = []
+        c = struct.pack("")
         for p in self.phlist:
-            c.append(p.ph.pack())
-        return "".join(c)
+            c += p.ph.pack()
+        return c
     def resize(self, sec, diff):
         for p in self.phlist:
             if p.ph.offset > sec.sh.offset:
@@ -518,21 +547,136 @@ class virt(object):
             offset = 0
         return -1
 
-import sys
-if sys.version_info[0] < 3:
-    def py23_ord(v):
-        return ord(v)
-else:
-    def py23_ord(v):
-        return v
+def elf_default_content(self, **kargs):
+    if self.Ehdr.type == elf.ET_REL:
+        elf_default_content_reloc(self, **kargs)
+
+def elf_default_content_reloc(self, **kargs):
+    # Create the Section header string table, which contains the names
+    # of the sections
+    self.sh._shstrtab = StrTable(self.sh, addralign = 1)
+    self.sh._shstrtab.content[0] = '\0'
+    symtab = SymTable(self.sh, addralign = 4, entsize = 16)
+    strtab = StrTable(self.sh, addralign = 1)
+    symtab.sh.name = ".symtab"
+    strtab.sh.name = ".strtab"
+    self.sh._shstrtab.sh.name = ".shstrtab"
+    # Create the Section Header List
+    sections = kargs.get('sections',[".text"])
+    relocs = kargs.get('relocs',[])
+    self.sh.shlist.append(NullSection(self.sh))
+    for name in sections:
+        flags = {}
+        if name == ".text":
+            SectionType = ProgBits
+            flags['addralign'] = 4
+            flags['flags'] = elf.SHF_ALLOC|elf.SHF_EXECINSTR
+        if name == ".data":
+            SectionType = ProgBits
+            flags['addralign'] = 4
+            flags['flags'] = elf.SHF_ALLOC|elf.SHF_WRITE
+        if name == ".bss":
+            SectionType = NoBitsSection
+            flags['addralign'] = 4
+            flags['flags'] = elf.SHF_ALLOC|elf.SHF_WRITE
+        if name == ".rodata":
+            SectionType = ProgBits
+            flags['addralign'] = 1
+            flags['flags'] = elf.SHF_ALLOC
+        if name == ".eh_frame":
+            SectionType = ProgBits
+            flags['addralign'] = 4
+            flags['flags'] = elf.SHF_ALLOC
+        if name == ".comment":
+            SectionType = ProgBits
+            flags['addralign'] = 1
+            flags['entsize'] = 1
+            flags['flags'] = elf.SHF_MERGE|elf.SHF_STRINGS
+        if name == ".note.GNU-stack":
+            SectionType = ProgBits
+            flags['addralign'] = 1
+        if not name in relocs:
+            flags['name'] = name
+        self.sh.shlist.append(SectionType(self.sh, **flags))
+        if name in relocs:
+            flags = { 'name': ".rel"+name, 'addralign': 4, 'entsize': 8 }
+            flags['info'] = len(self.sh.shlist)-1
+            self.sh.shlist.append(RelTable(self.sh, **flags))
+            self.sh.shlist[-2].sh.name_idx = self.sh.shlist[-1].sh.name_idx+4
+    self.sh.shlist.append(self.sh._shstrtab)
+    self.sh.shlist.append(symtab)
+    self.sh.shlist.append(strtab)
+    # Automatically generate some values
+    self.Ehdr.shstrndx = self.sh.shlist.index(self.sh._shstrtab)
+    self.Ehdr.shnum = len(self.sh.shlist)
+    symtab.sh.link = self.sh.shlist.index(strtab)
+    for s in self.sh.shlist:
+        if isinstance(s, RelTable):
+            s.sh.link = self.sh.shlist.index(symtab)
+    # Note that all sections are empty, and therefore the section offsets
+    # and sizes are invalid
+    # elf_set_offsets() should take care of that
+
+def elf_set_offsets(self):
+    if self.Ehdr.shoff != 0:
+        return
+    if self.Ehdr.type != elf.ET_REL:
+        # TODO
+        return
+    # Set offsets; the standard section layout is not the order of the shlist
+    s = self.getsectionbyname("")
+    s.sh.offset = 0
+    pos = self.Ehdr.ehsize
+    section_layout = [".text", ".data", ".bss", ".rodata", ".comment",
+                      ".note.GNU-stack", ".eh_frame" ]
+    section_layout = section_layout \
+        + [ ".shstrtab", None, ".symtab", ".strtab"] \
+        + [ ".rel"+name for name in section_layout ]
+    for name in section_layout:
+        if name == None:
+            pos = ((pos + 3)//4)*4
+            self.Ehdr.shoff = pos
+            self.Ehdr.shentsize = len(self.sh._shstrtab.sh)
+            pos += self.Ehdr.shnum * self.Ehdr.shentsize
+            continue
+        s = self.getsectionbyname(name)
+        if s == None:
+            continue
+        align = s.sh.addralign
+        s.sh.offset = ((pos + align-1)//align)*align
+        s.sh.size = len(s.content)
+        pos = s.sh.offset
+        if name != ".bss": pos += s.sh.size
 
 # ELF object
 class ELF(object):
-    def __init__(self, elfstr):
+    def __init__(self, elfstr = None, **kargs):
+        self._virt = virt(self)
+        if elfstr is None:
+            # Create an ELF file, with default header values
+            # kargs can supersede these default values
+            self.wsize = kargs.get('wsize', 32)
+            self.sex = kargs.get('sex', '<')
+            self.Ehdr = elf.Ehdr(parent=self)
+            self.Ehdr.ident = struct.pack("16B",
+                0x7f,0x45,0x4c,0x46, # magic number, \x7fELF
+                {32:1, 64:2}[self.wsize], # EI_CLASS
+                {'<':1,'>':2}[self.sex],  # EI_DATA
+                1, # EI_VERSION
+                0, # EI_OSABI
+                0, # EI_ABIVERSION
+                0,0,0,0,0,0,0)
+            self.Ehdr.version = 1
+            self.Ehdr.type = kargs.get('e_type', elf.ET_REL)
+            self.Ehdr.machine = kargs.get('e_machine', elf.EM_386)
+            self.Ehdr.ehsize = len(self.Ehdr)
+            self.sh = SHList(parent=self)
+            self.ph = PHList(parent=self)
+            elf_default_content(self, **kargs)
+            return
         self._content = elfstr
         self.parse_content()
         self.check_coherency()
-        self._virt = virt(self)
 
     def get_virt(self):
         return self._virt
@@ -541,8 +685,9 @@ class ELF(object):
     content = ContentManager()
     def parse_content(self):
         h = self.content[:8]
-        self.wsize = py23_ord(h[4])*32
-        self.sex   = {1:'<', 2:'>'} [py23_ord(h[5])]
+        if type(h) == str: h = struct.unpack("B"*8, h)
+        self.wsize = h[4]*32
+        self.sex   = {1:'<', 2:'>'} [h[5]]
         self.Ehdr = elf.Ehdr(parent=self, content=self.content)
         self.sh = SHList(parent=self)
         self.ph = PHList(parent=self)
@@ -552,13 +697,12 @@ class ELF(object):
         return self.content[item]
 
     def build_content(self):
+        elf_set_offsets(self)
         c = StrPatchwork()
         c[0] = self.Ehdr.pack()
         c[self.Ehdr.phoff] = self.ph.pack()
         for s in self.sh:
-            data = s.content
-            if type(data) != str: data = data.pack()
-            c[s.sh.offset] = data
+            c[s.sh.offset] = s.pack()
         c[self.Ehdr.shoff] = self.sh.pack()
         return c.pack()
 
