@@ -567,22 +567,34 @@ def elf_default_content_reloc(self, **kargs):
     self.sh.shlist.append(NullSection(self.sh))
     for name in sections:
         flags = {}
-        if name == ".text":
+        if name.startswith(".text"):
             SectionType = ProgBits
             flags['addralign'] = 4
             flags['flags'] = elf.SHF_ALLOC|elf.SHF_EXECINSTR
-        if name == ".data":
+            if name.startswith(".text.startup"):
+                flags['addralign'] = 16
+        if name.startswith(".data"):
             SectionType = ProgBits
             flags['addralign'] = 4
             flags['flags'] = elf.SHF_ALLOC|elf.SHF_WRITE
-        if name == ".bss":
+        if name.startswith(".bss"):
             SectionType = NoBitsSection
             flags['addralign'] = 4
             flags['flags'] = elf.SHF_ALLOC|elf.SHF_WRITE
-        if name == ".rodata":
+        if name.startswith(".rodata"):
             SectionType = ProgBits
             flags['addralign'] = 1
             flags['flags'] = elf.SHF_ALLOC
+            if name.startswith(".rodata."):
+                flags['flags'] |= elf.SHF_MERGE
+            if name.startswith(".rodata.str"):
+                flags['flags'] |= elf.SHF_STRINGS
+                flags['entsize'] = 1
+            if name.startswith(".rodata.str1.4"):
+                flags['addralign'] = 4
+            if name.startswith(".rodata.cst4"):
+                flags['entsize'] = 4
+                flags['addralign'] = 4
         if name == ".eh_frame":
             SectionType = ProgBits
             flags['addralign'] = 4
@@ -627,8 +639,10 @@ def elf_set_offsets(self):
     s = self.getsectionbyname("")
     s.sh.offset = 0
     pos = self.Ehdr.ehsize
-    section_layout = [".text", ".data", ".bss", ".rodata", ".comment",
-                      ".note.GNU-stack", ".eh_frame" ]
+    section_layout = [".text", ".data", ".bss"]
+    section_layout += [ s.sh.name for s in self.sh.shlist if s.sh.name.startswith(".rodata") ]
+    section_layout += [ s.sh.name for s in self.sh.shlist if s.sh.name.startswith(".text.") ]
+    section_layout += [ ".comment", ".note.GNU-stack", ".eh_frame" ]
     section_layout = section_layout \
         + [ ".shstrtab", None, ".symtab", ".strtab"] \
         + [ ".rel"+name for name in section_layout ]
