@@ -115,6 +115,25 @@ def display_sections(e):
                          sh.sh.size, sh.sh.entsize, flags,
                          sh.sh.link, sh.sh.info, sh.sh.addralign))
 
+def display_groups(e):
+    for i, sh in enumerate(e.sh):
+        if sh.sh.type == elf.SHT_GROUP:
+            if sh.flags == elf.GRP_COMDAT: flags = 'COMDAT'
+            else: flags = ''
+            symbol = e.sh[sh.sh.link]
+            if not symbol.sh.type == elf.SHT_SYMTAB:
+                print("readelf: Error: Bad sh_link in group section `%s'"%sh.sh.name)
+                continue
+            symbol = symbol[sh.sh.info].name
+            print("%s group section [%4d] `%s' [%s] contains %d sections:"%(
+                flags,i,sh.sh.name,symbol,len(sh.sections)))
+            format = "   [%5s]   %s"
+            print(format%('Index',' Name'))
+            for s in sh.sections:
+                print(format%(s,e.sh[s].sh.name))
+                if not (e.sh[s].sh.flags & elf.SHF_GROUP):
+                    print("No SHF_GROUP in %s"%e.sh[s].sh.name)
+
 def display_symbols(e, table_name):
     # Output format similar to readelf -s or readelf --dyn-syms
     if not table_name in e.sh.__dict__:
@@ -147,6 +166,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', dest='options', action='append_const', const='symtab',   help='Symbol table')
     parser.add_argument('-d', dest='options', action='append_const', const='dynsym',   help='Dynamic symbols')
     parser.add_argument('-l', dest='options', action='append_const', const='program',   help='Program headers')
+    parser.add_argument('-g', dest='options', action='append_const', const='groups',   help='Section groups')
     parser.add_argument('file', nargs='+', help='ELF file(s)')
     args = parser.parse_args()
     if args.options == None:
@@ -168,3 +188,5 @@ if __name__ == '__main__':
             display_symbols(e, 'dynsym')
         if 'program' in args.options:
             display_program_headers(e)
+        if 'groups' in args.options:
+            display_groups(e)

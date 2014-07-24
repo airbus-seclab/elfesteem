@@ -140,6 +140,24 @@ class FiniArray(Section):
 
 class GroupSection(Section):
     sht = elf.SHT_GROUP
+    def get_flags(self):
+        flags, = struct.unpack("I", self.content[:4])
+        return flags
+    def get_sections(self):
+        l = len(self.content)/4 - 1
+        sections = struct.unpack("I"*l, self.content[4:])
+        return sections
+    def set_flags(self, value):
+        self.content[0] = struct.pack("I", value)
+    def set_sections(self, value):
+        for idx in self.sections:
+            self.parent.shlist[idx].sh.flags &= ~elf.SHF_GROUP
+        for idx in value:
+            self.parent.shlist[idx].sh.flags |= elf.SHF_GROUP
+            self.parent.shlist[idx].sh.addralign = 1
+        self.content[4] = struct.pack("I"*len(value), *value)
+    flags = property(get_flags, set_flags)
+    sections = property(get_sections, set_sections)
 
 class SymTabSHIndeces(Section):
     sht = elf.SHT_SYMTAB_SHNDX
@@ -261,9 +279,11 @@ class SymTable(Section):
             raise ValueError("Cannot set SymTable item to %r"%val)
         if not hasattr(self, 'symtab'):
             self.symtab=[]
+            self.symbols={}
         if item >= len(self.symtab):
             self.symtab.extend([None for i in range(item+1-len(self.symtab))])
         self.symtab[item] = val
+        self.symbols[val.name] = val
         self.content[item*self.sh.entsize] = val.pack()
         if val.info>>4 == elf.STB_LOCAL and item >= self.sh.info:
             # One greater than the symbol table index of the last local symbol
@@ -607,6 +627,10 @@ def elf_default_content_reloc(self, **kargs):
         if name == ".note.GNU-stack":
             SectionType = ProgBits
             flags['addralign'] = 1
+        if name == ".group":
+            SectionType = GroupSection
+            flags['addralign'] = 4
+            flags['entsize'] = 4
         if not name in relocs:
             flags['name'] = name
         self.sh.shlist.append(SectionType(self.sh, **flags))
@@ -623,7 +647,7 @@ def elf_default_content_reloc(self, **kargs):
     self.Ehdr.shnum = len(self.sh.shlist)
     symtab.sh.link = self.sh.shlist.index(strtab)
     for s in self.sh.shlist:
-        if isinstance(s, RelTable):
+        if isinstance(s, RelTable) or isinstance(s, GroupSection):
             s.sh.link = self.sh.shlist.index(symtab)
     # Note that all sections are empty, and therefore the section offsets
     # and sizes are invalid
@@ -639,8 +663,9 @@ def elf_set_offsets(self):
     s = self.getsectionbyname("")
     s.sh.offset = 0
     pos = self.Ehdr.ehsize
-    section_layout = [".text", ".data", ".bss"]
+    section_layout = [".group", ".text", ".data", ".bss"]
     section_layout += [ s.sh.name for s in self.sh.shlist if s.sh.name.startswith(".rodata") ]
+    section_layout += [ s.sh.name for s in self.sh.shlist if s.sh.name.startswith(".data.") ]
     section_layout += [ s.sh.name for s in self.sh.shlist if s.sh.name.startswith(".text.") ]
     section_layout += [ ".comment", ".note.GNU-stack", ".eh_frame" ]
     section_layout = section_layout \
@@ -653,14 +678,19 @@ def elf_set_offsets(self):
             self.Ehdr.shentsize = len(self.sh._shstrtab.sh)
             pos += self.Ehdr.shnum * self.Ehdr.shentsize
             continue
-        s = self.getsectionbyname(name)
-        if s == None:
-            continue
-        align = s.sh.addralign
-        s.sh.offset = ((pos + align-1)//align)*align
-        s.sh.size = len(s.content)
-        pos = s.sh.offset
-        if name != ".bss": pos += s.sh.size
+        for s in self.getsectionsbyname(name):
+            align = s.sh.addralign
+            s.sh.offset = ((pos + align-1)//align)*align
+            s.sh.size = len(s.content)
+            pos = s.sh.offset
+            if name != ".bss": pos += s.sh.size
+    for s in self.sh.shlist[1:]:
+        if s.sh.offset == 0:
+            align = s.sh.addralign
+            s.sh.offset = ((pos + align-1)//align)*align
+            s.sh.size = len(s.content)
+            pos = s.sh.offset
+        
 
 # ELF object
 class ELF(object):
@@ -750,12 +780,12 @@ class ELF(object):
     def pack(self):
         return self.build_content()
 
+    def getsectionsbyname(self, name):
+        return [s for s in self.sh if s.sh.name.strip('\x00') == name]
     def getsectionbyname(self, name):
-        # TODO: many sections may have the same name, e.g. '.group'
-        for s in self.sh:
-            if s.sh.name.strip('\x00') == name:
-                return s
-        return None
+        s = self.getsectionsbyname(name)
+        if len(s) == 0: return None
+        return s[0]
 
     def getsectionbyvad(self, ad, section = None):
         if section:
