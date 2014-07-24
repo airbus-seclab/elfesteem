@@ -414,6 +414,13 @@ STT_HIOS        = 12              # End of OS-specific
 STT_LOPROC      = 13              # Start of processor-specific
 STT_HIPROC      = 15              # End of processor-specific
 
+# Symbol visibility specification encoded in the st_other field.
+
+STV_DEFAULT     = 0               # Default symbol visibility rules
+STV_INTERNAL    = 1               # Processor specific hidden class
+STV_HIDDEN      = 2               # Sym unavailable to other modules
+STV_PROTECTED   = 3               # Not preemptible, not exported
+
 # Legal values for d_tag (dynamic entry type).
 
 DT_NULL         = 0               # Marks end of dynamic section
@@ -1605,6 +1612,7 @@ constants = {
   'SHT' : {}, # sh_type
   'STB' : {}, # st_info / ST_BIND
   'STT' : {}, # st_info / ST_TYPE
+  'STV' : {}, # st_other (visibility)
   'EM'  : {}, # e_machine
   'ET'  : {}, # e_type
   'PT'  : {}, # p_type

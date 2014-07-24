@@ -151,10 +151,11 @@ def display_symbols(e, table_name):
     for i, value in enumerate(table.symtab):
         type = elf.constants['STT'][value.info&0xf]
         bind = elf.constants['STB'][value.info>>4]
+        visibility = elf.constants['STV'][value.other]
         if value.shndx>999:  ndx = "ABS"
         elif value.shndx==0: ndx = "UND"
         else:                ndx = "%3d"%value.shndx
-        print(format%(i, value.value, value.size, type, bind, "DEFAULT", ndx, value.name))
+        print(format%(i, value.value, value.size, type, bind, visibility, ndx, value.name))
 
 
 
