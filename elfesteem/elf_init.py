@@ -113,6 +113,9 @@ wsize = parent.wsize)
     def get_addr(self):
         return self.sh.addr
     addr = property(get_addr)
+    def get_name(self):
+        return self.sh.name
+    name = property(get_name)
 
 class NullSection(Section):
     sht = elf.SHT_NULL
