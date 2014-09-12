@@ -1064,7 +1064,7 @@ class virt(object):
         if item.step != None:
             raise ValueError("pas de step")
         if item.stop == None:
-            s = self.parent.getsectbyvad(item.start, section = section)
+            s = self.parent.getsectionbyvad(item.start, section = section)
             if not s:
                 raise ValueError('unknown rva address! 0x%x'%item.start)
             s_start = item.start - s.addr
@@ -1074,7 +1074,7 @@ class virt(object):
         virt_item = []
         start = item.start
         while total_len:
-            s = self.parent.getsectbyvad(start, section = section)
+            s = self.parent.getsectionbyvad(start, section = section)
             if not s:
                 raise ValueError('unknown rva address! 0x%x'%start)
             s_start = start - s.addr
@@ -1193,15 +1193,15 @@ class MACHO(object):
     def __str__(self):
         raise AttributeError("Use pack() instead of str()")
     
-    def getsectbyname(self, name):
+    def getsectionbyname(self, name):
         for s in self.sect.sect:
-            if s.sectname.strip(data_null) == name:
+            if hasattr(s, 'sh') and name == "%s,%s"%(s.sh.segname,s.sh.sectname):
                 return s
         return None
 
-    def getsectbyvad(self, ad, section = None):
+    def getsectionbyvad(self, ad, section = None):
         if section:
-            s = self.getsectbyname(section)
+            s = self.getsectionbyname(section)
             if s.addr <= ad < s.addr+s.size:
                 return s
         f = []
