@@ -1614,18 +1614,17 @@ R_M32R_NUM              = 256     # Keep this the last entry.
 #
 
 def enumerate_constants(constants, globs):
-    for type in constants.keys():
+    for type in constants:
         if type == 'R':
-            for val in filter(lambda x:x[:len(type)+1]==type+"_", globs.keys()):
-                subtype = val[len(type)+1:]
-                subtype = subtype[:subtype.index('_')]
-                if not subtype in constants[type]:
-                    constants[type][subtype] = {}
-                constants[type][subtype][globs[val]] = val[len(type)+len(subtype)+2:]
             continue
         for val in filter(lambda x:x[:len(type)+1]==type+"_", globs.keys()):
             if not globs[val] in constants[type]:
                 constants[type][globs[val]] = val[len(type)+1:]
+    for subtype in constants['EM'].values():
+        for val in filter(lambda x:x[:len(subtype)+3]=="R_"+subtype+"_", globs.keys()):
+            if not subtype in constants['R']:
+                constants['R'][subtype] = {}
+            constants['R'][subtype][globs[val]] = val[len(subtype)+3:]
 
 constants = {
   'SHT' : {}, # sh_type
