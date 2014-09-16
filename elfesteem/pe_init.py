@@ -207,7 +207,7 @@ class StrTable(object):
     def getby_name(self, name):
         return self.names[name]
     def getby_offset(self, of):
-        return self.res[of]
+        return self.res.get(of, "")
 
 class CoffSymbols(object):
     def __init__(self, strpwk, of, numberofsymbols, parent):
@@ -387,11 +387,11 @@ class PE(object):
                                        self)
             """
             # Consistency check
-            if str(self.SymbolStrings) == self.content[
+            if self.SymbolStrings.pack() == self.content[
                                        self.Coffhdr.pointertosymboltable
                                        + 18 * self.Coffhdr.numberofsymbols:]:
                 print("OK for SymbolStrings")
-            if str(self.Symbols) == self.content[
+            if self.Symbols.pack() == self.content[
                                        self.Coffhdr.pointertosymboltable:
                                        self.Coffhdr.pointertosymboltable
                                        + 18 * self.Coffhdr.numberofsymbols]:
@@ -515,10 +515,10 @@ class PE(object):
     def build_content(self):
 
         c = StrPatchwork()
-        c[0] = str(self.Doshdr)
+        c[0] = self.Doshdr.pack()
 
         for s in self.SHList.shlist:
-            c[s.offset:s.offset+s.rawsize] = str(s.data)
+            c[s.offset:s.offset+s.rawsize] = s.data.pack()
 
         # fix image size
         s_last = self.SHList.shlist[-1]
@@ -527,18 +527,18 @@ class PE(object):
         self.NThdr.sizeofimage = size
 
         off = self.Doshdr.lfanew
-        c[off] = str(self.NTsig)
+        c[off] = self.NTsig.pack()
         off += len(self.NTsig)
-        c[off] = str(self.Coffhdr)
+        c[off] = self.Coffhdr.pack()
         off += len(self.Coffhdr)
-        c[off] = str(self.Opthdr)
+        c[off] = self.Opthdr.pack()
         off += len(self.Opthdr)
-        c[off] = str(self.NThdr)
+        c[off] = self.NThdr.pack()
         off += len(self.NThdr)
-        #c[off] = str(self.Optehdr)
+        #c[off] = self.Optehdr.pack()
 
         off = self.Doshdr.lfanew+len(self.NTsig)+len(self.Coffhdr)+self.Coffhdr.sizeofoptionalheader
-        c[off] = str(self.SHList)
+        c[off] = self.SHList.pack()
 
         for s in self.SHList:
             if off + len(str(self.SHList)) > s.offset:
@@ -548,13 +548,13 @@ class PE(object):
         self.DirDelay.build_content(c)
         self.DirReloc.build_content(c)
         self.DirRes.build_content(c)
-        s = str(c)
+        s = c.pack()
         # TODO: add symbol table
         if (self.Doshdr.lfanew+len(self.NTsig)+len(self.Coffhdr))%4:
             log.warn("non aligned coffhdr, bad crc calculation")
         crcs = self.patch_crc(s, self.NThdr.CheckSum)
         c[self.Doshdr.lfanew+len(self.NTsig)+len(self.Coffhdr)+64] = struct.pack('I', crcs)
-        return str(c)
+        return c.pack()
 
     def __str__(self):
         return self.build_content()

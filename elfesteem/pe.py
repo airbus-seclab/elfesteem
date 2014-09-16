@@ -119,6 +119,7 @@ class Shdr(CStruct):
                 ("numberoflinenumbers","u16"),
                 ("flags","u32") ]
     def get_name(self):
+        # If Python2, is of type 'str', if Python3, we convert from 'bytes'
         if type(self.name_data) == str: return self.name_data
         return str(self.name_data, encoding='latin1')
     def set_name(self, value):
