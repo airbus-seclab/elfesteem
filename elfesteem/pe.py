@@ -235,7 +235,7 @@ class DescName(CStruct):
                 ]
     def gets(self, s, of):
         if of < 0x1000:
-            log.warn("desname in pe hdr, used as offset")
+            log.warn("descname in pe hdr, used as offset")
             ofname = of
         else:
             ofname = self.parent_head.rva2off(of)
@@ -272,6 +272,10 @@ class struct_array(object):
                                  c.parent_head,
                                  c.parent_head._sex,
                                  c.parent_head._wsize)
+            # Special case: off between header and first section
+            if c.parent_head.NThdr.sizeofheaders <= of < c.parent_head.SHList[0].offset:
+                self.end = data_null*l
+                break
             if num == None:
                 if s[of:of+l] == data_null*l:
                     self.end = data_null*l

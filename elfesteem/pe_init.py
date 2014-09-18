@@ -427,7 +427,11 @@ class PE(object):
             if s.rawsize == 0:
                 mm = 0
             else:
-                mm = max(s.rawsize, 0x1000)
+                if s.rawsize % filealignment:
+                    rs = (s.rawsize/filealignment+1)*filealignment
+                else:
+                    rs = s.rawsize
+                mm = max(rs, 0x1000)
             s.data[0] = self.content[raw_off:raw_off+mm]
         try:
             self.DirImport = pe.DirImport.unpack(self.content,
@@ -546,11 +550,15 @@ class PE(object):
         return  self.getsectionbyrva(rva) is not None
 
     def rva2off(self, rva):
+        # Special case rva in header
+        if rva < self.NThdr.sizeofheaders:
+            return rva
         s = self.getsectionbyrva(rva)
         if s is None:
             raise pe.InvalidOffset('cannot get offset for 0x%X'%rva)
             return
-        return rva-s.addr+s.offset
+        soff = (s.offset/self.NThdr.filealignment)*self.NThdr.filealignment
+        return rva-s.addr+soff
 
     def off2rva(self, off):
         s = self.getsectionbyoff(off)
