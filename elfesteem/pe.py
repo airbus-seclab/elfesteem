@@ -268,7 +268,7 @@ class struct_array(object):
                                  c.parent_head._sex,
                                  c.parent_head._wsize)
             # Special case: off between header and first section
-            if c.parent_head.NThdr.sizeofheaders <= of < c.parent_head.SHList[0].addr:
+            if c.parent_head.NThdr.sizeofheaders <= of < c.parent_head.SHList[0].offset:
                 self.end = '\x00'*l
                 break
             if num == None:
