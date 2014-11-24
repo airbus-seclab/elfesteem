@@ -47,7 +47,6 @@ SectionBase = SectionMetaclass('SectionBase', (object,), {})
 
 class Section(SectionBase):
     sht = None
-    @classmethod
     def create(cls, parent, shstr=None):
         if shstr == None:
             sh = None
@@ -61,6 +60,7 @@ wsize = parent.wsize)
             sh._parent=i
         i.__init__(parent, sh)
         return i
+    create = classmethod(create)
 
     content = ContentManager()
     def resize(self, old, new):

@@ -1,10 +1,9 @@
 #! /usr/bin/env python
 
 import struct, array
-from . import pe
-from .strpatchwork import StrPatchwork
+from elfesteem import pe
+from elfesteem.strpatchwork import StrPatchwork
 import logging
-from collections import defaultdict
 log = logging.getLogger("peparse")
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))

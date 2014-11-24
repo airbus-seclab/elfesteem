@@ -39,10 +39,9 @@ class Shdr(CStructWithStrTable):
                 ("info","u32"),
                 ("addralign","ptr"),
                 ("entsize","ptr") ]
-    @property
     def strtab(self):
         return self._parent.shstrtab
-    @property
+    strtab = property(strtab)
     def name_prop(self):
         name = self.name
         if self.flags & SHF_GROUP:
@@ -61,6 +60,7 @@ class Shdr(CStructWithStrTable):
                 if s.flags == GRP_COMDAT:
                     name += ',comdat'
         return name
+    name_prop = property(name_prop)
 
 class Phdr32(CStruct):
     _fields = [ ("type","u32"),
@@ -89,9 +89,9 @@ class Sym32(CStructWithStrTable):
                 ("info","u08"),
                 ("other","u08"),
                 ("shndx","u16") ]
-    @property
     def strtab(self):
         return self._parent.linksection
+    strtab = property(strtab)
 
 class Sym64(Sym32):
     _fields = [ ("name_idx","u32"),
@@ -108,31 +108,31 @@ class Dym(CStruct):
 class Rel32(CStruct):
     _fields = [ ("offset","ptr"),
                 ("info","u32") ]
-    @property
     def type(self):
         return self.info & 0xff
-    @property
+    type = property(type)
     def symtab(self):
         return self._parent.linksection.symtab[self.info>>8]
-    @property
+    symtab = property(symtab)
     def shndx(self):
         return self.symtab.shndx
-    @property
+    shndx = property(shndx)
     def value(self):
         return self.symtab.value
-    @property
+    value = property(value)
     def sym(self):
         return self.symtab.name
+    sym = property(sym)
 
 class Rel64(Rel32):
     _fields = [ ("offset","ptr"),
                 ("info","u64") ]
-    @property
     def type(self):
         return self.info & 0xffffffff
-    @property
+    type = property(type)
     def symtab(self):
         return self._parent.linksection.symtab[self.info>>32]
+    symtab = property(symtab)
 
 class Rela32(Rel32):
     _fields = [ ("offset","ptr"),
@@ -147,11 +147,11 @@ class Rela64(Rel64):
 class Dyn32(CStruct):
     _fields = [ ("type","u32"),
                 ("name_idx","u32") ]
-    @property
     def name(self):
         if self.type == DT_NEEDED:
             return self._parent.linksection.get_name(self.name_idx)
         return self.name_idx
+    name = property(name)
 
 class Dyn64(Dyn32):
     _fields = [ ("type","u64"),

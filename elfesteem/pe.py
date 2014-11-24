@@ -1,10 +1,9 @@
 #! /usr/bin/env python
 
-from .new_cstruct import CStruct, data_null, data_empty
-from .strpatchwork import StrPatchwork
+from elfesteem.new_cstruct import CStruct, data_null, data_empty
+from elfesteem.strpatchwork import StrPatchwork
 import struct
 import logging
-from collections import defaultdict
 log = logging.getLogger("pepy")
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
@@ -1112,14 +1111,16 @@ class DirReloc(CStruct):
         all_base_ad = set([x & 0xFFFFF000 for x in rels])
         all_base_ad = list(all_base_ad)
         all_base_ad.sort()
-        rels_by_base = defaultdict(list)
+        rels_by_base = {}
         while rels:
             r = rels.pop()
-            if r >= all_base_ad[-1]:
-                rels_by_base[all_base_ad[-1]].append(r)
+            base = all_base_ad[-1]
+            if not base in rels_by_base: rels_by_base[base] = []
+            if r >= base:
+                rels_by_base[base].append(r)
             else:
                 all_base_ad.pop()
-                rels_by_base[all_base_ad[-1]].append(r)
+                rels_by_base[base].append(r)
         rels_by_base = [x for x in rels_by_base.items()]
         rels_by_base.sort()
         for o_init, rels in rels_by_base:
