@@ -147,7 +147,7 @@ class GroupSection(Section):
         flags, = struct.unpack("I", self.content[:4])
         return flags
     def get_sections(self):
-        l = len(self.content)/4 - 1
+        l = len(self.content)//4 - 1
         sections = struct.unpack("I"*l, self.content[4:])
         return sections
     def set_flags(self, value):
