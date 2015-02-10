@@ -127,6 +127,13 @@ class virt:
         self.parent.drva.__setitem__(rva_item, data)
 
     def __len__(self):
+        # __len__ should not be used: Python returns an int object, which
+        # will cap values to 0x7FFFFFFF on 32 bit systems. A binary can have
+        # a base address higher than this, resulting in the impossibility to
+        # handle such programs.
+        log.warn("__len__ deprecated")
+        return self.max_addr()
+    def max_addr(self):
          s = self.parent.SHList[-1]
          l = s.addr+s.size+self.parent.NThdr.ImageBase
          return int(l)
