@@ -885,6 +885,8 @@ class DirDelay(CStruct):
                     rva+=len(imp)
 
     def build_content(self, c):
+        if len(self.parent_head.NThdr.optentries) < DIRECTORY_ENTRY_DELAY_IMPORT:
+            return
         dirdelay = self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_DELAY_IMPORT]
         of1 = dirdelay.rva
         if not of1: # No Delay Import
