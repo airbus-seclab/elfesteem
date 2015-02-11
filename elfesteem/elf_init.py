@@ -592,7 +592,7 @@ class virt:
 
         return
 
-    def __len__(self):
+    def max_addr(self):
         # the maximum virtual address is found by retrieving the maximum
         # possible virtual address, either from the program entries, and
         # section entries. if there is no such object, raise an error.

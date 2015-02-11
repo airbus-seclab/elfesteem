@@ -129,7 +129,7 @@ class virt:
         rva_item = self.item_virt2rva(item)
         self.parent.drva.__setitem__(rva_item, data)
 
-    def __len__(self):
+    def max_addr(self):
          s = self.parent.SHList[-1]
          l = s.addr+s.size+self.parent.NThdr.ImageBase
          return int(l)
