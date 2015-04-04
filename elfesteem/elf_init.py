@@ -784,6 +784,7 @@ class ELF(object):
         return self.build_content()
 
     def getsectionsbyname(self, name):
+        if ',' in name: name = name[:name.index(',')]
         return [s for s in self.sh if s.sh.name.strip('\x00') == name]
     def getsectionbyname(self, name):
         s = self.getsectionsbyname(name)

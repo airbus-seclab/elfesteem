@@ -59,6 +59,15 @@ class Shdr(CStructWithStrTable):
                 name += ',%s' % self._parent.parent[s.sh.link][s.sh.info].name
                 if s.flags == GRP_COMDAT:
                     name += ',comdat'
+        if self.flags & SHF_MERGE:
+            name += ',"'
+            if self.flags & SHF_ALLOC: name += 'a'
+            name += 'M'
+            if self.flags & SHF_STRINGS: name += 'S'
+            name += '"'
+            if self.type & SHT_PROGBITS: name += ',@progbits'
+            else: raise ValueError("SHF_MERGE should only appear with SHT_PROGBITS")
+            name += ',%s' % self.entsize
         return name
     name_prop = property(name_prop)
 
