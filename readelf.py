@@ -86,26 +86,17 @@ def display_sections(e):
     print(header)
     for i, sh in enumerate(e.sh):
         flags = ""
-        if sh.sh.flags & elf.SHF_WRITE:
-            flags += "W"
-        if sh.sh.flags & elf.SHF_ALLOC:
-            flags += "A"
-        if sh.sh.flags & elf.SHF_EXECINSTR:
-            flags += "X"
-        if sh.sh.flags & elf.SHF_MERGE:
-            flags += "M"
-        if sh.sh.flags & elf.SHF_STRINGS:
-            flags += "S"
-        if sh.sh.flags & elf.SHF_INFO_LINK:
-            flags += "I"
-        if sh.sh.flags & elf.SHF_LINK_ORDER:
-            flags += "L"
-        if sh.sh.flags & elf.SHF_OS_NONCONFORMING:
-            flags += "O"
-        if sh.sh.flags & elf.SHF_GROUP:
-            flags += "G"
-        if sh.sh.flags & elf.SHF_TLS:
-            flags += "T"
+        if sh.sh.flags & elf.SHF_WRITE:            flags += "W"
+        if sh.sh.flags & elf.SHF_ALLOC:            flags += "A"
+        if sh.sh.flags & elf.SHF_EXECINSTR:        flags += "X"
+        if sh.sh.flags & elf.SHF_MERGE:            flags += "M"
+        if sh.sh.flags & elf.SHF_STRINGS:          flags += "S"
+        if sh.sh.flags & elf.SHF_INFO_LINK:        flags += "I"
+        if sh.sh.flags & elf.SHF_LINK_ORDER:       flags += "L"
+        if sh.sh.flags & elf.SHF_OS_NONCONFORMING: flags += "O"
+        if sh.sh.flags & elf.SHF_GROUP:            flags += "G"
+        if sh.sh.flags & elf.SHF_TLS:              flags += "T"
+        if sh.sh.flags & elf.SHF_EXCLUDE:          flags += "E"
         type = elf.constants['SHT'][sh.sh.type]
         if type == 'GNU_verdef':   type = 'VERDEF'
         if type == 'GNU_verneed':  type = 'VERNEED'
