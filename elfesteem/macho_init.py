@@ -423,13 +423,15 @@ class LoaderUnixthread(Loader):
     lht = macho.LC_UNIXTHREAD
     lhc = macho.unixthread_command
     data = data_empty
+    registerInstructionPointer = {
+        macho.CPU_TYPE_I386: 10,
+        macho.CPU_TYPE_X86_64: 16,
+        }
+    def entrypoint(self):
+        return self.data[registerInstructionPointer[self.cputype]]
     def set_entrypoint(self, val):
-        registerInstructionPointer = {
-            macho.CPU_TYPE_I386: 10,
-            macho.CPU_TYPE_X86_64: 16,
-            }
         self.data[registerInstructionPointer[self.cputype]] = val
-    entrypoint = property(None, set_entrypoint)
+    entrypoint = property(entrypoint, set_entrypoint)
     def _parse_content(self):
         if type(self.parent._parent) == dict: self.cputype = self.parent._parent['cputype']
         else:                                self.cputype = self.parent._parent.parent.Mhdr.cputype
@@ -1193,6 +1195,18 @@ class MACHO(object):
     def __str__(self):
         raise AttributeError("Use pack() instead of str()")
     
+    def entrypoint(self):
+        ep = [ _ for _ in self.lh.lhlist if _.cmd in [ macho.LC_MAIN, macho.LC_UNIXTHREAD ] ]
+        if len(ep) != 1: raise ValueError("Loader with entrypoint %s" % ep)
+        if ep[0].cmd == macho.LC_MAIN: return self.off2ad(ep[0].entryoff)
+        if ep[0].cmd == macho.LC_UNIXTHREAD: return ep[0].entrypoint
+    def set_entrypoint(self, val):
+        ep = [ _ for _ in self.lh.lhlist if _.cmd in [ macho.LC_MAIN, macho.LC_UNIXTHREAD ] ]
+        if len(ep) != 1: raise ValueError("Loader with entrypoint %s" % ep)
+        if ep[0].cmd == macho.LC_MAIN: ep[0].entryoff = self.ad2off(val)
+        if ep[0].cmd == macho.LC_UNIXTHREAD: ep[0].entrypoint = val
+    entrypoint = property(entrypoint, set_entrypoint)
+
     def getsectionbyname(self, name):
         for s in self.sect.sect:
             if hasattr(s, 'sh') and name == "%s,%s"%(s.sh.segname,s.sh.sectname):
@@ -1219,6 +1233,10 @@ class MACHO(object):
                     f.append(lc)
         return f[0]
 
+    def ad2off(self, ad):
+        s = self.getsectionbyvad(ad)
+        return ad - s.addr + s.offset
+    
     def off2ad(self, of):
         lc = self.getsegment_byoffset(of)
         return of - lc.fileoff + lc.vmaddr
