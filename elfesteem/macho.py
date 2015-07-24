@@ -52,6 +52,18 @@ CPU_SUBTYPE_PENTII_M5 = 0x00000056
 CPU_SUBTYPE_POWERPC_970 = 0x00000064
 CPU_SUBTYPE_486SX = 0x00000084
 
+MH_OBJECT       = 0x1  # relocatable object file
+MH_EXECUTE      = 0x2  # demand paged executable file
+MH_FVMLIB       = 0x3  # fixed VM shared library file
+MH_CORE         = 0x4  # core file
+MH_PRELOAD      = 0x5  # preloaded executable file
+MH_DYLIB        = 0x6  # dynamically bound shared library
+MH_DYLINKER     = 0x7  # dynamic link editor
+MH_BUNDLE       = 0x8  # dynamically bound bundle file
+MH_DYLIB_STUB   = 0x9  # shared library stub for static linking only, no section contents
+MH_DSYM         = 0xa  # companion file with only debug sections
+MH_KEXT_BUNDLE  = 0xb  # x86_64 kexts
+
 SEGMENT_READ = 0x1
 SEGMENT_WRITE = 0x2
 SEGMENT_EXECUTE = 0x4
@@ -85,14 +97,38 @@ LC_DYLIB_CODE_SIGN_DRS = 0x2b #LoaderLinkEditDataCommand
 SG_PROTECTED_VERSION_1 = 0x8
 
 # Section types: lsb of "flags"
-S_REGULAR  = 0x00
-S_ZEROFILL = 0x01
-S_NON_LAZY_SYMBOL_POINTERS = 0x6
-S_LAZY_SYMBOL_POINTERS = 0x7
-S_SYMBOL_STUBS = 0x8
+S_REGULAR          = 0x0 # regular section
+S_ZEROFILL         = 0x1 # zero fill on demand section
+S_CSTRING_LITERALS = 0x2 # section with only literal C strings
+S_4BYTE_LITERALS   = 0x3 # section with only 4 byte literals
+S_8BYTE_LITERALS   = 0x4 # section with only 8 byte literals
+S_LITERAL_POINTERS = 0x5 # section with only pointers to literals
+S_NON_LAZY_SYMBOL_POINTERS   = 0x6  # section with only non-lazy symbol pointers
+S_LAZY_SYMBOL_POINTERS       = 0x7  # section with only lazy symbol pointers
+S_SYMBOL_STUBS               = 0x8  # section with only symbol stubs, byte size of stub in the reserved2 field
+S_MOD_INIT_FUNC_POINTERS     = 0x9  # section with only function pointers for initialization
+S_MOD_TERM_FUNC_POINTERS     = 0xa  # section with only function pointers for termination
+S_COALESCED                  = 0xb  # section contains symbols that are to be coalesced
+S_GB_ZEROFILL                = 0xc  # zero fill on demand section (that can be larger than 4 gigabytes)
+S_INTERPOSING                = 0xd  # section with only pairs of function pointers for interposing
+S_16BYTE_LITERALS            = 0xe  # section with only 16 byte literals
+S_DTRACE_DOF                 = 0xf  # section contains DTrace Object Format
+S_LAZY_DYLIB_SYMBOL_POINTERS = 0x10 # section with only lazy symbol pointers to lazy loaded dylibs
+S_THREAD_LOCAL_REGULAR                = 0x11 # template of initial values for TLVs
+S_THREAD_LOCAL_ZEROFILL               = 0x12 # template of initial values for TLVs
+S_THREAD_LOCAL_VARIABLES              = 0x13 # TLV descriptors
+S_THREAD_LOCAL_VARIABLE_POINTERS      = 0x14 # pointers to TLV descriptors
+S_THREAD_LOCAL_INIT_FUNCTION_POINTERS = 0x15 # functions to call to initialize TLV values
+
 # Section flags
+S_ATTR_PURE_INSTRUCTIONS   = 0x80000000 # section contains only true machine instructions
+S_ATTR_NO_TOC              = 0x40000000 # section contains coalesced symbols that are not to be in a ranlib table of contents
+S_ATTR_STRIP_STATIC_SYMS   = 0x20000000 # ok to strip static symbols in this section in files with the MH_DYLDLINK flag
+S_ATTR_NO_DEAD_STRIP       = 0x10000000 # no dead stripping
+S_ATTR_LIVE_SUPPORT        = 0x08000000 # blocks are live if they reference live blocks
+S_ATTR_SELF_MODIFYING_CODE = 0x04000000 # Used with i386 code stubs written on by dyld
+
 S_ATTR_SOME_INSTRUCTIONS = 0x00000400
-S_ATTR_PURE_INSTRUCTIONS = 0x80000000
 
 
 #32bits
