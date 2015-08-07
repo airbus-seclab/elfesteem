@@ -258,6 +258,7 @@ EM_OPENRISC =    92              # OpenRISC 32-bit embedded processor
 EM_ARC_A5 =      93              # ARC Cores Tangent-A5
 EM_XTENSA =      94              # Tensilica Xtensa Architecture
 
+EM_AARCH64 =     183             # Aarch64 architecture
 EM_ALPHA =       0x9026
 
 # Special section indices.
