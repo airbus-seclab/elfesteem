@@ -19,27 +19,70 @@ def print_header(e):
     print("      magic cputype cpusubtype  caps    filetype ncmds sizeofcmds      flags")
     print(" 0x%08x %7d %10d  0x%02x %10u %5u %10u 0x%08x" %(e.Mhdr.magic,e.Mhdr.cputype ,e.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK,(e.Mhdr.cpusubtype & macho.CPU_CAPS_MASK) >> 24,e.Mhdr.filetype,e.Mhdr.ncmds,e.Mhdr.sizeofcmds,e.Mhdr.flags))
 
+def split_integer(v, nbits, ndigits, truncate=None):
+    mask = (1<<nbits)-1
+    res = []
+    while ndigits > 0:
+        res.insert(0, v & mask)
+        v = v >> nbits
+        ndigits -= 1
+    res[0] += v << nbits
+    if truncate is not None:
+        while len(res) > truncate and res[-1] == 0:
+            res = res[:-1]
+    return ".".join(["%u"%_ for _ in res])
+
 def print_lc(e):
     for i,lc in enumerate(e.lh.lhlist):
         print("Load command %u" %i)
-        if lc.cmd == macho.LC_SEGMENT or lc.cmd == macho.LC_SEGMENT_64:
-            #PRINT SEGMENT
-            print("      cmd %s" %{macho.LC_SEGMENT: "LC_SEGMENT", macho.LC_SEGMENT_64: "LC_SEGMENT_64"}[lc.cmd])
-            print("  cmdsize %u" %lc.cmdsize)
-            print("  segname %.16s" %lc.segname)
-            if lc.cmd == macho.LC_SEGMENT_64:
-                print("   vmaddr 0x%016x" %lc.vmaddr)
-                print("   vmsize 0x%016x" %lc.vmsize)
-            else:
-                print("   vmaddr 0x%08x" %lc.vmaddr)
-                print("   vmsize 0x%08x" %lc.vmsize)
-            print("  fileoff %u" %lc.fileoff)
-            print(" filesize %u" %lc.filesize)
-            print("  maxprot 0x%08x" %lc.maxprot)
-            print(" initprot 0x%08x" %lc.initprot)
-            print("   nsects %u" %lc.nsects)
-            print("    flags 0x%x" %lc.flags)
+        lc_value = [
+            ("cmd",     "LC_%s" %macho.constants['LC'][lc.cmd]),
+            ("cmdsize", lc.cmdsize),
+            ]
+        shift = 1
+        for name, _ in getattr(lc.lhc, '_fields', []):
+            value = getattr(lc, name)
+            if name in ["vmaddr", "vmsize"]:
+                if lc.cmd == macho.LC_SEGMENT_64: value = "0x%016x" % value
+                else:                             value = "0x%08x" % value
+            elif name in ["maxprot", "initprot", "cksum"]:
+                value = "0x%08x" % value
+            elif name == "flags":
+                value = "0x%x" % value
+            elif name == "stroffset":
+                name = "        name"
+                value = "%s (offset %u)" %(lc.name, value)
+            elif name == "timestamp":
+                name = "time stamp"
+                value = "%u %s" %(value, time.ctime(value))
+            elif name in ["current_version", "compatibility_version"]:
+                shift = 0
+                name = name[:-8]
+                value = "version " + split_integer(value, 8, 3)
+            elif lc.cmd == macho.LC_VERSION_MIN_MACOSX:
+                shift = 2
+                value = split_integer(value, 8, 3, truncate=1)
+            elif lc.cmd == macho.LC_SOURCE_VERSION:
+                shift = 2
+                value = split_integer(value, 10, 5, truncate=2)
+            elif lc.cmd == macho.LC_UNIXTHREAD:
+                shift = 4
+                break
+            lc_value.append((name, value))
+        if lc.cmd == macho.LC_UUID:
+            lc_value.append(("uuid", "%.8X-%.4X-%.4X-%.4X-%.4X%.8X" % lc.uuid))
 
+        # otool displays lc_value with a nice alignment
+        name_max_len = 0
+        for name, _ in lc_value:
+            if name_max_len < len(name):
+                name_max_len = len(name)
+        format = "%%%ds %%s" % (name_max_len+shift)
+        for pair in lc_value:
+            print format % pair
+        # for some load command, additional information is displayed
+
+        if lc.cmd == macho.LC_SEGMENT or lc.cmd == macho.LC_SEGMENT_64:
             if hasattr(lc,'sectionsToAdd'):
                 for s in lc.sectionsToAdd(e):
                     if not hasattr(s, 'reloclist') :
@@ -66,57 +109,8 @@ def print_lc(e):
                         if s.sh.type == macho.S_SYMBOL_STUBS:
                             comment2 = " (size of stubs)"
                         print(" reserved2 %u%s" %(s.sh.reserved2,comment2))
-    
-        if lc.cmd == macho.LC_SYMTAB:
-            #PRINT SYMTAB
-            print("     cmd LC_SYMTAB")
-            print(" cmdsize %u" %lc.cmdsize)
-            print("  symoff %u" %lc.sym_off)
-            print("   nsyms %u" %lc.nsyms)
-            print("  stroff %u" %lc.str_off)
-            print(" strsize %u" %lc.str_size)
 
-        if lc.cmd == macho.LC_DYSYMTAB:
-            #PRINT DYSYMTAB
-            print("            cmd LC_DYSYMTAB")
-            print("        cmdsize %u" %lc.cmdsize)
-            print("      ilocalsym %u" %lc.ilocalsym)
-            print("      nlocalsym %u" %lc.nlocalsym)
-            print("     iextdefsym %u" %lc.iextdefsym)
-            print("     nextdefsym %u" %lc.nextdefsym)
-            print("      iundefsym %u" %lc.iundefsym)
-            print("      nundefsym %u" %lc.nundefsym)
-            print("         tocoff %u" %lc.toc_off)
-            print("           ntoc %u" %lc.ntoc)
-            print("      modtaboff %u" %lc.modtab_off)
-            print("        nmodtab %u" %lc.nmodtab)
-            print("   extrefsymoff %u" %lc.extrefsym_off)
-            print("    nextrefsyms %u" %lc.nextrefsym)
-            print(" indirectsymoff %u" %lc.indirectsym_off)
-            print("  nindirectsyms %u" %lc.nindirectsym)
-            print("      extreloff %u" %lc.extrel_off)
-            print("        nextrel %u" %lc.nextrel)
-            print("      locreloff %u" %lc.locrel_off)
-            print("        nlocrel %u" %lc.nlocrel)
-
-        if lc.cmd == macho.LC_LOAD_DYLIB or lc.cmd == macho.LC_ID_DYLIB:
-            #PRINT SYMTAB
-            print("          cmd %s" %{macho.LC_LOAD_DYLIB:'LC_LOAD_DYLIB', macho.LC_ID_DYLIB:'LC_ID_DYLIB'}[lc.cmd])
-            print("      cmdsize %u" %lc.cmdsize)
-            print("         name %s (offset %u)" %(lc.name,lc.stroffset))
-            print("   time stamp %u %s" %(lc.timestamp, time.ctime(lc.timestamp)))
-            print("      current version %u.%u.%u" %(lc.current_version >> 16, (lc.current_version >> 8) & 0xff, lc.current_version & 0xff))
-            print("compatibility version %u.%u.%u" %(lc.compatibility_version >> 16, (lc.compatibility_version >> 8) & 0xff, lc.compatibility_version & 0xff))
-
-        if lc.cmd == macho.LC_MAIN:
-            print("       cmd LC_MAIN")
-            print("   cmdsize %u" %lc.cmdsize)
-            print("  entryoff %u" %lc.entryoff)
-            print(" stacksize %u" %lc.stacksize)
-
-        if lc.cmd == macho.LC_UNIXTHREAD:
-            print("        cmd LC_UNIXTHREAD")
-            print("    cmdsize %u" %lc.cmdsize)
+        elif lc.cmd == macho.LC_UNIXTHREAD:
             if e.Mhdr.cputype == macho.CPU_TYPE_POWERPC:
                 print("     flavor PPC_THREAD_STATE")
                 print("      count PPC_THREAD_STATE_COUNT")
@@ -171,85 +165,6 @@ def print_lc(e):
                 print("\t    r12 0x%08x sp     0x%08x lr  0x%08x pc  0x%08x" %(lc.data[12], lc.data[13],lc.data[14],lc.data[15]))
                 print("\t   cpsr 0x%08x" %lc.data[16])
 
-        if lc.cmd == macho.LC_UUID:
-            print("     cmd LC_UUID")
-            print(" cmdsize %u" %lc.cmdsize)
-            print("    uuid %.8X-%.4X-%.4X-%.4X-%.4X%.8X" % lc.uuid)
-
-        if lc.cmd == macho.LC_TWOLEVEL_HINTS:
-            print("     cmd LC_TWOLEVEL_HINTS")
-            print(" cmdsize %u" %lc.cmdsize)
-            print("  offset %u" %lc.twolevelhints_off)
-            print("  nhints %u" %lc.nhints)
-
-        if lc.cmd == macho.LC_PREBIND_CKSUM:
-            print("     cmd LC_PREBIND_CKSUM")
-            print(" cmdsize %u" %lc.cmdsize)
-            print("   cksum 0x%08x" %lc.cksum)
-
-        if lc.cmd == macho.LC_CODE_SIGNATURE or lc.cmd == macho.LC_FUNCTION_STARTS or lc.cmd == macho.LC_DATA_IN_CODE or lc.cmd == macho.LC_DYLIB_CODE_SIGN_DRS:
-            print("      cmd %s" %{macho.LC_CODE_SIGNATURE:'LC_CODE_SIGNATURE',
-                                   macho.LC_FUNCTION_STARTS:'LC_FUNCTION_STARTS',
-                                   macho.LC_DATA_IN_CODE:'LC_DATA_IN_CODE',
-                                   macho.LC_DYLIB_CODE_SIGN_DRS:'LC_DYLIB_CODE_SIGN_DRS'}[lc.cmd])
-            print("  cmdsize %u" %lc.cmdsize)
-            print("  dataoff %u" %lc.data_off)
-            print(" datasize %u" %lc.data_size)
-
-        if lc.cmd == macho.LC_DYLD_INFO or lc.cmd == macho.LC_DYLD_INFO_ONLY:
-            print("            cmd %s" %{macho.LC_DYLD_INFO:'LC_DYLD_INFO', macho.LC_DYLD_INFO_ONLY:'LC_DYLD_INFO_ONLY'}[lc.cmd])
-            print("        cmdsize %u" %lc.cmdsize)
-            print("     rebase_off %u" %lc.rebase_off)
-            print("    rebase_size %u" %lc.rebase_size)
-            print("       bind_off %u" %lc.bind_off)
-            print("      bind_size %u" %lc.bind_size)
-            print("  weak_bind_off %u" %lc.weak_bind_off)
-            print(" weak_bind_size %u" %lc.weak_bind_size)
-            print("  lazy_bind_off %u" %lc.lazy_bind_off)
-            print(" lazy_bind_size %u" %lc.lazy_bind_size)
-            print("     export_off %u" %lc.export_off)
-            print("    export_size %u" %lc.export_size)
-
-        if lc.cmd == macho.LC_ENCRYPTION_INFO:
-            print("          cmd LC_ENCRYPTION_INFO")
-            print("      cmdsize %u" %lc.cmdsize)
-            print("    cryptoff  %u" %lc.crypt_off)
-            print("    cryptsize %u" %lc.crypt_size)
-            print("    cryptid   %u" %lc.crypt_id)
-
-        if lc.cmd == macho.LC_LOAD_DYLINKER:
-            print("          cmd LC_LOAD_DYLINKER")
-            print("      cmdsize %u" %lc.cmdsize)
-            print("         name %s (offset %u)" %(lc.name, lc.stroffset))
-
-        if lc.cmd == macho.LC_VERSION_MIN_MACOSX:
-            print("      cmd LC_VERSION_MIN_MACOSX")
-            print("  cmdsize %u" %lc.cmdsize)
-            if lc.version & 0xff == 0:
-                print("  version %u.%u" %(lc.version >> 16,(lc.version >> 8) & 0xff))
-            else:
-                print("  version %u.%u.%u" %(lc.version >> 16,(lc.version >> 8) & 0xff, lc.version & 0xff))
-            if lc.sdk & 0xff == 0:
-                print("      sdk %u.%u" %(lc.sdk >> 16,(lc.sdk >> 8) & 0xff))
-            else:
-                print("      sdk %u.%u.%u" %(lc.sdk >> 16,(lc.sdk >> 8) & 0xff, lc.sdk & 0xff))
-
-        if lc.cmd == macho.LC_SOURCE_VERSION:
-            print("      cmd LC_SOURCE_VERSION")
-            print("  cmdsize %u" %lc.cmdsize)
-            aa = (lc.version >> 40) & 0xffffff;
-            bb = (lc.version >> 30) & 0x3ff;
-            cc = (lc.version >> 20) & 0x3ff;
-            dd = (lc.version >> 10) & 0x3ff;
-            ee = lc.version & 0x3ff;
-            if(ee != 0):
-                print("  version %u.%u.%u.%u.%u" %(aa, bb, cc, dd, ee))
-            elif(dd != 0):
-                print("  version %u.%u.%u.%u" %(aa, bb, cc, dd))
-            elif(cc != 0):
-                print("  version %u.%u.%u" %(aa, bb, cc))
-            else:
-                print("  version %u.%u" %(aa, bb))
 
 
 def print_symbols(e):

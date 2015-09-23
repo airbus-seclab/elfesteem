@@ -127,12 +127,12 @@ def isOffsetChangeable(offset, min_offset):
 class LoaderLinkEditDataCommand(Loader):
     lhc = macho.linkedit_data_command
     def changeOffsets(self, decalage, min_offset=None):
-        if isOffsetChangeable(self.data_off, min_offset):
-            self.data_off += decalage
+        if isOffsetChangeable(self.dataoff, min_offset):
+            self.dataoff += decalage
     def sectionsToAdd(self, raw):
         self.sect = []
-        if self.data_size != 0:
-            c = raw[self.data_off:self.data_off + self.data_size]
+        if self.datasize != 0:
+            c = raw[self.dataoff:self.dataoff + self.datasize]
             self.sect.append(self.sect_class(self,c, type='data'))
         return self.sect
 
@@ -236,20 +236,20 @@ class LoaderSymTab(Loader):
     def sectionsMappedInMemory(self):
         return [self]
     def changeOffsets(self, decalage, min_offset=None):
-        if isOffsetChangeable(self.str_off, min_offset):
-            self.str_off += decalage
-        if isOffsetChangeable(self.sym_off, min_offset):
-            self.sym_off += decalage
+        if isOffsetChangeable(self.stroff, min_offset):
+            self.stroff += decalage
+        if isOffsetChangeable(self.symoff, min_offset):
+            self.symoff += decalage
     def sectionsToAdd(self, raw):
         if self.wsize == 32 : sizesym = 12
         if self.wsize == 64 : sizesym = 16
         self.sect = []
-        self.sym_size = self.nsyms*sizesym
-        if self.sym_off != 0:
-            c = raw[self.sym_off:self.sym_off + self.sym_size]
+        self.symsize = self.nsyms*sizesym
+        if self.symoff != 0:
+            c = raw[self.symoff:self.symoff + self.symsize]
             self.sect.append(SymbolTable(self,c, type='sym'))
-        if self.str_off != 0:
-            c = raw[self.str_off:self.str_off + self.str_size]
+        if self.stroff != 0:
+            c = raw[self.stroff:self.stroff + self.strsize]
             self.sect.append(StringTable(self,c, type='str'))
         return self.sect
 
@@ -257,25 +257,28 @@ class LoaderDysymTab(Loader):
     lht = macho.LC_DYSYMTAB
     lhc = macho.dysymtab_command
     subtypes = ['toc', 'modtab', 'extrefsym', 'indirectsym', 'extrel', 'locrel']
-    symbolsize = {'toc':2*4, 'modtab':{32: 13*4, 64: 12*4+8}[32], 'extrefsym':4, 'indirectsym':4, 'extrel':2*4, 'locrel':2*4}
-    symbolsize_64 = {'toc':2*4, 'modtab':{32: 13*4, 64: 12*4+8}[64], 'extrefsym':4, 'indirectsym':4, 'extrel':2*4, 'locrel':2*4}
+    symbolsize = {
+        32: {'toc':2*4, 'modtab':{32: 13*4, 64: 12*4+8}[32], 'extrefsym':4, 'indirectsym':4, 'extrel':2*4, 'locrel':2*4},
+        64: {'toc':2*4, 'modtab':{32: 13*4, 64: 12*4+8}[64], 'extrefsym':4, 'indirectsym':4, 'extrel':2*4, 'locrel':2*4},
+        }
     def changeOffsets(self, decalage, min_offset=None):
         for type in LoaderDysymTab.subtypes:
-            of = getattr(self,type+'_off')
+            object_offset = type+'off'
+            of = getattr(self,object_offset)
             if isOffsetChangeable(of, min_offset):
-                setattr(self, type+'_off', of + decalage)
+                setattr(self, object_offset, of + decalage)
     def sectionsToAdd(self, raw):
         self.sect = []
         for type in LoaderDysymTab.subtypes:
-            if self.wsize == 32:
-                setattr(self, type+'_size',getattr(self,'n'+type)*LoaderDysymTab.symbolsize[type])
-            elif self.wsize == 64:
-                setattr(self, type+'_size',getattr(self,'n'+type)*LoaderDysymTab.symbolsize_64[type])
+            object_size = type+'size'
+            object_count = 'n'+type
+            if type.endswith('sym'): object_count += 's'
+            setattr(self, object_size,getattr(self,object_count)*LoaderDysymTab.symbolsize[self.wsize][type])
 
         for type in LoaderDysymTab.subtypes:
-            of = getattr(self,type+'_off')
+            of = getattr(self,type+'off')
             if of != 0:
-                size = getattr(self,type+'_size')
+                size = getattr(self,type+'size')
                 c = raw[of:of + size]
                 self.sect.append(DySymbolTable(self,c, type=type))
         return self.sect
@@ -319,15 +322,15 @@ class LoaderTwoLevelHints(Loader):
     lht = macho.LC_TWOLEVEL_HINTS
     lhc = macho.twolevel_hints_command
     def changeOffsets(self, decalage, min_offset=None):
-        if isOffsetChangeable(self.twolevelhints_off, min_offset):
-            self.twolevelhints_off += decalage
+        if isOffsetChangeable(self.offset, min_offset):
+            self.offset += decalage
     def sectionsToAdd(self, raw):
         self.sect = []
         size_of_hint = 4
-        if self.twolevelhints_off != 0:
-            self.twolevelhints_size = size_of_hint*self.nhints
-            c = raw[self.twolevelhints_off:self.twolevelhints_off + self.twolevelhints_size]
-            self.sect.append(Hint(self,c, type='twolevelhints'))
+        if self.offset != 0:
+            self.size = size_of_hint*self.nhints
+            c = raw[self.offset:self.offset + self.size]
+            self.sect.append(Hint(self,c))
         return self.sect
 
 class LoaderPrebindCksum(Loader):
@@ -338,16 +341,16 @@ class LoaderEncryption(Loader):
     lht = macho.LC_ENCRYPTION_INFO
     lhc = macho.encryption_command
     def changeOffsets(self, decalage, min_offset=None):
-        if isOffsetChangeable(self.crypt_off, min_offset):
-            self.crypt_off += decalage
-        if isOffsetChangeable(self.crypt_size, min_offset):
-            self.crypt_size += decalage
-        if isOffsetChangeable(self.crypt_id, min_offset):
-            self.crypt_id += decalage
+        if isOffsetChangeable(self.cryptoff, min_offset):
+            self.cryptoff += decalage
+        if isOffsetChangeable(self.cryptsize, min_offset):
+            self.cryptsize += decalage
+        if isOffsetChangeable(self.cryptid, min_offset):
+            self.cryptid += decalage
     def sectionsToAdd(self, raw):
         self.sect = []
-        if self.crypt_off != 0:
-            c = raw[self.crypt_off:self.crypt_off + self.crypt_size]
+        if self.cryptoff != 0:
+            c = raw[self.cryptoff:self.cryptoff + self.cryptsize]
             self.sect.append(Encryption(self,c, type='crypt'))
         return self.sect
 
@@ -361,7 +364,7 @@ class LoaderDYLDInfo(Loader):
             of = getattr(self,type+'_off')
             if of != 0:
                 c = raw[of:of + getattr(self,type+'_size')]
-                self.sect.append(DynamicLoaderInfo(self,c, type=type))
+                self.sect.append(DynamicLoaderInfo(self,c, type=type+'_'))
         return self.sect
     
     def changeOffsets(self, decalage, min_offset=None):
@@ -387,7 +390,7 @@ class LoaderDYLDInfoOnly(Loader):
             of = getattr(self,type+'_off')
             if of != 0:
                 c = raw[of:of + getattr(self,type+'_size')]
-                self.sect.append(DynamicLoaderInfo(self,c, type=type))
+                self.sect.append(DynamicLoaderInfo(self,c, type=type+'_'))
         return self.sect
     
     def changeOffsets(self, decalage, min_offset=None):
@@ -435,14 +438,16 @@ class LoaderUnixthread(Loader):
     def _parse_content(self):
         if type(self.parent._parent) == dict: self.cputype = self.parent._parent['cputype']
         else:                                self.cputype = self.parent._parent.parent.Mhdr.cputype
-        if self.content == data_empty:
+        if self.content.pack() == data_empty:
             self.lhc.flavor, self.lhc.count, self.regsize = threadStateParameters[self.cputype]
             self.lh.cmdsize += self.lhc.count*4
             data = data_null * (self.lhc.count*4)
         else:
             flavor, count, self.regsize = threadStateParameters[self.cputype]
-            if self.lhc.flavor != flavor: FLAVOR_ERROR
-            if self.lhc.count  != count:  COUNT_ERROR
+            if (self.lhc.flavor, self.lhc.count) != (flavor, count):
+                print "THREAD_STATE %d COUNT %d" % (self.lhc.flavor, self.lhc.count)
+                print "Wanted %d %d" % (flavor, count)
+                raise ValueError("Inconsistent values for CPU %d" % self.cputype)
             data = self.content[8:8+(self.lhc.count)*4]
         #print "THREAD_STATE %d COUNT %d" % (self.lhc.flavor, self.lhc.count)
         self.packstring = "%s%d%s" % (
@@ -744,18 +749,24 @@ class LinkEditSection(MachoData):
         self.content = StrPatchwork(c)
         self.lc = parent
         self.type = type
+        if type is None:
+            self._offset = 'offset'
+            self._size = 'size'
+        else:
+            self._offset = type+'off'
+            self._size = type+'size'
         self._parsecontent()
     def _parsecontent(self):
         pass
     def get_offset(self):
-        return getattr(self.lc,self.type+'_off')
+        return getattr(self.lc,self._offset)
     def set_offset(self, val):
-        setattr(self.lc,self.type+'_off', val)
+        setattr(self.lc,self._offset, val)
     offset = property(get_offset, set_offset)
     def get_size(self):
-        return getattr(self.lc,self.type+'_size')
+        return getattr(self.lc,self._size)
     def set_size(self, val):
-        setattr(self.lc,self.type+'_size', val)
+        setattr(self.lc,self._size, val)
     size = property(get_size, set_size)
     def pack(self):
         return self.content.pack()
@@ -881,7 +892,7 @@ class SymbolTable(LinkEditSection):
         self.symbols = []
         self.symbols_from_name = {}
         of = 0
-        one_sym_size = int(self.lc.sym_size/self.lc.nsyms)
+        one_sym_size = int(self.lc.symsize/self.lc.nsyms)
         if self.wsize == 32:
             symbol_type = macho.symbol
         elif self.wsize == 64 :
@@ -921,7 +932,7 @@ class StringTable(LinkEditSection):
         for i, name in self.res.items():
             data[i] = name
         data = data.pack()
-        padding = self.lc.str_size - len(data)
+        padding = self.lc.strsize - len(data)
         return data + data_null*padding
 
 class DySymbolTable(LinkEditSection):
