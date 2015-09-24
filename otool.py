@@ -1,23 +1,15 @@
 #! /usr/bin/env python
 
-from optparse import OptionParser
 from elfesteem import macho_init, macho, intervals
 import os.path
 import time
 import platform
 import sys
 
-parser = OptionParser(usage = "usage: %prog [options] file")
-parser.add_option('-l', "--loadcommands", action="store_true",dest="loadcommands",default=False,help="print the load commands")
-parser.add_option('-H', "--header", action="store_true", dest="header", default=False, help="print the mach header")
-parser.add_option('-b', "--symbols", action="store_true", dest="symbols", default=False, help="print the symbols")
-parser.add_option('-A', "--arch", dest="architectures", help="enable the choice of a fat architecture")
-(options, args) = parser.parse_args()
-
 def print_header(e):
     print("Mach header")
     print("      magic cputype cpusubtype  caps    filetype ncmds sizeofcmds      flags")
-    print(" 0x%08x %7x %10d  0x%02x %10u %5u %10u 0x%08x" %(e.Mhdr.magic,e.Mhdr.cputype ,e.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK),(e.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK) >> 24,e.Mhdr.filetype,e.Mhdr.ncmds,e.Mhdr.sizeofcmds,e.Mhdr.flags))
+    print(" 0x%08x %7d %10d  0x%02x %10u %5u %10u 0x%08x" %(e.Mhdr.magic,e.Mhdr.cputype ,e.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK),(e.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK) >> 24,e.Mhdr.filetype,e.Mhdr.ncmds,e.Mhdr.sizeofcmds,e.Mhdr.flags))
 
 def split_integer(v, nbits, ndigits, truncate=None):
     mask = (1<<nbits)-1
@@ -200,11 +192,6 @@ def print_symbols(e):
             print("%-35s %-15s %-4s 0x%08x %04x"%(value.name,section,n_type,value.value,desc))
 
 
-
-if not args:
-    parser.print_help()
-    sys.exit(0)
-    
 archi = {
     (macho.CPU_TYPE_MC680x0,   macho.CPU_SUBTYPE_MC680x0_ALL):  'm68k',
     (macho.CPU_TYPE_MC680x0,   macho.CPU_SUBTYPE_MC68030_ONLY): 'm68030',
@@ -260,50 +247,82 @@ archi = {
     (macho.CPU_TYPE_ARM64,     macho.CPU_SUBTYPE_ARM64_V8):     'arm64v8',
     }
 
-for file in args:
-    raw = open(file, 'rb').read()
-    filesize = os.path.getsize(file)
-    e = macho_init.MACHO(raw, interval=intervals.Intervals().add(0,filesize), parseSymbols = False)
-    architectures = options.architectures
+def arch_name(e):
+    return archi[(e.Mhdr.cputype,
+        e.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK))]
 
-    if architectures == None and hasattr(e, 'Fhdr'):
-        architectures = platform.machine()
-    if architectures != None:
-        for (cputype, cpusubtype), arch in archi.items():
-            if arch == architectures:
-                break
-        else:
-            cputype, cpusubtype = None, None
-
-        if cputype == macho.CPU_TYPE_ARM:
-            for mac in e.arch:
-                if mac.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK == cpusubtype:
-                    e = mac
-        else:
-            for mac in e.arch:
-                if mac.Mhdr.cputype == cputype:
-                    e = mac
-                    break
-            else:
-                pass
-                #raise ValueError("Cannot find architecture in FAT file")
-
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('-arch', dest='arch_type', action='append', help='select architecture')
+    parser.add_argument('-h', dest='options', action='append_const', const='header', help='print the mach header')
+    parser.add_argument('-l', dest='options', action='append_const', const='load', help='print the load commands')
+    parser.add_argument('--symbols', dest='options', action='append_const', const='symbols', help='print the symbols')
+    parser.add_argument('file', nargs='*', help='object file')
+    args = parser.parse_args()
+    if args.options == None:
+        args.options = []
+    if len(args.file) == 0:
+        parser.print_help()
     functions = []
-
-    if options.header:
+    if 'header' in args.options:
         functions.append(print_header)
-    if options.loadcommands:
+    if 'load' in args.options:
         functions.append(print_lc)
-    if options.symbols:
+    if 'symbols' in args.options:
         functions.append(print_symbols)
 
-    if hasattr(e, 'Fhdr'):
-        for mach in e.arch:
-            print("%s (architecture %s):" %(file, archi[(mach.Mhdr.cputype, mach.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK))]))
-            for f in functions:
-                f(mach)
-    else :
-        print("%s:" %file)
-        for f in functions:
-            f(e)
+    for file in args.file:
+        raw = open(file, 'rb').read()
+        filesize = os.path.getsize(file)
+        e = macho_init.MACHO(raw,
+            interval=intervals.Intervals().add(0,filesize),
+            parseSymbols = False)
+        if args.arch_type == None and hasattr(e, 'Fhdr'):
+            # Select the current architecture, if present
+            current = platform.machine()
+            for _ in e.arch:
+                if current == arch_name(_):
+                    e = _
+                    break
+        elif 'all' in args.arch_type:
+            # Display all architectures
+            e = [ _ for _ in e.arch ]
+        elif len(args.arch_type) == 1 and hasattr(e, 'Mhdr'):
+            # Display if it is the architecture
+            current = args.arch_type[0]
+            if current != arch_name(e):
+                e = []
+        elif len(args.arch_type) == 1 and hasattr(e, 'Fhdr'):
+            # Display one architecture
+            current = args.arch_type[0]
+            for _ in e.arch:
+                if current == arch_name(_):
+                    e = _
+                    break
+            else:
+                sys.stderr.write("error: otool: file: %s does not contain architecture: %s\n" % (file, current))
+                e = []
+        else:
+            # Display some architectures, in the order appearing in the args
+            f = []
+            for current in args.arch_type:
+                for _ in e.arch:
+                    if current == arch_name(_):
+                        f.append(_)
+                        break
+                else:
+                    sys.stderr.write("error: otool: file: %s does not contain architecture: %s\n" % (file, current))
+            e = f
 
+        if hasattr(e, 'Mhdr'):
+            print("%s:" %file)
+            for f in functions:
+                f(e)
+        else:
+            for _ in e:
+                t0 = _.Mhdr.cputype
+                t1 = _.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK)
+                print("%s (architecture %s):" %(file, arch_name(_)))
+                for f in functions:
+                    f(_)
