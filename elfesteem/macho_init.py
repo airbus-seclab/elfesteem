@@ -1159,22 +1159,6 @@ class MACHO(object):
     content = ContentManager()
     def parse_content(self):
         magic, = struct.unpack("<I",self.content[0:4])
-        if  magic == macho.MH_MAGIC:
-            self.sex = '<'
-            self.wsize = 32
-            self.Mhdr = macho.Mhdr(parent=self, content=self.content)
-        if  magic == macho.MH_CIGAM:
-            self.sex = '>'
-            self.wsize = 32
-            self.Mhdr = macho.Mhdr(parent=self, content=self.content)
-        if  magic == macho.MH_MAGIC_64:
-            self.sex = '<'
-            self.wsize = 64
-            self.Mhdr = macho.Mhdr_64(parent=self, content=self.content)
-        if  magic == macho.MH_CIGAM_64:
-            self.sex = '>'
-            self.wsize = 64
-            self.Mhdr = macho.Mhdr_64(parent=self, content=self.content)
         if  magic == macho.FAT_MAGIC or magic == macho.FAT_CIGAM:
             self.sex = '<' if magic == macho.FAT_MAGIC else '>'
             self.wsize = 0
@@ -1184,6 +1168,30 @@ class MACHO(object):
             self.arch = MachoList(self)
             self.rawdata = []
             return
+        elif  magic == macho.MH_MAGIC:
+            self.sex = '<'
+            self.wsize = 32
+            self.Mhdr = macho.Mhdr(parent=self, content=self.content)
+        elif  magic == macho.MH_CIGAM:
+            self.sex = '>'
+            self.wsize = 32
+            self.Mhdr = macho.Mhdr(parent=self, content=self.content)
+        elif  magic == macho.MH_MAGIC_64:
+            self.sex = '<'
+            self.wsize = 64
+            self.Mhdr = macho.Mhdr_64(parent=self, content=self.content)
+        elif  magic == macho.MH_CIGAM_64:
+            self.sex = '>'
+            self.wsize = 64
+            self.Mhdr = macho.Mhdr_64(parent=self, content=self.content)
+        elif  self.content[0:7] == '!<arch>':
+            # a Mach-O FAT file may contain ar archives, called "Static
+            # archive libraries",
+            # cf. https://developer.apple.com/library/mac/documentation/DeveloperTools/Conceptual/MachOTopics/1-Articles/building_files.html
+            # elfesteem does not know how to parse ar archives
+            raise ValueError("ar archive")
+        else:
+            raise ValueError("Not a Mach-O file")
         if self.verbose: print("MHDR is %r" % self.Mhdr)
         self.lh = LHList(self)
         self.sect = SectionList(self)
