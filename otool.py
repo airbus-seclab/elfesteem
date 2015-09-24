@@ -17,7 +17,7 @@ parser.add_option('-A', "--arch", dest="architectures", help="enable the choice 
 def print_header(e):
     print("Mach header")
     print("      magic cputype cpusubtype  caps    filetype ncmds sizeofcmds      flags")
-    print(" 0x%08x %7d %10d  0x%02x %10u %5u %10u 0x%08x" %(e.Mhdr.magic,e.Mhdr.cputype ,e.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK,(e.Mhdr.cpusubtype & macho.CPU_CAPS_MASK) >> 24,e.Mhdr.filetype,e.Mhdr.ncmds,e.Mhdr.sizeofcmds,e.Mhdr.flags))
+    print(" 0x%08x %7x %10d  0x%02x %10u %5u %10u 0x%08x" %(e.Mhdr.magic,e.Mhdr.cputype ,e.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK),(e.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK) >> 24,e.Mhdr.filetype,e.Mhdr.ncmds,e.Mhdr.sizeofcmds,e.Mhdr.flags))
 
 def split_integer(v, nbits, ndigits, truncate=None):
     mask = (1<<nbits)-1
@@ -205,35 +205,60 @@ if not args:
     parser.print_help()
     sys.exit(0)
     
-archi = {(macho.CPU_TYPE_X86_64,    macho.CPU_SUBTYPE_X86_64_ALL): 'x86_64',
-         (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_ALL): 'ppc',
-         (macho.CPU_TYPE_POWERPC64, macho.CPU_SUBTYPE_POWERPC_ALL): 'ppc64',
-         (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_I386_ALL): 'i386',
-         (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_ALL): 'arm',
-         (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_601): 'ppc601',
-         (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_603): 'ppc603',
-         (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_603e): 'ppc603e',
-         (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_603ev): 'ppc603ev',
-         (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_604): 'ppc604',
-         (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_604e): 'ppc604e',
-         (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_750): 'ppc750',
-         (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_7400): 'ppc7400',
-         (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_7450): 'ppc7450',
-         (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_970): 'ppc970',
-         (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_486): 'i486',
-         (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_486SX): 'i486SX',
-         (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_PENT): 'pentium',
-         (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_586): 'i586',
-         (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_PENTPRO): 'pentpro',
-         (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_PENTPRO): 'i686',
-         (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_PENTII_M3): 'pentIIm3',
-         (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_PENTII_M5): 'pentIIm5',
-         (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_PENTIUM_4): 'pentium4',
-         (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_V4T): 'armv4t',
-         (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_V5TEJ): 'armv5',
-         (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_XSCALE): 'xscale',
-         (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_V6): 'armv6',
-         (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_V7): 'armv7'}
+archi = {
+    (macho.CPU_TYPE_MC680x0,   macho.CPU_SUBTYPE_MC680x0_ALL):  'm68k',
+    (macho.CPU_TYPE_MC680x0,   macho.CPU_SUBTYPE_MC68030_ONLY): 'm68030',
+    (macho.CPU_TYPE_MC680x0,   macho.CPU_SUBTYPE_MC68040):      'm68040',
+    (macho.CPU_TYPE_MC88000,   macho.CPU_SUBTYPE_MC88000_ALL):  'm88k',
+    (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_I386_ALL):     'i386',
+    (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_486):          'i486',
+    (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_486SX):        'i486SX',
+    (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_PENT):         'pentium',
+    (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_PENTPRO):      'pentpro',
+    #macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_PENTIUM_4):    'pentium4',
+    (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_PENTII_M3):    'pentIIm3',
+    (macho.CPU_TYPE_I386,      macho.CPU_SUBTYPE_PENTII_M5):    'pentIIm5',
+    (macho.CPU_TYPE_X86_64,    macho.CPU_SUBTYPE_X86_64_ALL):   'x86_64',
+    (macho.CPU_TYPE_X86_64,    macho.CPU_SUBTYPE_X86_64_H):     'x86_64h',
+    (macho.CPU_TYPE_I860,      macho.CPU_SUBTYPE_I860_ALL):     'i860',
+    (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_ALL):  'ppc',
+    (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_601):  'ppc601',
+    (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_603):  'ppc602',
+    (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_603):  'ppc603',
+    (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_603e): 'ppc603e',
+    (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_603ev):'ppc603ev',
+    (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_604):  'ppc604',
+    (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_604e): 'ppc604e',
+    (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_620):  'ppc620',
+    (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_750):  'ppc750',
+    (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_7400): 'ppc7400',
+    (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_7450): 'ppc7450',
+    (macho.CPU_TYPE_POWERPC,   macho.CPU_SUBTYPE_POWERPC_970):  'ppc970',
+    (macho.CPU_TYPE_POWERPC64, macho.CPU_SUBTYPE_POWERPC64_ALL):'ppc64',
+    (macho.CPU_TYPE_POWERPC64, macho.CPU_SUBTYPE_POWERPC_970):  'ppc970-64',
+    (macho.CPU_TYPE_VEO,       macho.CPU_SUBTYPE_VEO_ALL):      'veo',
+    (macho.CPU_TYPE_VEO,       macho.CPU_SUBTYPE_VEO_1):        'veo1',
+    (macho.CPU_TYPE_VEO,       macho.CPU_SUBTYPE_VEO_2):        'veo2',
+    (macho.CPU_TYPE_VEO,       macho.CPU_SUBTYPE_VEO_3):        'veo3',
+    (macho.CPU_TYPE_VEO,       macho.CPU_SUBTYPE_VEO_4):        'veo4',
+    (macho.CPU_TYPE_HPPA,      macho.CPU_SUBTYPE_HPPA_ALL):     'hppa',
+    (macho.CPU_TYPE_HPPA,      macho.CPU_SUBTYPE_HPPA_7100LC):  'hppa7100LC',
+    (macho.CPU_TYPE_SPARC,     macho.CPU_SUBTYPE_SPARC_ALL):    'sparc',
+    (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_ALL):      'arm',
+    (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_V4T):      'armv4t',
+    (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_V5TEJ):    'armv5',
+    (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_XSCALE):   'xscale',
+    (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_V6):       'armv6',
+    (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_V6M):      'armv6m',
+    (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_V7):       'armv7',
+    (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_V7F):      'armv7f',
+    (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_V7S):      'armv7s',
+    (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_V7K):      'armv7k',
+    (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_V7M):      'armv7m',
+    (macho.CPU_TYPE_ARM,       macho.CPU_SUBTYPE_ARM_V7EM):     'armv7em',
+    (macho.CPU_TYPE_ARM64,     macho.CPU_SUBTYPE_ARM64_ALL):    'arm64',
+    (macho.CPU_TYPE_ARM64,     macho.CPU_SUBTYPE_ARM64_V8):     'arm64v8',
+    }
 
 for file in args:
     raw = open(file, 'rb').read()
@@ -274,7 +299,7 @@ for file in args:
 
     if hasattr(e, 'Fhdr'):
         for mach in e.arch:
-            print("%s (architecture %s):" %(file, archi[(mach.Mhdr.cputype, mach.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK)]))
+            print("%s (architecture %s):" %(file, archi[(mach.Mhdr.cputype, mach.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK))]))
             for f in functions:
                 f(mach)
     else :
