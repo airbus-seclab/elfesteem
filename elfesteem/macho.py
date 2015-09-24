@@ -345,6 +345,9 @@ class linkedit_data_command(CStruct):
     _fields = [ ("dataoff","u32"),
                 ("datasize","u32")]
 
+class linkeroption_command(CStruct):
+    _fields = [ ("count","u32")]
+
 class sectionHeader(CStruct):
     _namelen = 16
     _fields = [ ("pad_sectname","%ds"%_namelen),

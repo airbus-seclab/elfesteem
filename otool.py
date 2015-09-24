@@ -62,6 +62,9 @@ def print_lc(e):
             elif lc.cmd == macho.LC_VERSION_MIN_MACOSX:
                 shift = 2
                 value = split_integer(value, 8, 3, truncate=1)
+            elif lc.cmd == macho.LC_VERSION_MIN_IPHONEOS:
+                shift = 2
+                value = split_integer(value, 8, 3, truncate=2)
             elif lc.cmd == macho.LC_SOURCE_VERSION:
                 shift = 2
                 value = split_integer(value, 10, 5, truncate=2)
@@ -164,6 +167,10 @@ def print_lc(e):
                 print("\t    r8  0x%08x r9     0x%08x r10 0x%08x r11 0x%08x" %(lc.data[8], lc.data[9],lc.data[10],lc.data[11]))
                 print("\t    r12 0x%08x sp     0x%08x lr  0x%08x pc  0x%08x" %(lc.data[12], lc.data[13],lc.data[14],lc.data[15]))
                 print("\t   cpsr 0x%08x" %lc.data[16])
+
+        elif lc.cmd == macho.LC_LINKER_OPTION:
+            for i, s in enumerate(lc.strings):
+                print("  string #%d %s" % (i+1, s))
 
 
 

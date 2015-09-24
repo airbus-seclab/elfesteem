@@ -409,6 +409,10 @@ class LoaderVersion(Loader):
     lht = macho.LC_VERSION_MIN_MACOSX
     lhc = macho.version_min_command
 
+class LoaderVersionIPhone(Loader):
+    lht = macho.LC_VERSION_MIN_IPHONEOS
+    lhc = macho.version_min_command
+
 class LoaderEntryPoint(Loader):
     lht = macho.LC_MAIN
     lhc = macho.entry_point_command
@@ -463,6 +467,22 @@ class LoaderSourceVersion(Loader):
     lht = macho.LC_SOURCE_VERSION
     lhc = macho.source_version_command
 
+class LoaderLinkerOption(Loader):
+    lht = macho.LC_LINKER_OPTION
+    lhc = macho.linkeroption_command
+    def _parse_content(self):
+        self.strings = []
+        data = self.content.pack()
+        if data == data_empty: self.count = 0
+        data = self.content[4:]
+        while (len(self.strings) < self.count):
+            s = data[:data.index(data_null)]
+            self.strings.append(s)
+            data = data[len(s)+1:]
+        self.padding = self.lh.cmdsize - self.lh._size - self.lhc._size - len(data_null.join(self.strings))
+    def _str_additional_data(self):
+        return data_null.join(self.strings) + data_null*self.padding
+
 class LHList(object):
     def __init__(self, parent, **kargs):
         inherit_sex_wsize(self, parent, kargs)
@@ -477,6 +497,7 @@ class LHList(object):
             self.lhlist.append(lh)
             if parent.interval is not None :
                 if not parent.interval.contains(of,of+len(lh.pack())):
+                    print("Parsing %r (%d,%d)" % (lh,of,len(lh.pack())))
                     raise ValueError("This part of file has already been parsed")
                 #print "LHList interval before", parent.interval
                 #print " ---- to delete ---",of,"-",of+len(str(lh)),"/",hex(of),"-",hex(of+len(str(lh)))
@@ -981,6 +1002,13 @@ class CodeSignature(LinkEditSection):
 class LoaderCodeSignature(LoaderLinkEditDataCommand):
     lht = macho.LC_CODE_SIGNATURE
     sect_class = CodeSignature
+
+class OptimizationHint(LinkEditSection):
+    pass
+
+class LoaderOptimizationHint(LoaderLinkEditDataCommand):
+    lht = macho.LC_LINKER_OPTIMIZATION_HINT
+    sect_class = OptimizationHint
 
 class Hint(LinkEditSection):
     pass
