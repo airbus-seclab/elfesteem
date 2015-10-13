@@ -278,42 +278,53 @@ if __name__ == '__main__':
         e = macho_init.MACHO(raw,
             interval=intervals.Intervals().add(0,filesize),
             parseSymbols = False)
-        if args.arch_type == None and hasattr(e, 'Fhdr'):
-            # Select the current architecture, if present
-            current = platform.machine()
-            for _ in e.arch:
-                if current == arch_name(_):
-                    e = _
-                    break
-        elif 'all' in args.arch_type:
-            # Display all architectures
-            e = [ _ for _ in e.arch ]
-        elif len(args.arch_type) == 1 and hasattr(e, 'Mhdr'):
-            # Display if it is the architecture
-            current = args.arch_type[0]
-            if current != arch_name(e):
-                e = []
-        elif len(args.arch_type) == 1 and hasattr(e, 'Fhdr'):
-            # Display one architecture
-            current = args.arch_type[0]
-            for _ in e.arch:
-                if current == arch_name(_):
-                    e = _
-                    break
-            else:
-                sys.stderr.write("error: otool: file: %s does not contain architecture: %s\n" % (file, current))
-                e = []
-        else:
-            # Display some architectures, in the order appearing in the args
-            f = []
-            for current in args.arch_type:
+        if args.arch_type is None:
+            if hasattr(e, 'Fhdr'):
+                # Select the current architecture, if present
+                current = platform.machine()
                 for _ in e.arch:
                     if current == arch_name(_):
-                        f.append(_)
+                        e = _
+                        break
+        elif 'all' in args.arch_type:
+            if hasattr(e, 'Fhdr'):
+                # Display all architectures
+                e = [ _ for _ in e.arch ]
+        elif len(args.arch_type) == 1:
+            if hasattr(e, 'Fhdr'):
+                # Display one architecture
+                current = args.arch_type[0]
+                for _ in e.arch:
+                    if current == arch_name(_):
+                        e = _
                         break
                 else:
                     sys.stderr.write("error: otool: file: %s does not contain architecture: %s\n" % (file, current))
-            e = f
+                    e = []
+            else:
+                # Display if it is the architecture
+                current = args.arch_type[0]
+                if current != arch_name(e):
+                    e = []
+        else:
+            if hasattr(e, 'Fhdr'):
+                # Display some architectures, in the order appearing in the args
+                f = []
+                for current in args.arch_type:
+                    for _ in e.arch:
+                        if current == arch_name(_):
+                            f.append(_)
+                            break
+                    else:
+                        sys.stderr.write("error: otool: file: %s does not contain architecture: %s\n" % (file, current))
+                e = f
+            else:
+                # Display if one is the architecture
+                for current in args.arch_type:
+                    if current == arch_name(e):
+                        break
+                else:
+                    e = []
 
         if hasattr(e, 'Mhdr'):
             print("%s:" %file)
