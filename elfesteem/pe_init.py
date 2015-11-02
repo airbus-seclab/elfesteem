@@ -29,16 +29,16 @@ class ContentManager(object):
 
 class ContectRva(object):
 
-    def __init__(self, x):
-        self.parent = x
+    def __init__(self, parent):
+        self.parent = parent
 
-    def get_slice_raw(self, item):
-        if isinstance(item, (int, long)):
-            rva_items = self.get_rvaitem(item)
-        elif isinstance(item, slice):
-            rva_items = self.get_rvaitem(item.start, item.stop, item.step)
-        else:
-            raise ValueError('Item must be int/long/slice')
+    def get_slice_raw(self, rva_start, rva_stop):
+        """
+        Returns RVA data between @rva_start and @rva_stop RVAs
+        @rva_start: start RVA address
+        @rva_stop: stop RVA address
+        """
+        rva_items = self.get_rva_item(rva_start, rva_stop)
         if rva_items is None:
             return
         data_out = ""
@@ -49,50 +49,74 @@ class ContectRva(object):
                 data_out += self.parent.__getitem__(n_item)
         return data_out
 
-    def get_rvaitem(self, start, stop=None, step=None):
+    def get_rva_item(self, rva_start, rva_stop):
+        """
+        Returns sections/slice data between @rva_start and @rva_stop RVAs
+        @rva_start: start RVA address
+        @rva_stop: stop RVA address
+        """
         if self.parent.SHList is None:
-            return [(None, start)]
-        if stop == None:
-            s = self.parent.getsectionbyrva(start)
+            return [(None, rva_start)]
+        if rva_stop == None:
+            s = self.parent.getsectionbyrva(rva_start)
             if s is None:
-                return [(None, start)]
-            start = start - s.addr
-            return [(s, start)]
-        total_len = stop - start
+                return [(None, rva_start)]
+            rva_start = rva_start - s.addr
+            return [(s, rva_start)]
+        total_len = rva_stop - rva_start
         rva_items = []
         while total_len:
             # Special case if look at pe hdr address
-            if 0 <= start < min(self.parent.SHList[0].addr,
-                                self.parent.NThdr.sizeofheaders):
-                s_start = start
-                s_stop = stop
+            if 0 <= rva_start < min(self.parent.SHList[0].addr,
+                                    self.parent.NThdr.sizeofheaders):
+                s_start = rva_start
+                s_stop = rva_stop
                 s_max = min(self.parent.SHList[0].addr,
                             self.parent.NThdr.sizeofheaders)
                 s = None
             else:
-                s = self.parent.getsectionbyrva(start)
+                s = self.parent.getsectionbyrva(rva_start)
                 if s is None:
-                    log.warn('unknown rva address! %x' % start)
+                    log.warn('unknown rva address! %x' % rva_start)
                     return []
                 s_max = max(s.size, s.rawsize)
-                s_start = start - s.addr
-                s_stop = stop - s.addr
+                s_start = rva_start - s.addr
+                s_stop = rva_stop - s.addr
             if s_stop > s_max:
                 s_stop = s_max
             s_len = s_stop - s_start
             total_len -= s_len
-            start += s_len
+            rva_start += s_len
             n_item = slice(s_start, s_stop, step)
             rva_items.append((s, n_item))
         return rva_items
 
     def __getitem__(self, item):
-        return self.get_slice_raw(item)
+        raise DeprecationWarning(
+            "Replace code by rva.get(start, [stop, step])")
 
     def __setitem__(self, item, data):
-        if not type(item) is slice:
-            item = slice(item, item + len(data), None)
-        rva_items = self.get_rvaitem(item.start, item.stop, item.step)
+        raise DeprecationWarning("Replace code by rva.set(start, data)")
+
+    def get(self, rva_start, rva_stop=None):
+        """
+        Get data in RVA view starting at @rva_start, stopping at @rva_stop
+        @rva_start: rva start address
+        @rva_stop: rva stop address
+        """
+        if rva_stop is None:
+            rva_stop = rva_start + 1
+        return self.get_slice_raw(rva_start, rva_stop)
+
+    def set(self, rva, data):
+        """
+        Set @data in RVA view starting at @start
+        @rva: rva start address
+        @data: data to set
+        """
+        if not isinstance(rva, (int, long)):
+            raise ValueError('addr must be int/long')
+        rva_items = self.get_rva_item(rva, rva + len(data))
         if rva_items is None:
             return
         off = 0
@@ -114,25 +138,37 @@ class ContentVirtual:
     def __init__(self, x):
         self.parent = x
 
-    def item_virt2rva(self, item):
-        if not type(item) is slice:  # integer
-            rva = self.parent.virt2rva(item)
-            return slice(rva, None, None)
-        start = self.parent.virt2rva(item.start)
-        stop = self.parent.virt2rva(item.stop)
-        step = item.step
-        return slice(start, stop, step)
-
     def __getitem__(self, item):
-        raise DeprecationWarning("Replace code by virt(start, [stop, step])")
-        rva_item = self.item_virt2rva(item)
-        return self.parent.rva.__getitem__(rva_item)
+        raise DeprecationWarning("Replace code by virt.get(start, [stop])")
 
     def __setitem__(self, item, data):
-        if not type(item) is slice:
-            item = slice(item, item + len(data), None)
-        rva_item = self.item_virt2rva(item)
-        self.parent.rva.__setitem__(rva_item, data)
+        raise DeprecationWarning("Replace code by virt.set(start, data)")
+
+    def __call__(self, ad_start, ad_stop=None, ad_step=None):
+        raise DeprecationWarning("Replace code by virt.set(addr, data)")
+
+    def get(self, virt_start, virt_stop=None):
+        """
+        Get data in VIRTUAL view starting at @virt_start, stopping at @virt_stop
+        @virt_start: virt start address
+        @virt_stop: virt stop address
+        """
+        rva_start = self.parent.virt2rva(virt_start)
+        if virt_stop != None:
+            rva_stop = self.parent.virt2rva(virt_stop)
+        else:
+            rva_stop = None
+        return self.parent.rva.get(rva_start, rva_stop)
+
+    def set(self, addr, data):
+        """
+        Set @data in VIRTUAL view starting at @start
+        @addr: virtual start address
+        @data: data to set
+        """
+        if not isinstance(addr, (int, long)):
+            raise ValueError('addr must be int/long')
+        self.parent.rva.set(self.virt2rva(addr), data)
 
     def max_addr(self):
         s = self.parent.SHList[-1]
@@ -200,21 +236,6 @@ class ContentVirtual:
 
     def is_addr_in(self, ad):
         return self.parent.is_in_virt_address(ad)
-
-    def __call__(self, ad_start, ad_stop=None, ad_step=None):
-        ad_start = self.parent.virt2rva(ad_start)
-        if ad_stop != None:
-            ad_stop = self.parent.virt2rva(ad_stop)
-
-        rva_items = self.parent.rva.get_rvaitem(ad_start, ad_stop, ad_step)
-        data_out = ""
-        for s, n_item in rva_items:
-            if s is None:
-                data_out += self.parent.__getitem__(n_item)
-            else:
-                data_out += s.data.__getitem__(n_item)
-
-        return data_out
 
 # PE object
 
@@ -636,9 +657,9 @@ class PE(object):
                 if t != 3:
                     raise ValueError('reloc type not impl')
                 off += rva
-                v = struct.unpack('I', self.rva[off:off + 4])[0]
+                v = struct.unpack('I', self.rva.get(off, off + 4))[0]
                 v += offset
-                self.rva[off:off + 4] = struct.pack('I', v & 0xFFFFFFFF)
+                self.rva.set(off, struct.pack('I', v & 0xFFFFFFFF))
         self.NThdr.ImageBase = imgbase
 
 
