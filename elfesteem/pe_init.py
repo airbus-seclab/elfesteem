@@ -34,15 +34,18 @@ class ContectRva(object):
         self.parent = x
 
     def get_slice_raw(self, item):
-        if not type(item) is slice:
-            return None
-        rva_items = self.get_rvaitem(item.start, item.stop, item.step)
+        if isinstance(item, (int, long)):
+            rva_items = self.get_rvaitem(item)
+        elif isinstance(item, slice):
+            rva_items = self.get_rvaitem(item.start, item.stop, item.step)
+        else:
+            raise ValueError('Item must be int/long/slice')
         if rva_items is None:
             return
         data_out = ""
-        for s, n_item in rva_items:
-            if s:
-                data_out += s.data.__getitem__(n_item)
+        for section, n_item in rva_items:
+            if section:
+                data_out += section.data.__getitem__(n_item)
             else:
                 data_out += self.parent.__getitem__(n_item)
         return data_out
@@ -126,8 +129,7 @@ class ContentVirtual:
         return slice(start, stop, step)
 
     def __getitem__(self, item):
-        raise DeprecationWarning("xx(start, [stop, step])")
-        print 'ii'
+        raise DeprecationWarning("Replace code by virt(start, [stop, step])")
         rva_item = self.item_virt2rva(item)
         return self.parent.drva.__getitem__(rva_item)
 
