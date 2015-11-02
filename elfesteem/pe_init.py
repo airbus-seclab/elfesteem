@@ -28,7 +28,7 @@ class ContentManager(object):
         self.__set__(owner, None)
 
 
-class drva:
+class ContectRva(object):
 
     def __init__(self, x):
         self.parent = x
@@ -111,7 +111,7 @@ class drva:
         return  # s.data.__setitem__(n_item, data)
 
 
-class virt:
+class ContentVirtual:
 
     def __init__(self, x):
         self.parent = x
@@ -231,8 +231,8 @@ class PE(object):
                  parse_delay=True,
                  parse_reloc=True,
                  wsize=32):
-        self._drva = drva(self)
-        self._virt = virt(self)
+        self._drva = ContectRva(self)
+        self._virt = ContentVirtual(self)
         if pestr == None:
             self._content = StrPatchwork()
             self._sex = 0
