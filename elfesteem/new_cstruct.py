@@ -9,13 +9,13 @@ size2type_s = {}
 
 for t in 'B', 'H', 'I', 'Q':
     s = struct.calcsize(t)
-    type2realtype[t] = s*8
-    size2type[s*8] = t
+    type2realtype[t] = s * 8
+    size2type[s * 8] = t
 
 for t in 'b', 'h', 'i', 'q':
     s = struct.calcsize(t)
-    type2realtype[t] = s*8
-    size2type_s[s*8] = t
+    type2realtype[t] = s * 8
+    size2type_s[s * 8] = t
 
 type2realtype['u08'] = size2type[8]
 type2realtype['u16'] = size2type[16]
@@ -32,7 +32,8 @@ type2realtype['f'] = 'f'
 type2realtype['q'] = 'q'
 type2realtype['ptr'] = 'ptr'
 
-sex_types = {0:'<', 1:'>'}
+sex_types = {0: '<', 1: '>'}
+
 
 def fix_size(fields, wsize):
     out = []
@@ -49,6 +50,7 @@ def fix_size(fields, wsize):
     fields = out
     return fields
 
+
 def real_fmt(fmt, wsize):
     if fmt == "ptr":
         v = size2type[wsize]
@@ -59,28 +61,31 @@ def real_fmt(fmt, wsize):
     return v
 
 all_cstructs = {}
+
+
 class Cstruct_Metaclass(type):
     field_suffix = "_value"
+
     def __new__(cls, name, bases, dct):
         for fields in dct['_fields']:
             fname = fields[0]
             if fname in ['parent', 'parent_head']:
                 raise ValueError('field name will confuse internal structs',
                                  repr(fname))
-            dct[fname] = property(dct.pop("get_"+fname,
-                                          lambda self,fname=fname: getattr(self,fname+self.__class__.field_suffix)),
-                                  dct.pop("set_"+fname,
-                                          lambda self,v,fname=fname: setattr(self,fname+self.__class__.field_suffix,v)),
-                                  dct.pop("del_"+fname, None))
-
-
+            dct[fname] = property(dct.pop("get_" + fname,
+                                          lambda self, fname=fname: getattr(
+                                              self, fname + self.__class__.field_suffix)),
+                                  dct.pop("set_" + fname,
+                                          lambda self, v, fname=fname: setattr(
+                                              self, fname + self.__class__.field_suffix, v)),
+                                  dct.pop("del_" + fname, None))
 
         o = super(Cstruct_Metaclass, cls).__new__(cls, name, bases, dct)
         if name != "CStruct":
             all_cstructs[name] = o
         return o
 
-    def unpack_l(cls, s, off = 0, parent_head = None, _sex=None, _wsize=None):
+    def unpack_l(cls, s, off=0, parent_head=None, _sex=None, _wsize=None):
         if _sex == None and _wsize == None:
             # get sex and size from parent
             if parent_head:
@@ -89,7 +94,7 @@ class Cstruct_Metaclass(type):
             else:
                 _sex = 0
                 _wsize = 32
-        c = cls(_sex = _sex, _wsize = _wsize)
+        c = cls(_sex=_sex, _wsize=_wsize)
         if parent_head == None:
             parent_head = c
         c.parent_head = parent_head
@@ -108,34 +113,36 @@ class Cstruct_Metaclass(type):
                     i = 0
                     while i < cpt(c):
                         fmt = real_fmt(ffmt, _wsize)
-                        of2 = of1+struct.calcsize(fmt)
-                        value.append(struct.unpack(c.sex+fmt, s[of1:of2])[0])
+                        of2 = of1 + struct.calcsize(fmt)
+                        value.append(struct.unpack(c.sex + fmt, s[of1:of2])[0])
                         of1 = of2
-                        i+=1
+                        i += 1
                 else:
                     fmt = real_fmt(ffmt, _wsize)
-                    of2 = of1+struct.calcsize(fmt)
-                    value = struct.unpack(c.sex+fmt, s[of1:of2])[0]
-            elif ffmt == "sz": # null terminated special case
+                    of2 = of1 + struct.calcsize(fmt)
+                    value = struct.unpack(c.sex + fmt, s[of1:of2])[0]
+            elif ffmt == "sz":  # null terminated special case
                 of2 = s.find('\x00', of1)
                 if of2 == -1:
                     raise ValueError('no null char in string!')
                 of2 += 1
-                value = s[of1:of2-1]
+                value = s[of1:of2 - 1]
             elif ffmt in all_cstructs:
                 # sub structures
                 if cpt:
                     value = []
                     i = 0
                     while i < cpt(c):
-                        v, l = all_cstructs[ffmt].unpack_l(s, of1, parent_head, _sex, _wsize)
+                        v, l = all_cstructs[ffmt].unpack_l(
+                            s, of1, parent_head, _sex, _wsize)
                         v.parent = c
                         value.append(v)
                         of2 = of1 + l
                         of1 = of2
                         i += 1
                 else:
-                    value, l = all_cstructs[ffmt].unpack_l(s, of1, parent_head, _sex, _wsize)
+                    value, l = all_cstructs[ffmt].unpack_l(
+                        s, of1, parent_head, _sex, _wsize)
                     value.parent = c
                     of2 = of1 + l
             elif isinstance(ffmt, tuple):
@@ -144,24 +151,26 @@ class Cstruct_Metaclass(type):
             else:
                 raise ValueError('unknown class', ffmt)
             of1 = of2
-            setattr(c, fname+c.__class__.field_suffix, value)
+            setattr(c, fname + c.__class__.field_suffix, value)
 
-        return c, of2-off
+        return c, of2 - off
 
-    def unpack(cls, s, off = 0, parent_head = None, _sex=None, _wsize=None):
-        c, l = cls.unpack_l(s, off = off,
-                            parent_head = parent_head, _sex=_sex, _wsize=_wsize)
+    def unpack(cls, s, off=0, parent_head=None, _sex=None, _wsize=None):
+        c, l = cls.unpack_l(s, off=off,
+                            parent_head=parent_head, _sex=_sex, _wsize=_wsize)
         return c
+
+
 class CStruct(object):
     __metaclass__ = Cstruct_Metaclass
     _packformat = ""
     _fields = []
 
-    def __init__(self, parent_head = None, _sex = None, _wsize = None, **kargs):
+    def __init__(self, parent_head=None, _sex=None, _wsize=None, **kargs):
         self.parent_head = parent_head
         self._size = None
         kargs = dict(kargs)
-        #if not sex or size: get the one of the parent
+        # if not sex or size: get the one of the parent
         if _sex == None and _wsize == None:
             if parent_head:
                 _sex = parent_head._sex
@@ -177,10 +186,10 @@ class CStruct(object):
         else:
             self.sex = sex_types[_sex]
         for f in self._fields:
-            setattr(self, f[0]+self.__class__.field_suffix, None)
+            setattr(self, f[0] + self.__class__.field_suffix, None)
         if kargs:
             for k, v in kargs.items():
-                self.__dict__[k+self.__class__.field_suffix] = v
+                self.__dict__[k + self.__class__.field_suffix] = v
 
     def pack(self):
         out = ''
@@ -191,25 +200,25 @@ class CStruct(object):
             elif len(field) == 3:
                 fname, ffmt, cpt = field
 
-            value = getattr(self, fname+self.__class__.field_suffix)
+            value = getattr(self, fname + self.__class__.field_suffix)
             if ffmt in type2realtype or (isinstance(ffmt, str) and re.match(r'\d+s', ffmt)):
                 # basic types
                 fmt = real_fmt(ffmt, self.wsize)
                 if cpt == None:
                     if value == None:
-                        o = struct.calcsize(fmt)*"\x00"
+                        o = struct.calcsize(fmt) * "\x00"
                     else:
-                        o = struct.pack(self.sex+fmt, value)
+                        o = struct.pack(self.sex + fmt, value)
                 else:
                     o = ""
                     for v in value:
                         if value == None:
-                            o += struct.calcsize(fmt)*"\x00"
+                            o += struct.calcsize(fmt) * "\x00"
                         else:
-                            o += struct.pack(self.sex+fmt, v)
+                            o += struct.pack(self.sex + fmt, v)
 
-            elif ffmt == "sz": # null terminated special case
-                o = value+'\x00'
+            elif ffmt == "sz":  # null terminated special case
+                o = value + '\x00'
             elif ffmt in all_cstructs:
                 # sub structures
                 if cpt == None:
@@ -235,9 +244,9 @@ class CStruct(object):
         return len(self.pack())
 
     def __repr__(self):
-        return "<%s=%s>" % (self.__class__.__name__, "/".join(map(lambda x:repr(getattr(self,x[0])),self._fields)))
+        return "<%s=%s>" % (self.__class__.__name__, "/".join(map(lambda x: repr(getattr(self, x[0])), self._fields)))
 
-    def __getitem__(self, item): # to work with format strings
+    def __getitem__(self, item):  # to work with format strings
         return getattr(self, item)
 
 if __name__ == "__main__":
@@ -281,13 +290,15 @@ if __name__ == "__main__":
                           lambda c, value:c.sets(value))),
                    ("f", "u16"),
                    ]
+
         def gets(cls, s, of):
             i = 0
-            while s[of+i] != "\x00":
-                i+=1
-            return s[of:of+i], of+i+1
+            while s[of + i] != "\x00":
+                i += 1
+            return s[of:of + i], of + i + 1
+
         def sets(cls, value):
-            return str(value)+'\x00'
+            return str(value) + '\x00'
 
     """
     h field is a 4 len string
@@ -317,7 +328,7 @@ if __name__ == "__main__":
     print repr(s2)
     print repr(c1.unpack(s2))
 
-    s3 = struct.pack('HHI', 4444, 5555, 666666666)+s2
+    s3 = struct.pack('HHI', 4444, 5555, 666666666) + s2
     print repr(s3)
     assert len(s3) == 16
     c = c2.unpack(s3)
@@ -327,8 +338,7 @@ if __name__ == "__main__":
     assert s3 == s4
     assert c.c2_c.parent_head == c
 
-
-    s5 = struct.pack('HHH', 2, 5555, 6666)+s1*2+struct.pack('H', 9999)
+    s5 = struct.pack('HHH', 2, 5555, 6666) + s1 * 2 + struct.pack('H', 9999)
     c = c3.unpack(s5)
     assert len(c) == 24
     print repr(c)
@@ -346,7 +356,7 @@ if __name__ == "__main__":
     c.c1_field3 = 333333333
     assert str(c) == s1
 
-    s7 = struct.pack('H', 8888)+"fffff\x00"+struct.pack('H', 9999)
+    s7 = struct.pack('H', 8888) + "fffff\x00" + struct.pack('H', 9999)
     c = c4.unpack(s7)
     print repr(c)
     print repr(c.e)
@@ -361,10 +371,8 @@ if __name__ == "__main__":
     print repr(c)
     assert s8 == str(c)
 
-
-    s9 = struct.pack('H', 9999)+ "toto\x00" + struct.pack('H', 1010)
+    s9 = struct.pack('H', 9999) + "toto\x00" + struct.pack('H', 1010)
     print repr(s9)
     c = c6.unpack(s9)
     print repr(c), repr(str(c))
     assert s9 == str(c)
-
