@@ -22,7 +22,6 @@ class ContentManager(object):
     def __set__(self, owner, new_content):
         owner.resize(len(owner._content), len(new_content))
         owner._content = new_content
-        # owner.parse_content()
 
     def __delete__(self, owner):
         self.__set__(owner, None)
@@ -78,12 +77,8 @@ class ContectRva(object):
                 s_max = max(s.size, s.rawsize)
                 s_start = start - s.addr
                 s_stop = stop - s.addr
-            # print hex(s_stop), hex(s_start)
             if s_stop > s_max:
-                # print 'yy'
-                # raise ValueError('lack data %d, %d'%(stop, s_max))
                 s_stop = s_max
-            # print hex(s_start), hex(s_stop)
             s_len = s_stop - s_start
             total_len -= s_len
             start += s_len
@@ -111,7 +106,7 @@ class ContectRva(object):
             if self.parent.content:
                 self.parent.content = self.parent.content[
                     :file_off] + data_slice + self.parent.content[file_off + len(data_slice):]
-        return  # s.data.__setitem__(n_item, data)
+        return
 
 
 class ContentVirtual:
@@ -331,7 +326,6 @@ class PE(object):
         self._sex = 0
         self._wsize = 32
         self.Doshdr = pe.Doshdr.unpack(self.content, of, self)
-        # print repr(self.Doshdr)
         of = self.Doshdr.lfanew
         if of > len(self.content):
             log.warn('ntsig after eof!')
@@ -364,12 +358,9 @@ class PE(object):
             Opthdr = pe.Opthdr64
 
         self.Opthdr, l = Opthdr.unpack_l(self.content, of, self)
-        # print hex(of+len(self.Opthdr))
         self.NThdr = pe.NThdr.unpack(self.content, of + l, self)
-        # print repr(self.NThdr.optentries)
         of += self.Coffhdr.sizeofoptionalheader
         self.SHList = pe.SHList.unpack(self.content, of, self)
-        # print repr(self.SHList)
 
         # load section data
         filealignment = self.NThdr.filealignment
@@ -442,19 +433,6 @@ class PE(object):
                                                    self)
                 except pe.InvalidOffset:
                     log.warning('cannot parse DirRes, skipping')
-        # self.Symbols = ClassArray(self, WSymb,
-        # self.Coffhdr.Coffhdr.pointertosymboltable,
-        # self.Coffhdr.Coffhdr.numberofsymbols)
-
-        # print repr(self.Doshdr)
-        # print repr(self.Coffhdr)
-        # print repr(self.Opthdr)
-        # print repr(self.SHList)
-
-        # print repr(self.DirImport)
-        # print repr(self.DirExport)
-        # print repr(self.DirReloc)
-        # print repr(self.DirRes)
 
     def resize(self, old, new):
         pass
