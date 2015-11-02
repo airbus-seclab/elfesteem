@@ -126,13 +126,13 @@ class ContentVirtual:
     def __getitem__(self, item):
         raise DeprecationWarning("Replace code by virt(start, [stop, step])")
         rva_item = self.item_virt2rva(item)
-        return self.parent.drva.__getitem__(rva_item)
+        return self.parent.rva.__getitem__(rva_item)
 
     def __setitem__(self, item, data):
         if not type(item) is slice:
             item = slice(item, item + len(data), None)
         rva_item = self.item_virt2rva(item)
-        self.parent.drva.__setitem__(rva_item, data)
+        self.parent.rva.__setitem__(rva_item, data)
 
     def max_addr(self):
         s = self.parent.SHList[-1]
@@ -206,7 +206,7 @@ class ContentVirtual:
         if ad_stop != None:
             ad_stop = self.parent.virt2rva(ad_stop)
 
-        rva_items = self.parent.drva.get_rvaitem(ad_start, ad_stop, ad_step)
+        rva_items = self.parent.rva.get_rvaitem(ad_start, ad_stop, ad_step)
         data_out = ""
         for s, n_item in rva_items:
             if s is None:
@@ -228,7 +228,7 @@ class PE(object):
                  parse_delay=True,
                  parse_reloc=True,
                  wsize=32):
-        self._drva = ContectRva(self)
+        self._rva = ContectRva(self)
         self._virt = ContentVirtual(self)
         if pestr == None:
             self._content = StrPatchwork()
@@ -522,9 +522,15 @@ class PE(object):
         return False
 
     def get_drva(self):
-        return self._drva
+        print 'Deprecated: Use PE.rva instead of PE.drva'
+        return self._rva
 
+    def get_rva(self):
+        return self._rva
+
+    # TODO XXX remove drva api
     drva = property(get_drva)
+    rva = property(get_rva)
 
     def get_virt(self):
         return self._virt
@@ -630,9 +636,9 @@ class PE(object):
                 if t != 3:
                     raise ValueError('reloc type not impl')
                 off += rva
-                v = struct.unpack('I', self.drva[off:off + 4])[0]
+                v = struct.unpack('I', self.rva[off:off + 4])[0]
                 v += offset
-                self.drva[off:off + 4] = struct.pack('I', v & 0xFFFFFFFF)
+                self.rva[off:off + 4] = struct.pack('I', v & 0xFFFFFFFF)
         self.NThdr.ImageBase = imgbase
 
 
