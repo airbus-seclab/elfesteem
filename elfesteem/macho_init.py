@@ -935,26 +935,46 @@ class SymbolTable(LinkEditSection):
             data[s.offset] = s.pack()
         return data.pack()
 
+import sys
+if sys.version_info[0] < 3:
+    bytes_to_name = lambda s: s
+    name_to_bytes = lambda s: s
+else:
+    bytes_to_name = lambda s: s.decode(encoding="latin1")
+    name_to_bytes = lambda s: s.encode(encoding="latin1")
+
 class StringTable(LinkEditSection):
-    def _parsecontent(self):
-        self.res = {}
-        c = self.content
-        q = 0
-        while c:
-            p = c.find(data_null)
-            if p < 0:
-                log.warning("Missing trailing 0 for string [%s]" % c) # XXX
-                p = len(c)
-            self.res[q] = c[:p]
-            q += p+1
-            c = c[p+1:]
-    def pack(self):
-        data = StrPatchwork()
-        for i, name in self.res.items():
-            data[i] = name
-        data = data.pack()
-        padding = self.lc.strsize - len(data)
-        return data + data_null*padding
+    def get_name(self, idx):
+        n = self.content[idx:]
+        n = n[:n.find(data_null)]
+        return bytes_to_name(n)
+    def add_name(self, name):
+        name = name_to_bytes(name)
+        if data_null+name+data_null in self.content:
+            return self.content.find(name)
+        data = self.content
+        if type(data) != str: data = data.pack()
+        idx = len(data)
+        self.content = data+name+data_null
+        for sh in self.parent.shlist:
+            if sh.sh.offset > self.sh.offset:
+                sh.sh.offset += len(name)+1
+        return idx
+    def mod_name(self, idx, name):
+        name = name_to_bytes(name)
+        n = self.content[idx:]
+        n = n[:n.find(data_null)]
+        data = self.content
+        if type(data) != str: data = data.pack()
+        data = data[:idx]+name+data[idx+len(n):]
+        dif = len(name) - len(n)
+        if dif != 0:
+            for sh in self.parent.shlist:
+                if sh.sh.name_idx > idx:
+                    sh.sh.name_idx += dif
+                if sh.sh.offset > self.sh.offset:
+                    sh.sh.offset += dif
+        return idx
 
 class DySymbolTable(LinkEditSection):
     pass
@@ -1411,7 +1431,7 @@ class MACHO(object):
 
     def get_stringtable(self):
         for strtab in self.sect.sect:
-            if hasattr(strtab, 'res'):
+            if hasattr(strtab, 'mod_name'):
                 return strtab
     stringtable=property(get_stringtable,None)
 

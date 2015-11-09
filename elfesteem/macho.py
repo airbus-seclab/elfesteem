@@ -579,31 +579,35 @@ class sectionHeader_64(sectionHeader):
                 ("reserved2","u32"),
                 ("reserved3","u32")]
 
-class symbol(CStruct):
+class CStructWithStrTable(CStruct):
+    def strtab(self):
+        if self.strtabindex ==1 and self._parent.parent.parent._parent.parent.Mhdr.cputype == 0x0c:
+            return
+        else:
+            return self._parent.parent.parent._parent.parent.get_stringtable()
+    strtab = property(strtab)
+    def get_name(self):
+        return self.strtab.get_name(self.strtabindex)
+    def set_name(self, name):
+        if self.strtabindex == 0:
+            self.strtabindex = self.strtab.add_name(name)
+        else:
+            self.strtab.mod_name(self.strtabindex, name)
+    name = property(get_name, set_name)
+
+class symbol(CStructWithStrTable):
     _fields = [ ("strtabindex","u32"),
                 ("type","u08"),
                 ("sectionindex","u08"),
                 ("description","u16"),
                 ("value","u32")]
-    def get_name(self):
-        if self.strtabindex ==1 and self._parent.parent.parent._parent.parent.Mhdr.cputype == 0x0c:
-            return
-        else:
-            return self._parent.parent.parent._parent.parent.get_stringtable().res[self.strtabindex]
-    name = property(get_name)
 
-class symbol_64(CStruct):
+class symbol_64(CStructWithStrTable):
     _fields = [ ("strtabindex","u32"),
                 ("type","u08"),
                 ("sectionindex","u08"),
                 ("description","u16"),
                 ("value","u64")]
-    def get_name(self):
-        if self.strtabindex ==1 and self._parent.parent.parent._parent.parent.Mhdr.cputype == 0x0c:
-            return
-        else:
-            return self._parent.parent.parent._parent.parent.get_stringtable().res[self.strtabindex]
-    name = property(get_name)
 
 # Cf. /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk/usr/include/mach-o/nlist.h
 # The 'n_type' aka. 'type' field
