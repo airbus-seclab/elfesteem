@@ -333,6 +333,10 @@ class DirImport(CStruct):
             mask_ptr = 0x8000000000000000L
 
         for i, d in enumerate(out):
+            if d.name == 0:
+                # Special case
+                out = out[:i]
+                break
             d.dlldescname = DescName.unpack(s, d.name, self.parent_head)
             if d.originalfirstthunk and self.parent_head.is_rva_ok(d.originalfirstthunk):
                 d.originalfirstthunks = struct_array(self, s,
