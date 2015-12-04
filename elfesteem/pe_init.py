@@ -251,6 +251,7 @@ class PE(object):
                  wsize=32):
         self._rva = ContectRva(self)
         self._virt = ContentVirtual(self)
+        self.img_rva = StrPatchwork()
         if pestr == None:
             self._content = StrPatchwork()
             self._sex = 0
@@ -270,6 +271,8 @@ class PE(object):
             self.NThdr.CheckSum = 0
             self.SHList = pe.SHList(self)
             self.SHList.shlist = []
+
+            self.NThdr.sizeofheaders = 0x1000
 
             self.DirImport = pe.DirImport(self)
             self.DirExport = pe.DirExport(self)
@@ -380,6 +383,7 @@ class PE(object):
 
         self.Opthdr, l = Opthdr.unpack_l(self.content, of, self)
         self.NThdr = pe.NThdr.unpack(self.content, of + l, self)
+        self.img_rva[0] = self.content[:self.NThdr.sizeofheaders]
         of += self.Coffhdr.sizeofoptionalheader
         self.SHList = pe.SHList.unpack(self.content, of, self)
 
@@ -404,9 +408,14 @@ class PE(object):
                 else:
                     rs = s.rawsize
                 mm = max(rs, 0x1000)
-            s.data[0] = self.content[raw_off:raw_off + mm]
+            data = self.content[raw_off:raw_off + mm]
+            s.data[0] = data
+            self.img_rva[s.addr] = data
+        # Fix img_rva
+        self.img_rva = str(self.img_rva)
+
         try:
-            self.DirImport = pe.DirImport.unpack(self.content,
+            self.DirImport = pe.DirImport.unpack(self.img_rva,
                                                  self.NThdr.optentries[
                                                      pe.DIRECTORY_ENTRY_IMPORT].rva,
                                                  self)
@@ -415,7 +424,7 @@ class PE(object):
             self.DirImport = pe.DirImport(self)
 
         try:
-            self.DirExport = pe.DirExport.unpack(self.content,
+            self.DirExport = pe.DirExport.unpack(self.img_rva,
                                                  self.NThdr.optentries[
                                                      pe.DIRECTORY_ENTRY_EXPORT].rva,
                                                  self)
@@ -427,7 +436,7 @@ class PE(object):
             self.DirDelay = pe.DirDelay(self)
             if parse_delay:
                 try:
-                    self.DirDelay = pe.DirDelay.unpack(self.content,
+                    self.DirDelay = pe.DirDelay.unpack(self.img_rva,
                                                        self.NThdr.optentries[
                                                            pe.DIRECTORY_ENTRY_DELAY_IMPORT].rva,
                                                        self)
@@ -437,9 +446,9 @@ class PE(object):
             self.DirReloc = pe.DirReloc(self)
             if parse_reloc:
                 try:
-                    self.DirReloc = pe.DirReloc.unpack(self.content,
+                    self.DirReloc = pe.DirReloc.unpack(self.img_rva,
                                                        self.NThdr.optentries[
-                                                       pe.DIRECTORY_ENTRY_BASERELOC].rva,
+                                                           pe.DIRECTORY_ENTRY_BASERELOC].rva,
                                                        self)
                 except pe.InvalidOffset:
                     log.warning('cannot parse DirReloc, skipping')
@@ -448,7 +457,7 @@ class PE(object):
             if parse_resources:
                 self.DirRes = pe.DirRes(self)
                 try:
-                    self.DirRes = pe.DirRes.unpack(self.content,
+                    self.DirRes = pe.DirRes.unpack(self.img_rva,
                                                    self.NThdr.optentries[
                                                        pe.DIRECTORY_ENTRY_RESOURCE].rva,
                                                    self)

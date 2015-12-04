@@ -244,13 +244,7 @@ class DescName(CStruct):
                ]
 
     def gets(self, s, of):
-        if of < 0x1000:
-            log.warn("descname in pe hdr, used as offset")
-            ofname = of
-        else:
-            ofname = self.parent_head.rva2off(of)
-        name = self.parent_head[
-            ofname:self.parent_head._content.find('\x00', ofname)]
+        name = s[of:s.find('\x00', of)]
         return name, of + len(name) + 1
 
     def sets(self, value):
@@ -325,7 +319,6 @@ class DirImport(CStruct):
     def gete(self, s, of):
         if not of:
             return None, of
-        of = self.parent_head.rva2off(of)
         out = struct_array(self, s, of, ImpDesc_e)
         if self.parent_head._wsize == 32:
             mask_ptr = 0x80000000
@@ -340,16 +333,14 @@ class DirImport(CStruct):
             d.dlldescname = DescName.unpack(s, d.name, self.parent_head)
             if d.originalfirstthunk and self.parent_head.is_rva_ok(d.originalfirstthunk):
                 d.originalfirstthunks = struct_array(self, s,
-                                                     self.parent_head.rva2off(
-                                                         d.originalfirstthunk),
+                                                     d.originalfirstthunk,
                                                      Rva)
             else:
                 d.originalfirstthunks = None
 
             if d.firstthunk and self.parent_head.is_rva_ok(d.firstthunk):
                 d.firstthunks = struct_array(self, s,
-                                             self.parent_head.rva2off(
-                                                 d.firstthunk),
+                                             d.firstthunk,
                                              Rva)
             else:
                 d.firstthunks = None
@@ -364,8 +355,7 @@ class DirImport(CStruct):
                 if tmp_thunk[i].rva & mask_ptr == 0:
                     try:
                         n = ImportByName.unpack(s,
-                                                self.parent_head.rva2off(
-                                                    tmp_thunk[i].rva),
+                                                tmp_thunk[i].rva,
                                                 self.parent_head)
                     except:
                         log.warning(
@@ -613,7 +603,6 @@ class DirExport(CStruct):
         of_o = of
         if not of:
             return None, of
-        of = self.parent_head.rva2off(of)
         of_sav = of
         expdesc = ExpDesc_e.unpack(s,
                                    of,
@@ -625,16 +614,13 @@ class DirExport(CStruct):
             return None, of_o
         self.dlldescname = DescName.unpack(s, expdesc.name, self.parent_head)
         self.f_address = struct_array(self, s,
-                                      self.parent_head.rva2off(
-                                          expdesc.addressoffunctions),
+                                      expdesc.addressoffunctions,
                                       Rva32, expdesc.numberoffunctions)
         self.f_names = struct_array(self, s,
-                                    self.parent_head.rva2off(
-                                        expdesc.addressofnames),
+                                    expdesc.addressofnames,
                                     Rva32, expdesc.numberofnames)
         self.f_nameordinals = struct_array(self, s,
-                                           self.parent_head.rva2off(
-                                               expdesc.addressofordinals),
+                                           expdesc.addressofordinals,
                                            Ordinal, expdesc.numberofnames)
         for n in self.f_names:
             n.name = DescName.unpack(s, n.rva, self.parent_head)
@@ -820,7 +806,6 @@ class DirDelay(CStruct):
     def gete(self, s, of):
         if not of:
             return None, of
-        of = self.parent_head.rva2off(of)
         out = struct_array(self, s, of, Delaydesc_e)
         if self.parent_head._wsize == 32:
             mask_ptr = 0x80000000
@@ -838,17 +823,15 @@ class DirDelay(CStruct):
                                             self.parent_head)
             if d.originalfirstthunk:
                 d.originalfirstthunks = struct_array(self, s,
-                                                     self.parent_head.rva2off(
-                                                         isfromva(
-                                                             d.originalfirstthunk)),
+                                                     isfromva(
+                                                         d.originalfirstthunk),
                                                      Rva)
             else:
                 d.originalfirstthunks
 
             if d.firstthunk:
                 d.firstthunks = struct_array(self, s,
-                                             self.parent_head.rva2off(
-                                                 isfromva(d.firstthunk)),
+                                             isfromva(d.firstthunk),
                                              Rva)
             else:
                 d.firstthunk = None
@@ -864,8 +847,7 @@ class DirDelay(CStruct):
             for i in xrange(len(tmp_thunk)):
                 if tmp_thunk[i].rva & mask_ptr == 0:
                     n = ImportByName.unpack(s,
-                                            self.parent_head.rva2off(
-                                                isfromva(tmp_thunk[i].rva)),
+                                            isfromva(tmp_thunk[i].rva),
                                             self.parent_head)
                     d.impbynames.append(n)
                 else:
@@ -1104,26 +1086,25 @@ class DirReloc(CStruct):
         if not of:
             return None, of
 
-        of1 = self.parent_head.rva2off(of)
-        ofend = of1 + \
+        ofend = of + \
             self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_BASERELOC].size
         out = []
-        while of1 < ofend:
+        while of < ofend:
             reldesc, l = Rel.unpack_l(s,
-                                      of1,
+                                      of,
                                       self.parent_head)
             if reldesc.size == 0:
                 log.warn('warning null reldesc')
                 reldesc.size = l
                 break
-            of2 = of1 + l
+            of2 = of + l
             reldesc.rels = struct_array(self, s,
                                         of2,
                                         Reloc,
                                         (reldesc.size - l) / 2)  # / Reloc size
             reldesc.patchrel = False
             out.append(reldesc)
-            of1 += reldesc.size
+            of += reldesc.size
         return out, of
 
     def sete(self, v):
@@ -1248,64 +1229,61 @@ class DirRes(CStruct):
     def gete(self, s, of):
         if not of:
             return None, of
-        of1 = self.parent_head.rva2off(of)
-        if of1 == None:
+        if of == None:
             log.warning('cannot parse resources, %X' % of)
             return None, of
 
         resdesc, l = ResDesc_e.unpack_l(s,
-                                        of1,
+                                        of,
                                         self.parent_head)
 
         nbr = resdesc.numberofnamedentries + resdesc.numberofidentries
         if 1:  # try:
             resdesc.resentries = struct_array(self, s,
-                                              of1 + l,
+                                              of + l,
                                               ResEntry,
                                               nbr)
         if 0:  # except:
             log.warning('cannot parse resources')
             resdesc.resentries = struct_array(self, s,
-                                              of1 + l,
+                                              of + l,
                                               ResEntry,
                                               0)
-        dir_todo = {of1: resdesc}
+        dir_todo = {of: resdesc}
         dir_done = {}
         xx = 0
         cpt = 0
         while dir_todo:
-            of1, my_dir = dir_todo.popitem()
-            dir_done[of1] = my_dir
+            of, my_dir = dir_todo.popitem()
+            dir_done[of] = my_dir
             for e in my_dir.resentries:
-                of1 = e.offsettosubdir
-                if not of1:
+                of = e.offsettosubdir
+                if not of:
                     # data dir
-                    of1 = e.offsettodata
+                    of = e.offsettodata
                     data = ResDataEntry.unpack(s,
-                                               self.parent_head.rva2off(of1),
+                                               of,
                                                self.parent_head)
-                    of1 = data.offsettodata
-                    offile = self.parent_head.rva2off(of1)
-                    data.s = StrPatchwork(s[offile:offile + data.size])
+                    of = data.offsettodata
+                    data.s = StrPatchwork(s[of:of + data.size])
                     e.data = data
                     continue
                 # subdir
-                if of1 in dir_done:
+                if of in dir_done:
                     log.warn('warning recusif subdir')
                     fdds
                     continue
                 subdir, l = ResDesc_e.unpack_l(s,
-                                               self.parent_head.rva2off(of1),
+                                               of,
                                                self.parent_head)
                 nbr = subdir.numberofnamedentries + subdir.numberofidentries
                 subdir.resentries = struct_array(self, s,
-                                                 self.parent_head.rva2off(
-                                                     of1 + l),
+                                                 of + l,
                                                  ResEntry,
                                                  nbr)
 
                 e.subdir = subdir
-                dir_todo[of1] = e.subdir
+                dir_todo[of] = e.subdir
         return resdesc, of
 
     def build_content(self, c):
@@ -1491,7 +1469,7 @@ class ResEntry(CStruct):
                 DIRECTORY_ENTRY_RESOURCE].rva  # XXX res rva??
             name &= 0x7FFFFFFF
             self.name_s = SUnicode.unpack(s,
-                                          self.parent_head.rva2off(name),
+                                          name,
                                           self.parent_head)
         return name, of + 4
 
