@@ -87,7 +87,7 @@ class ContectRva(object):
             s_len = s_stop - s_start
             total_len -= s_len
             rva_start += s_len
-            n_item = slice(s_start, s_stop, step)
+            n_item = slice(s_start, s_stop)
             rva_items.append((s, n_item))
         return rva_items
 
@@ -145,7 +145,7 @@ class ContentVirtual:
         raise DeprecationWarning("Replace code by virt.set(start, data)")
 
     def __call__(self, ad_start, ad_stop=None, ad_step=None):
-        raise DeprecationWarning("Replace code by virt.set(addr, data)")
+        raise DeprecationWarning("Replace code by virt.get(start, stop)")
 
     def get(self, virt_start, virt_stop=None):
         """
@@ -168,7 +168,7 @@ class ContentVirtual:
         """
         if not isinstance(addr, (int, long)):
             raise ValueError('addr must be int/long')
-        self.parent.rva.set(self.virt2rva(addr), data)
+        self.parent.rva.set(self.parent.virt2rva(addr), data)
 
     def max_addr(self):
         s = self.parent.SHList[-1]

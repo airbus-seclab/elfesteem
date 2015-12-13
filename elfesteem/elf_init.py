@@ -601,7 +601,7 @@ class virt:
     def __init__(self, x):
         self.parent = x
 
-    def get_rvaitem(self, start, stop=None, step=None):
+    def get_rvaitem(self, start, stop=None):
         if stop == None:
             s = self.parent.getsectionbyvad(start)
             if s:
@@ -638,7 +638,7 @@ class virt:
                 raise ValueError('empty section! %x' % start)
             total_len -= s_len
             start += s_len
-            n_item = slice(s_start, s_stop, step)
+            n_item = slice(s_start, s_stop)
             virt_item.append((s, n_item))
         return virt_item
 
@@ -653,19 +653,43 @@ class virt:
     def __getitem__(self, item):
         """
         XXX
-        __getitem__ in python is limited to [0-0x7fffffff]
+        __getitem__ in python 32bit is limited to [0-0x7fffffff]
         So if a binary has some data mapped in hight memory, getitem is unusable
         """
         raise ValueError(
-            '\n\n**DEPRECATED API**\n\nuse virt(start, [stop, step]) instead of virt[start, [stop, step]]')
+            '\n\n**DEPRECATED API**\n\nuse virt.get(start, [stop]) instead of virt[start, [stop, step]]')
 
     def __setitem__(self, item, data):
-        s, n_item = self.item2virtitem(item)
-        if n_item == None:
-            return
-        return s.content.__setitem__(n_item, data)
+        """
+        XXX
+        __setitem__ in python 32bit is limited to [0-0x7fffffff]
+        So if a binary has some data mapped in hight memory, setitem is unusable
+        """
+        raise ValueError(
+            '\n\n**DEPRECATED API**\n\nuse virt.set(start, [stop]) instead of virt[start, [stop, step]]')
 
-    def __setitem__(self, item, data):
+    def get(self, ad_start, ad_stop=None):
+        rva_items = self.get_rvaitem(ad_start, ad_stop)
+        data_out = ""
+        for s, n_item in rva_items:
+            if not (isinstance(s, ProgramHeader) or isinstance(s, ProgramHeader64)):
+                data_out += s.content.__getitem__(n_item)
+                continue
+            if not type(n_item) is slice:
+                n_item = slice(n_item, n_item + 1, 1)
+            start = n_item.start + s.ph.offset
+            stop = n_item.stop + s.ph.offset
+            if n_item.step != None:
+                step = n_item.step + s.ph.offset
+            else:
+                step = None
+            n_item = slice(start, stop, step)
+            # data_out += self.parent.content.__s.content.__getitem__(n_item)
+            data_out += self.parent.content.__getitem__(n_item)
+
+        return data_out
+
+    def set(self, ad_start, data):
         if not type(item) is slice:
             item = slice(item, item + len(data), None)
         virt_item = self.item2virtitem(item)
@@ -701,27 +725,6 @@ class virt:
 
     def is_addr_in(self, ad):
         return self.parent.is_in_virt_address(ad)
-
-    def __call__(self, ad_start, ad_stop=None, ad_step=None):
-        rva_items = self.get_rvaitem(ad_start, ad_stop, ad_step)
-        data_out = ""
-        for s, n_item in rva_items:
-            if not (isinstance(s, ProgramHeader) or isinstance(s, ProgramHeader64)):
-                data_out += s.content.__getitem__(n_item)
-                continue
-            if not type(n_item) is slice:
-                n_item = slice(n_item, n_item + 1, 1)
-            start = n_item.start + s.ph.offset
-            stop = n_item.stop + s.ph.offset
-            if n_item.step != None:
-                step = n_item.step + s.ph.offset
-            else:
-                step = None
-            n_item = slice(start, stop, step)
-            # data_out += self.parent.content.__s.content.__getitem__(n_item)
-            data_out += self.parent.content.__getitem__(n_item)
-
-        return data_out
 
     def find(self, pattern, offset=0):
         sections = []
