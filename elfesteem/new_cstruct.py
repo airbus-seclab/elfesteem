@@ -120,6 +120,8 @@ class Cstruct_Metaclass(type):
                 else:
                     fmt = real_fmt(ffmt, _wsize)
                     of2 = of1 + struct.calcsize(fmt)
+                    if not (0 <= of1 < len(s) and 0 <= of1 < len(s)):
+                        raise RuntimeError("not enought data")
                     value = struct.unpack(c.sex + fmt, s[of1:of2])[0]
             elif ffmt == "sz":  # null terminated special case
                 of2 = s.find('\x00', of1)
@@ -128,6 +130,7 @@ class Cstruct_Metaclass(type):
                 of2 += 1
                 value = s[of1:of2 - 1]
             elif ffmt in all_cstructs:
+                of2 = of1
                 # sub structures
                 if cpt:
                     value = []

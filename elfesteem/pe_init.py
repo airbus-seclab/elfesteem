@@ -381,6 +381,10 @@ class PE(object):
         else:
             Opthdr = pe.Opthdr64
 
+        if len(self.content) < 0x200:
+            # Fix for very little PE
+            self.content += (0x200 - len(self.content)) * '\x00'
+
         self.Opthdr, l = Opthdr.unpack_l(self.content, of, self)
         self.NThdr = pe.NThdr.unpack(self.content, of + l, self)
         self.img_rva[0] = self.content[:self.NThdr.sizeofheaders]
@@ -392,14 +396,14 @@ class PE(object):
         for s in self.SHList.shlist:
             if self.loadfrommem:
                 s.offset = s.addr
-            if filealignment == 0:
-                raw_off = s.offset
+            if self.NThdr.sectionalignment > 0x1000:
+                raw_off = 0x200 * (s.offset / 0x200)
             else:
-                raw_off = filealignment * (s.offset / filealignment)
+                raw_off = s.offset
             if raw_off != s.offset:
-                log.warn('unaligned raw section!')
+                log.warn('unaligned raw section (%x %x)!', raw_off, s.offset)
             s.data = StrPatchwork()
-            # min section is 0x1000???
+
             if s.rawsize == 0:
                 mm = 0
             else:
@@ -407,9 +411,14 @@ class PE(object):
                     rs = (s.rawsize / filealignment + 1) * filealignment
                 else:
                     rs = s.rawsize
-                mm = max(rs, 0x1000)
+                mm = rs
+            if mm > s.size:
+                mm = min(mm, s.size)
             data = self.content[raw_off:raw_off + mm]
             s.data[0] = data
+            # Pad data to page size 0x1000
+            length = len(data)
+            data += "\x00" * ((((length + 0xfff)) & 0xFFFFF000) - length)
             self.img_rva[s.addr] = data
         # Fix img_rva
         self.img_rva = str(self.img_rva)
