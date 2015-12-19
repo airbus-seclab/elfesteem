@@ -326,6 +326,21 @@ S_ATTR_SELF_MODIFYING_CODE = 0x04000000 # Used with i386 code stubs written on b
 S_ATTR_SOME_INSTRUCTIONS = 0x00000400
 
 
+# /usr/include/mach-o/reloc.h
+# Relocation types used in a generic implementation.  Relocation entries for
+# normal things use the generic relocation as discribed above and their r_type
+# is GENERIC_RELOC_VANILLA (a value of zero).
+# (...)
+# The implemention is quite messy given the compatibility with the existing
+# relocation entry format. (...)
+GENERIC_RELOC_VANILLA        = 0 # generic relocation as described above
+GENERIC_RELOC_PAIR           = 1 # Only follows a GENERIC_RELOC_SECTDIFF
+GENERIC_RELOC_SECTDIFF       = 2
+GENERIC_RELOC_PB_LA_PTR      = 3 # prebound lazy pointer */
+GENERIC_RELOC_LOCAL_SECTDIFF = 4
+GENERIC_RELOC_TLV            = 5 # thread local variables */
+
+
 def enumerate_constants(constants, globs):
     for type in constants:
         for val in filter(lambda x:x[:len(type)+1]==type+"_", globs.keys()):
