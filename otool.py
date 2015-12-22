@@ -191,6 +191,37 @@ def print_symbols(e):
                 section = "%s,%s"%(section.sh.segname,section.sh.sectname)
             print("%-35s %-15s %-4s 0x%08x %04x"%(value.name,section,n_type,value.value,desc))
 
+def print_dysym(e):
+    # Display indirect symbol tables
+    for sect in e.sect.sect:
+        if type(sect) != macho_init.DySymbolTable:
+            continue
+        if sect.type == 'indirectsym':
+            print("Indirect symbols [%d entries]"%len(sect.entries))
+            print("%5s %s"%("index","name"))
+            for entry in sect.entries:
+                if   entry == macho.INDIRECT_SYMBOL_LOCAL:
+                    print("%5s" % "LOCAL")
+                elif entry == macho.INDIRECT_SYMBOL_ABS:
+                    print("%5s" % "ABSOLUTE")
+                else:
+                    print("%5s %s" % (entry,e.symbols.symbols[entry].name))
+        elif sect.type == 'locrel':
+            print("Local relocations [%d entries]"%len(sect.entries))
+            for entry in sect.entries:
+                print(repr(entry))
+        elif sect.type == 'extrel':
+            print("External relocations [%d entries]"%len(sect.entries))
+            for entry in sect.entries:
+                print(repr(entry))
+        else:
+            raise ValueError("[%s] %d entries"%(sect.type,len(sect.entries)))
+            TODO
+            #      table of contents
+            #      module table
+            #      reference symbol table
+            #      indirect symbol table
+
 def print_relocs(e):
     for s in e.sect.sect:
         if not hasattr(s, 'reloclist'): continue
@@ -269,6 +300,7 @@ if __name__ == '__main__':
     parser.add_argument('-h', dest='options', action='append_const', const='header', help='print the mach header')
     parser.add_argument('-l', dest='options', action='append_const', const='load', help='print the load commands')
     parser.add_argument('--symbols', dest='options', action='append_const', const='symbols', help='print the symbols')
+    parser.add_argument('--dysym', dest='options', action='append_const', const='dysym', help='print dynamic symbols')
     parser.add_argument('-r', dest='options', action='append_const', const='reloc', help='Display the relocation entries')
     parser.add_argument('file', nargs='*', help='object file')
     args = parser.parse_args()
@@ -283,6 +315,8 @@ if __name__ == '__main__':
         functions.append(print_lc)
     if 'symbols' in args.options:
         functions.append(print_symbols)
+    if 'dysym' in args.options:
+        functions.append(print_dysym)
     if 'reloc' in args.options:
         functions.append(print_relocs)
 

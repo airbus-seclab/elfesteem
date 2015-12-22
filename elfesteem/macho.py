@@ -638,6 +638,10 @@ N_PBUD  = 0xc   # prebound undefined (defined in a dylib)
 N_INDR  = 0xa   # indirect
 
 
+# Cf. /usr/include/mach-o/loader.h
+INDIRECT_SYMBOL_LOCAL = 0x80000000
+INDIRECT_SYMBOL_ABS   = 0x40000000
+
 class relocationSymbol(CStruct):
     _fields = [ ("relocaddr","u32"),
                 ("relocsym","u32")]

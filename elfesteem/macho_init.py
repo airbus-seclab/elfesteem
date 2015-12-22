@@ -258,8 +258,12 @@ class LoaderDysymTab(Loader):
     lhc = macho.dysymtab_command
     subtypes = ['toc', 'modtab', 'extrefsym', 'indirectsym', 'extrel', 'locrel']
     symbolsize = {
-        32: {'toc':2*4, 'modtab':{32: 13*4, 64: 12*4+8}[32], 'extrefsym':4, 'indirectsym':4, 'extrel':2*4, 'locrel':2*4},
-        64: {'toc':2*4, 'modtab':{32: 13*4, 64: 12*4+8}[64], 'extrefsym':4, 'indirectsym':4, 'extrel':2*4, 'locrel':2*4},
+        'toc':         2*4,
+        'modtab':      {32: 13*4, 64: 12*4+8},
+        'extrefsym':   4,
+        'indirectsym': 4,
+        'extrel':      2*4,
+        'locrel':      2*4,
         }
     def changeOffsets(self, decalage, min_offset=None):
         for type in LoaderDysymTab.subtypes:
@@ -269,18 +273,17 @@ class LoaderDysymTab(Loader):
                 setattr(self, object_offset, of + decalage)
     def sectionsToAdd(self, raw):
         self.sect = []
-        for type in LoaderDysymTab.subtypes:
-            object_size = type+'size'
-            object_count = 'n'+type
-            if type.endswith('sym'): object_count += 's'
-            setattr(self, object_size,getattr(self,object_count)*LoaderDysymTab.symbolsize[self.wsize][type])
-
-        for type in LoaderDysymTab.subtypes:
-            of = getattr(self,type+'off')
+        for t in LoaderDysymTab.subtypes:
+            object_size = LoaderDysymTab.symbolsize[t]
+            if type(object_size) == dict: object_size = object_size[self.wsize]
+            object_count = 'n'+t
+            if t.endswith('sym'): object_count += 's'
+            size = getattr(self, object_count)*object_size
+            setattr(self, t+'size', size)
+            of = getattr(self, t+'off')
             if of != 0:
-                size = getattr(self,type+'size')
                 c = raw[of:of + size]
-                self.sect.append(DySymbolTable(self,c, type=type))
+                self.sect.append(DySymbolTable(self,c, type=t))
         return self.sect
 
 class LoaderLib(Loader):
@@ -910,15 +913,16 @@ class DynamicLoaderInfo(LinkEditSection):
 
 class SymbolTable(LinkEditSection):
     def _parsecontent(self):
+        if self.type != 'sym': FAIL
         self.symbols = []
         self.symbols_from_name = {}
         of = 0
-        one_sym_size = int(self.lc.symsize/self.lc.nsyms)
-        if self.wsize == 32:
-            symbol_type = macho.symbol
-        elif self.wsize == 64 :
-            symbol_type = macho.symbol_64
-        for i in range(self.lc.nsyms):
+        count = self.lc.nsyms
+        size = self.lc.symsize
+        one_sym_size = int(size/count)
+        if   self.wsize == 32: symbol_type = macho.symbol
+        elif self.wsize == 64: symbol_type = macho.symbol_64
+        for i in range(count):
             symbol=symbol_type(parent=self, content=self.content[of:of+one_sym_size])
             symbol.offset = of
             self.symbols.append(symbol)
@@ -934,6 +938,37 @@ class SymbolTable(LinkEditSection):
         for s in self.symbols:
             data[s.offset] = s.pack()
         return data.pack()
+
+class DySymbolTable(LinkEditSection):
+    def _parsecontent(self):
+        self.entries = []
+        of = 0
+        object_count = 'n'+self.type
+        if self.type.endswith('sym'): object_count += 's'
+        count = getattr(self.lc, object_count)
+        size = getattr(self.lc, self.type+'size')
+        one_sym_size = int(size/count)
+        # Cf. /usr/include/mach-o/loader.h
+        if   self.type in [ 'indirectsym', 'extrefsym' ]:
+            def extract(v):
+                # 32bit index in the Symbol Table
+                return struct.unpack(self.sex+"I", v)[0]
+        elif self.type in [ 'locrel', 'extrel', 'toc' ]:
+            def extract(v):
+                # xxxrel: an offset and a count
+                # toc: symbol index, module index
+                return struct.unpack(self.sex+"II", v)
+        elif self.type in [ 'modtab' ]:
+            def extract(v):
+                if self.wsize == 32:
+                    return struct.unpack(self.sex+"12II", v)
+                if self.wsize == 64:
+                    return struct.unpack(self.sex+"12IQ", v)
+        else:
+            NEVER
+        for i in range(count):
+            self.entries.append(extract(self.content[of:of+one_sym_size]))
+            of += one_sym_size
 
 import sys
 if sys.version_info[0] < 3:
@@ -975,9 +1010,6 @@ class StringTable(LinkEditSection):
                 if sh.sh.offset > self.sh.offset:
                     sh.sh.offset += dif
         return idx
-
-class DySymbolTable(LinkEditSection):
-    pass
 
 class FunctionStarts(LinkEditSection):
     pass
@@ -1060,7 +1092,8 @@ class SectionList(object):
                                 #print "-- section --", s.__class__.__name__
                                 #print " ---- to delete ---",s.offset,"-",s.offset+len(str(s)),"/",hex(s.offset),"-",hex(s.offset+len(str(s)))
                                 if not parent.interval.contains(s.offset,s.offset+len(s.pack())):
-                                    raise ValueError("This part of file has already been parsed")
+                                    #raise ValueError("This part of file has already been parsed")
+                                    pass
                                 parent.interval.delete(s.offset,s.offset+len(s.pack()))
     def add(self, s):
         # looking in s.lc to know where to insert
@@ -1504,19 +1537,6 @@ class MACHO(object):
                 symbol.stub = symbol_stub[symbol.addr]
                 symbol_stub[symbol.addr].binding = symbol
                 symbol_table[symbol.name].stub = symbol_stub[symbol.addr]
-            """
-            for symbol in dynamic_loader_info_bind.BindSymbolOpcodeList:
-                if symbol.name.strip('\0') in ['dyld_stub_binder', 'ABSOLUTE']:
-                    continue
-                # We should probably never get here
-                # if we reach this place, then some more analysis of Mach-O is needed
-                symbol.pointer = nl_symbol_ptr[symbol.offset]
-                nl_symbol_ptr[symbol.offset].binding = symbol
-                symbol.stub = stub_helper[symbol.offset]
-                stub_helper[symbol.offset].binding = symbol
-                symbol_table[symbol.name].stub = stub_helper[symbol.offset]
-            """
-    
         else :
             indstubIndex = 0
             if nl_symbol_ptr is not None :
