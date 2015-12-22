@@ -222,6 +222,65 @@ def print_dysym(e):
             #      reference symbol table
             #      indirect symbol table
 
+def print_indirect(e):
+    # Find section with indirect symbols and indirect symbols table
+    indirectsym_table = None
+    indirectsym_section = []
+    for s in e.sect.sect:
+        if type(s) == macho_init.DySymbolTable and s.type == 'indirectsym':
+            if indirectsym_table is not None:
+                raise ValueError("Only one IndirectSymbolTable per Mach-O file")
+            indirectsym_table = s
+        if not hasattr(s, 'sh'): continue
+        if s.sh.type in [
+                macho.S_SYMBOL_STUBS,
+                macho.S_LAZY_SYMBOL_POINTERS,
+                macho.S_NON_LAZY_SYMBOL_POINTERS,
+                macho.S_LAZY_DYLIB_SYMBOL_POINTERS,
+                ]:
+            indirectsym_section.append(s)
+    # Display
+    verbose = False # Exactly the same output as 'otool -Iv'
+    import struct
+    idx = 0
+    for s in indirectsym_section:
+        print("Indirect symbols for (%s,%s) %u entries"
+           % (s.sh.segname, s.sh.sectname, len(s.list)))
+        if e.wsize == 64:
+            header = "%-18s %5s"
+            format = "0x%016x %5s"
+            valfmt = e.sex+"Q"
+        if e.wsize == 32:
+            header = "%-10s %5s"
+            format = "0x%08x %5s"
+            valfmt = e.sex+"I"
+        if s.sh.type == macho.S_SYMBOL_STUBS:
+            # First two bytes are 0xff 0x25
+            valfmt = e.sex+"HI"
+        address = s.addr
+        data = [ "address", "index", " name" ]
+        if verbose:
+            # The value read in the table is not output by otool
+            # it may be useless ???
+            header += "%-20s "
+            format += "%-20s "
+            data += "value"
+        header += "%s"
+        format += "%s"
+        print(header % tuple(data))
+        for entry in s.list:
+            content = struct.unpack(valfmt,entry.content)[-1]
+            index = indirectsym_table.entries[idx]
+            name = ''
+            if   index == macho.INDIRECT_SYMBOL_LOCAL: index = "LOCAL"
+            elif index == macho.INDIRECT_SYMBOL_ABS:   index = "ABSOLUTE"
+            else:  name = ' '+e.symbols.symbols[index].name
+            data = [ address, index, name ]
+            if verbose: data.append(content)
+            print(format % tuple(data))
+            idx += 1
+            address += len(entry.content)
+
 def print_relocs(e):
     for s in e.sect.sect:
         if not hasattr(s, 'reloclist'): continue
@@ -302,6 +361,7 @@ if __name__ == '__main__':
     parser.add_argument('--symbols', dest='options', action='append_const', const='symbols', help='print the symbols')
     parser.add_argument('--dysym', dest='options', action='append_const', const='dysym', help='print dynamic symbols')
     parser.add_argument('-r', dest='options', action='append_const', const='reloc', help='Display the relocation entries')
+    parser.add_argument('-I', dest='options', action='append_const', const='indirect', help='Display the indirect symbol table')
     parser.add_argument('file', nargs='*', help='object file')
     args = parser.parse_args()
     if args.options == None:
@@ -319,6 +379,8 @@ if __name__ == '__main__':
         functions.append(print_dysym)
     if 'reloc' in args.options:
         functions.append(print_relocs)
+    if 'indirect' in args.options:
+        functions.append(print_indirect)
 
     for file in args.file:
         raw = open(file, 'rb').read()
