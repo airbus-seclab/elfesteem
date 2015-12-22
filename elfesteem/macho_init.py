@@ -1215,9 +1215,13 @@ class MACHO(object):
         if self.verbose: print("MHDR is %r" % self.Mhdr)
         self.lh = LHList(self)
         self.sect = SectionList(self)
+        self.symbols = None
         for sect in self.sect.sect:
             if type(sect) != SymbolTable:
                 continue
+            if self.symbols is not None:
+                raise ValueError("Only one SymbolTable per Mach-O file")
+            self.symbols = sect
             for symbol in sect.symbols:
                 sect.symbols_from_name[symbol.name] = symbol
         self.rawdata = []
