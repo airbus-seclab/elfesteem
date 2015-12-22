@@ -191,6 +191,17 @@ def print_symbols(e):
                 section = "%s,%s"%(section.sh.segname,section.sh.sectname)
             print("%-35s %-15s %-4s 0x%08x %04x"%(value.name,section,n_type,value.value,desc))
 
+def print_relocs(e):
+    for s in e.sect.sect:
+        if not hasattr(s, 'reloclist'): continue
+        print("Relocation information (%s,%s) %u entries"
+           % (s.sh.segname, s.sh.sectname, s.sh.nreloc))
+        print("address  pcrel length extern type    scattered symbolnum/value")
+        for x in s.reloclist:
+            if x.scattered: xt, xn = 'n/a', '0x%08x' % x.symbolNumOrValue
+            else:           xt, xn = x.extern, '%u' % x.symbolNumOrValue
+            print("%08x %-5u %-6u %-6s %-7d %-9d %s" %
+                (x.address, x.pcrel, x.length, xt, x.type, x.scattered, xn))
 
 archi = {
     (macho.CPU_TYPE_MC680x0,   macho.CPU_SUBTYPE_MC680x0_ALL):  'm68k',
@@ -258,6 +269,7 @@ if __name__ == '__main__':
     parser.add_argument('-h', dest='options', action='append_const', const='header', help='print the mach header')
     parser.add_argument('-l', dest='options', action='append_const', const='load', help='print the load commands')
     parser.add_argument('--symbols', dest='options', action='append_const', const='symbols', help='print the symbols')
+    parser.add_argument('-r', dest='options', action='append_const', const='reloc', help='Display the relocation entries')
     parser.add_argument('file', nargs='*', help='object file')
     args = parser.parse_args()
     if args.options == None:
@@ -271,6 +283,8 @@ if __name__ == '__main__':
         functions.append(print_lc)
     if 'symbols' in args.options:
         functions.append(print_symbols)
+    if 'reloc' in args.options:
+        functions.append(print_relocs)
 
     for file in args.file:
         raw = open(file, 'rb').read()
