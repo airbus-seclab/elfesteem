@@ -8,12 +8,54 @@ def data_bytes(s):
     if sys.version_info[0] < 3: return s
     else: return s.encode("latin1")
 
+# Constants, cf. http://llvm.org/docs/doxygen/html/Support_2MachO_8h_source.html
 MH_MAGIC    =    0xfeedface #     /* the mach magic number */
 MH_CIGAM    =    0xcefaedfe #     /* NXSwapInt(MH_MAGIC) */
 MH_MAGIC_64 =    0xfeedfacf #     /* the 64-bit mach magic number */
 MH_CIGAM_64 =    0xcffaedfe #     /* NXSwapInt(MH_MAGIC_64) */
 FAT_MAGIC   =    0xcafebabe
 FAT_CIGAM   =    0xbebafeca #     /* NXSwapLong(FAT_MAGIC) */
+
+# Constants for the "filetype" field
+MH_OBJECT       = 0x1  # relocatable object file
+MH_EXECUTE      = 0x2  # demand paged executable file
+MH_FVMLIB       = 0x3  # fixed VM shared library file
+MH_CORE         = 0x4  # core file
+MH_PRELOAD      = 0x5  # preloaded executable file
+MH_DYLIB        = 0x6  # dynamically bound shared library
+MH_DYLINKER     = 0x7  # dynamic link editor
+MH_BUNDLE       = 0x8  # dynamically bound bundle file
+MH_DYLIB_STUB   = 0x9  # shared library stub for static linking only, no section contents
+MH_DSYM         = 0xa  # companion file with only debug sections
+MH_KEXT_BUNDLE  = 0xb  # x86_64 kexts
+
+# Constant bits for the "flags" field
+MH_NOUNDEFS                = 0x00000001
+MH_INCRLINK                = 0x00000002
+MH_DYLDLINK                = 0x00000004
+MH_BINDATLOAD              = 0x00000008
+MH_PREBOUND                = 0x00000010
+MH_SPLIT_SEGS              = 0x00000020
+MH_LAZY_INIT               = 0x00000040
+MH_TWOLEVEL                = 0x00000080
+MH_FORCE_FLAT              = 0x00000100
+MH_NOMULTIDEFS             = 0x00000200
+MH_NOFIXPREBINDING         = 0x00000400
+MH_PREBINDABLE             = 0x00000800
+MH_ALLMODSBOUND            = 0x00001000
+MH_SUBSECTIONS_VIA_SYMBOLS = 0x00002000
+MH_CANONICAL               = 0x00004000
+MH_WEAK_DEFINES            = 0x00008000
+MH_BINDS_TO_WEAK           = 0x00010000
+MH_ALLOW_STACK_EXECUTION   = 0x00020000
+MH_ROOT_SAFE               = 0x00040000
+MH_SETUID_SAFE             = 0x00080000
+MH_NO_REEXPORTED_DYLIBS    = 0x00100000
+MH_PIE                     = 0x00200000
+MH_DEAD_STRIPPABLE_DYLIB   = 0x00400000
+MH_HAS_TLV_DESCRIPTORS     = 0x00800000
+MH_NO_HEAP_EXECUTION       = 0x01000000
+MH_APP_EXTENSION_SAFE      = 0x02000000
 
 # Cf. /usr/include/mach/machine.h
 # VEO is found on http://www.opensource.apple.com/source/cctools/cctools-809/include/mach/machine.h
@@ -205,18 +247,6 @@ CPU_SUBTYPE_ARM_V7EM   = 16 # Not meant to be run under xnu
 CPU_SUBTYPE_ARM64_ALL  = 0
 CPU_SUBTYPE_ARM64_V8   = 1
 
-MH_OBJECT       = 0x1  # relocatable object file
-MH_EXECUTE      = 0x2  # demand paged executable file
-MH_FVMLIB       = 0x3  # fixed VM shared library file
-MH_CORE         = 0x4  # core file
-MH_PRELOAD      = 0x5  # preloaded executable file
-MH_DYLIB        = 0x6  # dynamically bound shared library
-MH_DYLINKER     = 0x7  # dynamic link editor
-MH_BUNDLE       = 0x8  # dynamically bound bundle file
-MH_DYLIB_STUB   = 0x9  # shared library stub for static linking only, no section contents
-MH_DSYM         = 0xa  # companion file with only debug sections
-MH_KEXT_BUNDLE  = 0xb  # x86_64 kexts
-
 SEGMENT_READ = 0x1
 SEGMENT_WRITE = 0x2
 SEGMENT_EXECUTE = 0x4
@@ -272,6 +302,8 @@ LC_DYLIB_CODE_SIGN_DRS = 0x2B # Code signing DRs copied from linked dylibs
 LC_ENCRYPTION_INFO_64  = 0x2C # 64-bit encrypted segment information
 LC_LINKER_OPTION       = 0x2D # linker options in MH_OBJECT files
 LC_LINKER_OPTIMIZATION_HINT = 0x2E # optimization hints in MH_OBJECT files
+LC_VERSION_MIN_TVOS    = 0x2F
+LC_VERSION_MIN_WATCHOS = 0x30
 
 # After MacOS X 10.1 when a new load command is added that is required to be
 # understood by the dynamic linker for the image to execute properly the
@@ -322,8 +354,11 @@ S_ATTR_STRIP_STATIC_SYMS   = 0x20000000 # ok to strip static symbols in this sec
 S_ATTR_NO_DEAD_STRIP       = 0x10000000 # no dead stripping
 S_ATTR_LIVE_SUPPORT        = 0x08000000 # blocks are live if they reference live blocks
 S_ATTR_SELF_MODIFYING_CODE = 0x04000000 # Used with i386 code stubs written on by dyld
+S_ATTR_DEBUG               = 0x02000000 # A debug section
 
-S_ATTR_SOME_INSTRUCTIONS = 0x00000400
+S_ATTR_SOME_INSTRUCTIONS = 0x00000400 # Section contains some machine instructions
+S_ATTR_EXT_RELOC         = 0x00000200 # Section has external relocation entries
+S_ATTR_LOC_RELOC         = 0x00000100 # Section has local relocation entries
 
 
 # /usr/include/mach-o/reloc.h
@@ -349,7 +384,6 @@ def enumerate_constants(constants, globs):
 
 constants = {
   'CPU_TYPE'  : {},
-  'MH'  : {},
   'LC'  : {},
   'S'   : {},
   }
