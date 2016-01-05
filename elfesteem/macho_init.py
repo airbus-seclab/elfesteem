@@ -4,7 +4,7 @@ import struct
 
 from elfesteem import cstruct
 from elfesteem import macho
-from elfesteem.macho import data_bytes
+from elfesteem.macho import bytes_to_name, name_to_bytes
 from elfesteem.cstruct import data_empty, data_null
 from elfesteem.strpatchwork import StrPatchwork
 from elfesteem import intervals
@@ -211,15 +211,14 @@ class LoaderSegmentBase(Loader):
                 self.sect.append(sh.reloc)
         return self.sect
     def get_segname(self):
-        return self.lhc.segname.strip(data_null)
+        return self.lhc.segname
     def set_segname(self, val):
-        padding = len(self.lhc.segname) - len(val)
-        if (padding < 0) : raise ValueError("segname is too long for the structure")
-        self.lhc.segname = val + data_null*padding
+        self.lhc.segname = val
         for sh in self.sh:
             sh.segname = val
+    segname = property(get_segname, set_segname)
     def is_text_segment(self):
-        return self.segname == data_bytes("__TEXT")
+        return self.segname == "__TEXT"
 
 class LoaderSegment(LoaderSegmentBase):
     lht = macho.LC_SEGMENT
@@ -291,11 +290,11 @@ class LoaderDysymTab(Loader):
 
 class LoaderLib(Loader):
     def _parse_content(self):
-        self.name = self.content[self.lhc.stroffset-8:].strip(data_null)
+        self.name = bytes_to_name(self.content[self.lhc.stroffset-8:]).strip('\0')
         self.padding = self.lh.cmdsize - len(self.lh.pack()) - len(self.lhc.pack()) - len(self.name)
         self._repr_fields[0] = ("name", "s")
     def _str_additional_data(self):
-        return self.name+data_null*self.padding
+        return name_to_bytes(self.name)+data_null*self.padding
 
 class LoaderLoadDylib(LoaderLib):
     lht = macho.LC_LOAD_DYLIB
@@ -455,8 +454,8 @@ class LoaderUnixthread(Loader):
         else:
             flavor, count, self.regsize = threadStateParameters[self.cputype]
             if (self.lhc.flavor, self.lhc.count) != (flavor, count):
-                print "THREAD_STATE %d COUNT %d" % (self.lhc.flavor, self.lhc.count)
-                print "Wanted %d %d" % (flavor, count)
+                print("THREAD_STATE %d COUNT %d" % (self.lhc.flavor, self.lhc.count))
+                print("Wanted %d %d" % (flavor, count))
                 raise ValueError("Inconsistent values for CPU %d" % self.cputype)
             data = self.content[8:8+(self.lhc.count)*4]
         #print "THREAD_STATE %d COUNT %d" % (self.lhc.flavor, self.lhc.count)
@@ -659,13 +658,6 @@ class Section(MachoData):
         return self.sh.size
     addr = property(get_addr, set_addr)
     size = property(get_size)
-    def get_segname(self):
-        return self.sh.segname.strip(data_null)
-    def set_segname(self, val):
-        padding = len(str(self.sh.segname)) - len(val)
-        if (padding < 0) : raise ValueError("segname is too long for the structure")
-        self.sh.segname = val + data_null*padding
-    segname = property(get_segname, set_segname)
     name = property(lambda self:"%s,%s"%(self.sh.segname,self.sh.sectname))
     def _parsecontent(self):
         pass
@@ -978,14 +970,6 @@ class DySymbolTable(LinkEditSection):
             self.entries.append(extract(self.content[of:of+one_sym_size]))
             of += one_sym_size
 
-import sys
-if sys.version_info[0] < 3:
-    bytes_to_name = lambda s: s
-    name_to_bytes = lambda s: s
-else:
-    bytes_to_name = lambda s: s.decode(encoding="latin1")
-    name_to_bytes = lambda s: s.encode(encoding="latin1")
-
 class StringTable(LinkEditSection):
     def get_name(self, idx):
         n = self.content[idx:]
@@ -1137,14 +1121,14 @@ class virt(object):
 
     def __call__(self, ad_start, ad_stop = None, section = None):
         rva_items = self.get_rvaitem(slice(ad_start, ad_stop), section = section)
-        data_out = ""
+        data_out = data_empty
         for s, n_item in rva_items:
             data_out += s.content[n_item]
         return data_out
     
     def __getitem__(self, item):
         rva_items = self.get_rvaitem(item)
-        data_out = ""
+        data_out = data_empty
         for s, n_item in rva_items:
             data_out += s.content[n_item]
         return data_out
@@ -1370,7 +1354,7 @@ class MACHO(object):
                 return
             if isinstance(s, Section):
                 if not self.lh.addSH(s):
-                    print("s.content %s" % s.content)
+                    print("s.content %s" % s.content.pack())
                     print("s.sex %s" % s.sex)
                     print("s.wsize %s" % s.wsize)
                     print("s.sh %r" % s.sh)

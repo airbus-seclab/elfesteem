@@ -4,9 +4,12 @@ from elfesteem.cstruct import CStruct
 # To be compatible with python 2 and python 3
 import struct, sys
 from elfesteem.cstruct import data_empty, data_null
-def data_bytes(s):
-    if sys.version_info[0] < 3: return s
-    else: return s.encode("latin1")
+if sys.version_info[0] < 3:
+    bytes_to_name = lambda s: s
+    name_to_bytes = lambda s: s
+else:
+    bytes_to_name = lambda s: s.decode(encoding="latin1")
+    name_to_bytes = lambda s: s.encode(encoding="latin1")
 
 # Constants, cf. http://llvm.org/docs/doxygen/html/Support_2MachO_8h_source.html
 MH_MAGIC    =    0xfeedface #     /* the mach magic number */
@@ -443,7 +446,8 @@ class Lhdr(CStruct):
                 ("cmdsize","u32") ]
 
 class segment_command(CStruct):
-    _fields = [ ("segname","16s"),
+    _namelen = 16
+    _fields = [ ("pad_segname","%ds"%_namelen),
                 ("vmaddr","u32"),
                 ("vmsize","u32"),
                 ("fileoff","u32"),
@@ -452,9 +456,17 @@ class segment_command(CStruct):
                 ("initprot","u32"),
                 ("nsects","u32"),
                 ("flags","u32")]
+    def get_segname(self):
+        return bytes_to_name(self.pad_segname).strip('\0')
+    def set_segname(self, val):
+        padding = self._namelen - len(val)
+        if (padding < 0) : raise ValueError("segname is too long for the structure")
+        self.pad_segname = name_to_bytes(val)+data_null*padding
+    segname = property(get_segname, set_segname)
 
-class segment_command_64(CStruct):
-    _fields = [ ("segname","16s"),
+class segment_command_64(segment_command):
+    _namelen = 16
+    _fields = [ ("pad_segname","%ds"%_namelen),
                 ("vmaddr","u64"),
                 ("vmsize","u64"),
                 ("fileoff","u64"),
@@ -587,9 +599,9 @@ class sectionHeader(CStruct):
             return
         self.align = 1
         if not 'segment' in kargs:
-            self.segname = data_bytes("__LINKEDIT")
+            self.segname = "__LINKEDIT"
         if not 'sectname' in kargs:
-            self.sectname = data_bytes("__added_data")
+            self.sectname = "__added_data"
         if self.is_text_section():
             self.type = S_REGULAR
             self.flags = S_ATTR_SOME_INSTRUCTIONS | S_ATTR_PURE_INSTRUCTIONS
@@ -597,21 +609,21 @@ class sectionHeader(CStruct):
         self.addr = addr
         self.size = len(parent.content)
     def get_segname(self):
-        return self.pad_segname.strip(data_null)
+        return bytes_to_name(self.pad_segname).strip('\0')
     def set_segname(self, val):
         padding = self._namelen - len(val)
         if (padding < 0) : raise ValueError("segname is too long for the structure")
-        self.pad_segname = val+data_null*padding
+        self.pad_segname = name_to_bytes(val)+data_null*padding
     segname = property(get_segname, set_segname)
     def get_sectname(self):
-        return self.pad_sectname.strip(data_null)
+        return bytes_to_name(self.pad_sectname).strip('\0')
     def set_sectname(self, val):
         padding = self._namelen - len(val)
         if (padding < 0) : raise ValueError("sectname is too long for the structure")
-        self.pad_sectname = val+data_null*padding
+        self.pad_sectname = name_to_bytes(val)+data_null*padding
     sectname = property(get_sectname, set_sectname)
     def is_text_section(self):
-        return self.sectname == data_bytes("__text")
+        return self.sectname == "__text"
 
 class sectionHeader_64(sectionHeader):
     _namelen = 16

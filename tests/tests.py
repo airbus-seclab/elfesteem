@@ -53,22 +53,22 @@ def getVaddr(e):
     return "No Vaddr Found"
 
 def initTests():
-    if not macho_init.MACHO('\xce\xfa\xed\xfe').__class__.__name__ == 'MACHO':
-        print "BUG: cannot create a MachO with only Magic Number"
+    if not macho_init.MACHO(struct.pack("<I",macho.MH_MAGIC)).__class__.__name__ == 'MACHO':
+        print("BUG: cannot create a MachO with only Magic Number")
     if not len(macho_init.MACHO(struct.pack("<IIIII",macho.MH_MAGIC,0,0,0,1)).lh.lhlist)>0:
-        print "BUG: cannot append lhlist"
+        print("BUG: cannot append lhlist")
     if not macho_init.Loader(parent=None,sex='<',wsize=32,content="").__class__.__name__ == 'Loader':
-        print "BUG: cannot create a Loader"
+        print("BUG: cannot create a Loader")
     if not macho_init.Loader(parent=None,sex='<',wsize=32, content=struct.pack("<II",1,0)).__class__.__name__ == 'LoaderSegment':
-        print "BUG: cannot create a LoaderSegment"
+        print("BUG: cannot create a LoaderSegment")
     if not macho_init.Loader(parent=None,sex='<',wsize=32,content=struct.pack("<II",123456789,0)).__class__.__name__ == 'Loader':
-        print "BUG: cannot create a loader command with an unknown lht"
+        print("BUG: cannot create a loader command with an unknown lht")
     a=macho_init.Loader(parent=None,sex='<',wsize=32,content=struct.pack("<II",1,0))
     a.nsects = 2
     if not a.nsects == 2 :
-        print "BUG: cannot modify the section number of a Loader"
+        print("BUG: cannot modify the section number of a Loader")
     if not macho_init.Section(parent=None,sex='<',wsize=32).__class__.__name__ == 'Section':
-        print "BUG: Cannot create a Section Header"
+        print("BUG: Cannot create a Section Header")
 
 def test(file, **kargs):
     content_start = None
@@ -98,7 +98,7 @@ def test(file, **kargs):
         for pos, data in errors:
             #print "problem at position %x with byte %r" % (pos, data)
             pass
-        print file, "--", "Some data is not parsed. To enable creating .dump with this data, use checkParsedCompleted(detect_nop=True)."
+        print(file, "--", "Some data is not parsed. To enable creating .dump with this data, use checkParsedCompleted(detect_nop=True).")
         return
     str_e = e.pack()
     open(file+".dump", 'wb').write(str_e)
@@ -112,25 +112,25 @@ def test(file, **kargs):
     #errors = f.checkParsedCompleted(add_rawdata=True) # deal with all non-zero not parsed
     if not errors == None :
         for pos, data in errors:
-            print "problem at position %x with byte %r" % (pos, data)
+            print("problem at position %x with byte %r" % (pos, data))
 
     if str_e != f.pack():
-        print file, "--","BUG: str(e) is not a fixpoint"
+        print(file, "--","BUG: str(e) is not a fixpoint")
         sys.exit(1)
 
     if str_e != raw:
         if 'chgmaintounxthrd' in kargs and kargs['chgmaintounxthrd'] or 'extendSegment' in kargs and kargs['extendSegment']:
             pass
         else :
-            print file, "--","BUG: str(e) is not raw"
+            print(file, "--","BUG: str(e) is not raw")
             sys.exit(1)
 
     if 'virt' in kargs and kargs['virt']:
         if 'bits' in kargs :
             if kargs['bits'] == 32:
-                print repr(e.virt[0x2000:0x2020])
+                print(repr(e.virt[0x2000:0x2020]))
             if kargs['bits'] == 64:
-                print repr(e.virt[0x100001000:0x100001020])
+                print(repr(e.virt[0x100001000:0x100001020]))
 
     if 'virt' in kargs and kargs['virt']=='write':
         if 'bits' in kargs :
@@ -207,14 +207,14 @@ def test(file, **kargs):
         for lc in e.lh.lhlist:
             if hasattr(lc,'uuid'):
                 if not lc.uuid == (704906703, 35615, 13570, 42501, 26970, 1422133179):
-                    print "BUG: UUID change failed"
+                    print("BUG: UUID change failed")
 
     if 'invertLoaders' in kargs and kargs['invertLoaders']:
         cmd_8 = e.lh.lhlist[8].cmd
         cmd_9 = e.lh.lhlist[9].cmd
         e.lh.lhlist[8:10] = [e.lh.lhlist[9], e.lh.lhlist[8]]
         if not (e.lh.lhlist[8].cmd == cmd_9 or e.lh.lhlist[9].cmd == cmd_8):
-            print "BUG: load commands are not inverted"
+            print("BUG: load commands are not inverted")
 
     newFile = file+".dump"
     open(newFile, 'wb').write(f.pack())
@@ -229,11 +229,11 @@ def test(file, **kargs):
         #print "(out_newFile, err_newFile)", (out_newFile, err_newFile)
         if 'virt' in kargs and kargs['virt']=='write':
             if not out_newFile == 'Virt HelloWorld !':
-                print out_newFile
-                print "BUG: output expected from %s file is 'Virt HelloWorld'" % newFile
+                print(out_newFile)
+                print("BUG: output expected from %s file is 'Virt HelloWorld'" % newFile)
         else :
             if not (out_file, err_file) == (out_newFile, err_newFile):
-                print "BUG: output expected from %s file is 'structure definie'" % newFile
+                print("BUG: output expected from %s file is 'structure definie'" % newFile)
 
 def nonRegressionTests():
     initTests()
@@ -307,5 +307,5 @@ def nonRegressionTests():
     #print "test of calculator OK"
     test('wxHexEditor', parseSymbols = False)
     #print "test('wxHexEditor') OK"
-    print "end of tests"
+    print("end of tests")
 nonRegressionTests()
