@@ -17,7 +17,7 @@ def changeMainToUnixThread(e ,**kargs):
     if 'off' in kargs:
         off = kargs['off']
         #content = kargs['content']
-    lh = macho_init.LoaderUnixthread(parent={'cputype':e.Mhdr.cputype}, sex='<', wsize=32)
+    lh = macho_init.Loader.create(parent={'cputype':e.Mhdr.cputype}, sex='<', wsize=32, content=struct.pack("<II",macho.LC_UNIXTHREAD,8))
     main_pos, = e.lh.getpos(macho.LC_MAIN)
     sign_pos, = e.lh.getpos(macho.LC_DYLIB_CODE_SIGN_DRS)
     sectsign_pos, = e.sect.getpos(e.lh.lhlist[sign_pos].sect[0])
@@ -100,7 +100,7 @@ def test(file, **kargs):
             pass
         print file, "--", "Some data is not parsed. To enable creating .dump with this data, use checkParsedCompleted(detect_nop=True)."
         return
-    str_e = str(e)
+    str_e = e.pack()
     open(file+".dump", 'wb').write(str_e)
     os.chmod(file+".dump", 0755)
     if 'parseSymbols' in kargs and not kargs['parseSymbols']:
@@ -114,7 +114,7 @@ def test(file, **kargs):
         for pos, data in errors:
             print "problem at position %x with byte %r" % (pos, data)
 
-    if str_e != str(f):
+    if str_e != f.pack():
         print file, "--","BUG: str(e) is not a fixpoint"
         sys.exit(1)
 
@@ -217,7 +217,7 @@ def test(file, **kargs):
             print "BUG: load commands are not inverted"
 
     newFile = file+".dump"
-    open(newFile, 'wb').write(str(f))
+    open(newFile, 'wb').write(f.pack())
     os.chmod(newFile, 0755)
 
     if not ('noPrint' in kargs and kargs['noPrint']):

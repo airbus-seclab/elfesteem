@@ -630,10 +630,7 @@ class sectionHeader_64(sectionHeader):
 
 class CStructWithStrTable(CStruct):
     def strtab(self):
-        if self.strtabindex ==1 and self._parent.parent.parent._parent.parent.Mhdr.cputype == 0x0c:
-            return
-        else:
-            return self._parent.parent.parent._parent.parent.get_stringtable()
+        return self._parent.parent.parent._parent.parent.get_stringtable()
     strtab = property(strtab)
     def get_name(self):
         return self.strtab.get_name(self.strtabindex)

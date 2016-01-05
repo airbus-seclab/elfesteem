@@ -97,7 +97,10 @@ class Loader(LoaderBase):
     def _parse_content(self):
         pass
     def __init__(self, **kargs):
-        if 'parent' in kargs:
+        if self.lhc is None:
+            self.lh = macho.Lhdr(**kargs)
+            self.parent = self.lh
+        elif 'parent' in kargs:
             self.lh = kargs['parent']
             self.parent = self.lh
         else :
@@ -163,7 +166,7 @@ class LoaderSegmentBase(Loader):
                     size = se.size
             maxoff = offset + size
         self.nsects += 1
-        self.cmdsize += len(str(s.sh))
+        self.cmdsize += len(s.sh.pack())
         s.sh.parent = self
         s.sh.offset = maxoff 
         s.sh.addr = self.vmaddr - self.fileoff + s.sh.offset
@@ -171,14 +174,14 @@ class LoaderSegmentBase(Loader):
         # Values and positions by default
         self.sh.append(s.sh)
         self.sect.append(s)
-        s.sh.size = len(str(s))
+        s.sh.size = len(s.pack())
         s.sh.offset = maxoff
         if offset + size > self.fileoff + self.filesize :
             raise ValueError("not enough space in segment")
             #self.parent.extendSegment(self, 0x1000*(s.sh.size/0x1000 +1))
         else :
-            self.filesize += len(str(s))
-            self.vmsize += len(str(s))   
+            self.filesize += len(s.pack())
+            self.vmsize += len(s.pack())   
     def changeOffsets(self, decalage, min_offset=None):
         for sh in self.sh:
             sh.changeOffsets(decalage, min_offset)
@@ -438,14 +441,14 @@ class LoaderUnixthread(Loader):
         macho.CPU_TYPE_X86_64: 16,
         }
     def entrypoint(self):
-        return self.data[registerInstructionPointer[self.cputype]]
+        return self.data[self.registerInstructionPointer[self.cputype]]
     def set_entrypoint(self, val):
-        self.data[registerInstructionPointer[self.cputype]] = val
+        self.data[self.registerInstructionPointer[self.cputype]] = val
     entrypoint = property(entrypoint, set_entrypoint)
     def _parse_content(self):
         if type(self.parent._parent) == dict: self.cputype = self.parent._parent['cputype']
         else:                                self.cputype = self.parent._parent.parent.Mhdr.cputype
-        if self.content.pack() == data_empty:
+        if len(self.content.pack()) == 0:
             self.lhc.flavor, self.lhc.count, self.regsize = threadStateParameters[self.cputype]
             self.lh.cmdsize += self.lhc.count*4
             data = data_null * (self.lhc.count*4)
@@ -589,10 +592,10 @@ class FarchList(object):
                 #print "Farchlist", parent.interval
     def __getitem__(self, item):
         return self.farchlist[item]
-    def __str__(self):
+    def pack(self):
         c = []
         for farch in self.farchlist:
-            c.append(str(farch))
+            c.append(farch.pack())
         return "".join(c)
 
 class MachoList(object):
@@ -636,7 +639,7 @@ class MachoData(object):
 class Section(MachoData):
     def __init__(self, parent, content=None, sh=None, **kargs):
         inherit_sex_wsize(self, parent, kargs)
-        self.content = StrPatchwork(content)
+        self.content = content
         if sh != None:
             self.sh = sh
         else:
@@ -670,6 +673,11 @@ class Section(MachoData):
         return self.content.pack()
     def __str__(self):
         raise AttributeError("Use pack() instead of str()")
+    def get_content(self):
+        return self.__content
+    def set_content(self,val):
+        self.__content = StrPatchwork(val)
+    content = property(get_content, set_content)
 
 class BaseSymbol(object):
     def pack(self):
@@ -1368,12 +1376,12 @@ class MACHO(object):
                     print("s.sh %r" % s.sh)
                     print("s.sh.segname %r" % s.sh.segname)
                     raise ValueError('addSH failed')
-                if not s.sh.size == len(str(s)) : raise ValueError("s.sh.size and len(str(s)) differ")
+                if not s.sh.size == len(s.pack()) : raise ValueError("s.sh.size and len(s.pack()) differ")
                 self.sect.add(s)
-                self.Mhdr.sizeofcmds += len(str(s.sh))
+                self.Mhdr.sizeofcmds += len(s.sh.pack())
             if isinstance(s, Loader):
-                s.cmdsize = len(str(s))
-                self.Mhdr.sizeofcmds += len(str(s))
+                s.cmdsize = len(s.pack())
+                self.Mhdr.sizeofcmds += s.cmdsize
                 self.Mhdr.ncmds += 1
                 if hasattr(s, 'segname'):
                     fileoff = 0
@@ -1433,7 +1441,7 @@ class MACHO(object):
         result = []
         if hasattr(self,'Fhdr'):
             for arch in self.arch.macholist:
-                result.extend([(pos+macho.offset, val) for (pos, val) in arch.incompletedPosVal()])
+                result.extend([(pos+arch.offset, val) for (pos, val) in arch.incompletedPosVal()])
             return result
         if hasattr(self,'Mhdr'):
             for lc in self.lh.lhlist:
@@ -1442,7 +1450,7 @@ class MACHO(object):
                         if s.is_text_section():
                             if s.size%2 == 1 :
                                 pos, val = s.offset+s.size, struct.pack("B",0x90)
-                                if struct.pack("B",self[pos])==val:
+                                if self[pos]==val:
                                     result.append((pos,val))
             return result
 
