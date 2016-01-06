@@ -1182,8 +1182,6 @@ class virt(object):
         for lc in self.parent.lh.lhlist:
             if hasattr(lc, 'vmaddr'):
                 l = max(l, lc.vmaddr+lc.vmsize)
-        if  not l:
-            raise ValueError('maximum virtual address not found !')
         return l
 
 
