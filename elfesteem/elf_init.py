@@ -203,8 +203,10 @@ class Dynamic(Section):
         self.dyntab = []
         self.dynamic = {}
         sz = self.sh.entsize
-        while c:
-            s,c = c[:sz],c[sz:]
+        idx = 0
+        while len(c) > sz*idx:
+            s = c[sz*idx:sz*(idx+1)]
+            idx += 1
             dyn = Dyn(parent=self, content=s)
             self.dyntab.append(dyn)
             if type(dyn.name) is str:
@@ -227,8 +229,7 @@ class StrTable(Section):
     sht = elf.SHT_STRTAB
 
     def get_name(self, idx):
-        n = self.content[idx:]
-        n = n[:n.find(data_null)]
+        n = self.content[idx:self.content.find(data_null, offset=idx)]
         return bytes_to_name(n)
 
     def add_name(self, name):
@@ -246,8 +247,7 @@ class StrTable(Section):
 
     def mod_name(self, idx, name):
         name = name_to_bytes(name)
-        n = self.content[idx:]
-        n = n[:n.find(data_null)]
+        n = self.content[idx:self.content.find(data_null, offset=idx)]
         data = self.content
         if type(data) != str: data = data.pack()
         data = data[:idx]+name+data[idx+len(n):]
@@ -268,8 +268,10 @@ class SymTable(Section):
         self.symtab=[]
         self.symbols={}
         sz = self.sh.entsize
-        while c:
-            s,c = c[:sz],c[sz:]
+        idx = 0
+        while len(c) > sz*idx:
+            s = c[sz*idx:sz*(idx+1)]
+            idx += 1
             sym = Sym(parent=self, content=s)
             self.symtab.append(sym)
             self.symbols[sym.name] = sym
