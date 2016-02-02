@@ -319,8 +319,10 @@ class Dynamic(Section):
         self.dyntab = []
         self.dynamic = {}
         sz = self.sh.entsize
-        while c:
-            s, c = c[:sz], c[sz:]
+        idx = 0
+        while len(c) > sz*idx:
+            s = c[sz*idx:sz*(idx+1)]
+            idx += 1
             dyn = WDynamic(self, sex, size, s)
             self.dyntab.append(dyn)
             if type(dyn.name) is str:
@@ -354,8 +356,7 @@ class StrTable(Section):
             # c = c[p+1:]
 
     def get_name(self, ofs):
-        n = self.content[ofs:]
-        n = n[:n.find("\0")]
+        n = self.content[ofs:self.content.find('\x00', offset=ofs)]
         return n
 
     def add_name(self, name):
@@ -423,8 +424,11 @@ class RelTable(Section):
         self.reltab = []
         self.rel = {}
         sz = self.sh.entsize
-        while c:
-            s, c = c[:sz], c[sz:]
+
+        idx = 0
+        while len(c) > sz*idx:
+            s = c[sz*idx:sz*(idx+1)]
+            idx += 1
             rel = WRel(self, sex, size, s)
             self.reltab.append(rel)
             if rel.parent.linksection != self.parent.shlist[0]:
