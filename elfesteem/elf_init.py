@@ -309,8 +309,10 @@ class RelTable(Section):
         self.reltab=[]
         self.rel = {}
         sz = self.sh.entsize
-        while c:
-            s,c = c[:sz],c[sz:]
+        idx = 0
+        while len(c) > sz*idx:
+            s = c[sz*idx:sz*(idx+1)]
+            idx += 1
             rel = Rel(parent=self, content=s)
             self.reltab.append(rel)
             self.rel[rel.sym] = rel
