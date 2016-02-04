@@ -24,7 +24,7 @@ class ContentManager(object):
         self.__set__(owner, None)
 
 
-class drva:
+class drva(object):
     def __init__(self, x):
         self.parent = x
     def get_slice_raw(self, item):
@@ -103,7 +103,7 @@ class drva:
         return #s.data.__setitem__(n_item, data)
 
 
-class virt:
+class virt(object):
     def __init__(self, x):
         self.parent = x
 
