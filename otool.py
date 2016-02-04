@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 from elfesteem import macho_init, macho, intervals
+from elfesteem.cstruct import data_null
 import os.path
 import time
 import platform
@@ -53,7 +54,7 @@ def print_lc(e):
                 value = "version " + split_integer(value, 8, 3)
             elif name == "pad_segname":
                 name = "segname"
-                value = value.rstrip('\0')
+                value = value.rstrip(data_null)
             elif lc.cmd == macho.LC_VERSION_MIN_MACOSX:
                 shift = 2
                 value = split_integer(value, 8, 3, truncate=1)
@@ -78,7 +79,7 @@ def print_lc(e):
                 name_max_len = len(name)
         format = "%%%ds %%s" % (name_max_len+shift)
         for pair in lc_value:
-            print format % pair
+            print(format % pair)
         # for some load command, additional information is displayed
 
         if lc.cmd == macho.LC_SEGMENT or lc.cmd == macho.LC_SEGMENT_64:

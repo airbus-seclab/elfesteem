@@ -27,7 +27,7 @@ class ContentManager(object):
 ### Sections
 
 
-def inherit_sex_wsize(self, parent, kargs):
+def inheritsexwsize(self, parent, kargs):
     for f in ['sex', 'wsize']:
         if f in kargs:
             setattr(self, f, kargs[f])
@@ -57,7 +57,7 @@ wsize = parent.wsize)
                 cls = SectionMetaclass.sectypes[sh.type]
         i = cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
         if sh is not None:
-            sh._parent=i
+            sh.parent=i
         i.__init__(parent, sh)
         return i
     create = classmethod(create)
@@ -103,9 +103,9 @@ wsize = parent.wsize)
     def __init__(self, parent, sh=None, **kargs):
         self.parent=parent
         self.phparent=None
-        inherit_sex_wsize(self, parent, {})
+        inheritsexwsize(self, parent, {})
         if sh is None:
-            sh = elf.Shdr(parent=self, type=self.sht, **kargs)
+            sh = elf.Shdr(parent=self, type=self.sht, name_idx=0, **kargs)
         self.sh=sh
         self._content=StrPatchwork()
     def __repr__(self):
@@ -222,14 +222,7 @@ class Dynamic(Section):
             return self.dynamic[item]
         return self.dyntab[item]
 
-import sys
-if sys.version_info[0] < 3:
-    bytes_to_name = lambda s: s
-    name_to_bytes = lambda s: s
-else:
-    bytes_to_name = lambda s: s.decode(encoding="latin1")
-    name_to_bytes = lambda s: s.encode(encoding="latin1")
-data_null = struct.pack("B",0)
+from elfesteem.cstruct import data_null, bytes_to_name, name_to_bytes
 
 class StrTable(Section):
     sht = elf.SHT_STRTAB
@@ -334,7 +327,7 @@ class RelATable(RelTable):
 class SHList(object):
     def __init__(self, parent, **kargs):
         self.parent = parent
-        inherit_sex_wsize(self, parent, kargs)
+        inheritsexwsize(self, parent, kargs)
         self.shlist = []
         ehdr = self.parent.Ehdr
         of1 = ehdr.shoff
@@ -411,7 +404,7 @@ class SHList(object):
 class ProgramHeader(object):
     def __init__(self, parent, PHtype, phstr, **kargs):
         self.parent = parent
-        inherit_sex_wsize(self, parent, kargs)
+        inheritsexwsize(self, parent, kargs)
         self.ph = PHtype(parent=self, content=phstr)
         self.shlist = [] # based on readelf's "Section to Segment mapping"
         self.shlist_partial = [] # These are other sections of interest
@@ -460,7 +453,7 @@ class ProgramHeader(object):
 class PHList(object):
     def __init__(self, parent, **kargs):
         self.parent = parent
-        inherit_sex_wsize(self, parent, kargs)
+        inheritsexwsize(self, parent, kargs)
         self.phlist = []
         ehdr = self.parent.Ehdr
         of1 = ehdr.phoff
@@ -612,7 +605,7 @@ class virt(object):
             data = self.parent.content[s.ph.offset:s.ph.offset+s.ph.filesz]
             ret = data.find(pattern, offset)
             if ret != -1:
-                return ret  + s.ph.vaddr#self.parent.rva2virt(s.addr + ret)
+                return ret  + s.ph.vaddr
             offset = 0
         return -1
 
@@ -724,7 +717,7 @@ def elf_set_offsets(self):
         if name == None:
             pos = ((pos + 3)//4)*4
             self.Ehdr.shoff = pos
-            self.Ehdr.shentsize = len(self.sh._shstrtab.sh)
+            self.Ehdr.shentsize = self.sh._shstrtab.sh.bytelen
             pos += self.Ehdr.shnum * self.Ehdr.shentsize
             continue
         for s in self.getsectionsbyname(name):
@@ -762,9 +755,9 @@ class ELF(object):
             self.Ehdr.version = 1
             self.Ehdr.type = kargs.get('e_type', elf.ET_REL)
             self.Ehdr.machine = kargs.get('e_machine', elf.EM_386)
-            self.Ehdr.ehsize = len(self.Ehdr)
-            self.sh = SHList(parent=self)
-            self.ph = PHList(parent=self)
+            self.Ehdr.ehsize = self.Ehdr.bytelen
+            self.sh = SHList(self)
+            self.ph = PHList(self)
             elf_default_content(self, **kargs)
             return
         self._content = elfstr
@@ -783,8 +776,8 @@ class ELF(object):
         self.wsize = h[4]*32
         self.sex   = {1:'<', 2:'>'} [h[5]]
         self.Ehdr = elf.Ehdr(parent=self, content=self.content)
-        self.sh = SHList(parent=self)
-        self.ph = PHList(parent=self)
+        self.sh = SHList(self)
+        self.ph = PHList(self)
     def resize(self, old, new):
         pass
     def __getitem__(self, item):

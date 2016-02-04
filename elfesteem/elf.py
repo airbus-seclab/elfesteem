@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-from elfesteem.cstruct import CStruct
+from elfesteem.cstruct import CStruct, CStructWithStrTable
 
 class Ehdr(CStruct):
     _fields = [ ("ident","16s"),
@@ -18,16 +18,6 @@ class Ehdr(CStruct):
                 ("shnum","u16"),
                 ("shstrndx","u16") ]
 
-class CStructWithStrTable(CStruct):
-    def get_name(self):
-        return self.strtab.get_name(self.name_idx)
-    def set_name(self, name):
-        if self.name_idx == 0:
-            self.name_idx = self.strtab.add_name(name)
-        else:
-            self.strtab.mod_name(self.name_idx, name)
-    name = property(get_name, set_name)
-
 class Shdr(CStructWithStrTable):
     _fields = [ ("name_idx","u32"),
                 ("type","u32"),
@@ -40,7 +30,7 @@ class Shdr(CStructWithStrTable):
                 ("addralign","ptr"),
                 ("entsize","ptr") ]
     def strtab(self):
-        return self._parent.shstrtab
+        return self.parent.shstrtab
     strtab = property(strtab)
 
 class Phdr32(CStruct):
@@ -71,7 +61,7 @@ class Sym32(CStructWithStrTable):
                 ("other","u08"),
                 ("shndx","u16") ]
     def strtab(self):
-        return self._parent.linksection
+        return self.parent.linksection
     strtab = property(strtab)
 
 class Sym64(Sym32):
@@ -88,7 +78,7 @@ class Dym(CStruct):
 
 class RelBase(CStruct):
     def symbol(self):
-        if not hasattr(self._parent.linksection, 'symtab'):
+        if not hasattr(self.parent.linksection, 'symtab'):
             # In some (invalid?) binaries, most sections are of
             # type NOBITS, including the symbols section, which
             # therefore has no symtab member
@@ -97,7 +87,7 @@ class RelBase(CStruct):
             class VoidName(object):
                 name = None
             return VoidName()
-        return self._parent.linksection.symtab[self.sym_idx]
+        return self.parent.linksection.symtab[self.sym_idx]
     symbol = property(symbol)
     def shndx(self):
         return self.symbol.shndx
@@ -165,7 +155,7 @@ class Dyn32(CStruct):
                 ("name_idx","u32") ]
     def name(self):
         if self.type == DT_NEEDED:
-            return self._parent.linksection.get_name(self.name_idx)
+            return self.parent.linksection.get_name(self.name_idx)
         return self.name_idx
     name = property(name)
 

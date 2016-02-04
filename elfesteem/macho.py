@@ -1,15 +1,8 @@
 #! /usr/bin/env python
 
-from elfesteem.cstruct import CStruct
+from elfesteem.cstruct import CStruct, CStructWithStrTable
 # To be compatible with python 2 and python 3
-import struct, sys
-from elfesteem.cstruct import data_empty, data_null
-if sys.version_info[0] < 3:
-    bytes_to_name = lambda s: s
-    name_to_bytes = lambda s: s
-else:
-    bytes_to_name = lambda s: s.decode(encoding="latin1")
-    name_to_bytes = lambda s: s.encode(encoding="latin1")
+from elfesteem.cstruct import data_empty, data_null, bytes_to_name, name_to_bytes
 
 # Constants, cf. http://llvm.org/docs/doxygen/html/Support_2MachO_8h_source.html
 MH_MAGIC    =    0xfeedface #     /* the mach magic number */
@@ -423,8 +416,8 @@ class Mhdr(CStruct):
         CStruct.__init__(self, *args, **kargs)
         if self.magic not in [0xfeedface, 0xfeedfacf, 0xcafebabe]:
             raise ValueError('Not a little-endian Mach-O')
-        if self._parent.interval is not None :
-            self._parent.interval.delete(0,28)
+        if self.parent.interval is not None :
+            self.parent.interval.delete(0,28)
 
 class Mhdr_64(CStruct):
     _fields = [ ("magic","u32"),
@@ -439,8 +432,8 @@ class Mhdr_64(CStruct):
         CStruct.__init__(self, *args, **kargs)
         if self.magic not in [0xfeedface, 0xfeedfacf, 0xcafebabe]:
             raise ValueError('Not a little-endian Mach-O')
-        if self._parent.interval is not None :
-            self._parent.interval.delete(0,32)
+        if self.parent.interval is not None :
+            self.parent.interval.delete(0,32)
 
 class Fhdr(CStruct):
     _fields = [ ("magic","u32"),
@@ -449,8 +442,8 @@ class Fhdr(CStruct):
         CStruct.__init__(self, *args, **kargs)
         if self.magic not in [0xfeedface, 0xfeedfacf, 0xcafebabe]:
             raise ValueError('Not a little-endian Mach-O')
-        if self._parent.interval is not None :
-            self._parent.interval.delete(0,8)
+        if self.parent.interval is not None :
+            self.parent.interval.delete(0,8)
 
 class Farch(CStruct):
     _fields = [ ("cputype","u32"),
@@ -466,10 +459,10 @@ class Lhdr(CStruct):
 class segment_command(CStruct):
     _namelen = 16
     _fields = [ ("pad_segname","%ds"%_namelen),
-                ("vmaddr","u32"),
-                ("vmsize","u32"),
-                ("fileoff","u32"),
-                ("filesize","u32"),
+                ("vmaddr","ptr"),
+                ("vmsize","ptr"),
+                ("fileoff","ptr"),
+                ("filesize","ptr"),
                 ("maxprot","u32"),
                 ("initprot","u32"),
                 ("nsects","u32"),
@@ -482,22 +475,9 @@ class segment_command(CStruct):
         self.pad_segname = name_to_bytes(val)+data_null*padding
     segname = property(get_segname, set_segname)
 
-class segment_command_64(segment_command):
-    _namelen = 16
-    _fields = [ ("pad_segname","%ds"%_namelen),
-                ("vmaddr","u64"),
-                ("vmsize","u64"),
-                ("fileoff","u64"),
-                ("filesize","u64"),
-                ("maxprot","u32"),
-                ("initprot","u32"),
-                ("nsects","u32"),
-                ("flags","u32")]
-
 class data_in_code_command(CStruct):
     _fields = [ ("data_incode_off","u32"),
                 ("data_incode_size","u32")]
-
 
 class dyld_info_command(CStruct):
     _fields = [ ("rebase_off","u32"),
@@ -589,15 +569,15 @@ class sectionHeader(CStruct):
     _namelen = 16
     _fields = [ ("pad_sectname","%ds"%_namelen),
                 ("pad_segname","%ds"%_namelen),
-                ("addr","u32"),
-                ("size","u32"),
+                ("addr","ptr"),
+                ("size","ptr"),
                 ("offset","u32"),
                 ("align","u32"),
                 ("reloff","u32"),
                 ("nreloc","u32"),
                 ("all_flags","u32"),
                 ("reserved1","u32"),
-                ("reserved2","u32")]
+                ("reserved2","ptr")]
     def get_type(self):
         return self.all_flags & 0xff
     def set_type(self, val):
@@ -648,47 +628,15 @@ class sectionHeader(CStruct):
     def is_text_section(self):
         return self.sectname == "__text"
 
-class sectionHeader_64(sectionHeader):
-    _namelen = 16
-    _fields = [ ("pad_sectname","%ds"%_namelen),
-                ("pad_segname","%ds"%_namelen),
-                ("addr","u64"),
-                ("size","u64"),
-                ("offset","u32"),
-                ("align","u32"),
-                ("reloff","u32"),
-                ("nreloc","u32"),
-                ("all_flags","u32"),
-                ("reserved1","u32"),
-                ("reserved2","u32"),
-                ("reserved3","u32")]
-
-class CStructWithStrTable(CStruct):
-    def strtab(self):
-        return self._parent.parent.parent._parent.parent.get_stringtable()
-    strtab = property(strtab)
-    def get_name(self):
-        return self.strtab.get_name(self.strtabindex)
-    def set_name(self, name):
-        if self.strtabindex == 0:
-            self.strtabindex = self.strtab.add_name(name)
-        else:
-            self.strtab.mod_name(self.strtabindex, name)
-    name = property(get_name, set_name)
-
 class symbol(CStructWithStrTable):
-    _fields = [ ("strtabindex","u32"),
+    _fields = [ ("name_idx","u32"),
                 ("type","u08"),
                 ("sectionindex","u08"),
                 ("description","u16"),
-                ("value","u32")]
-
-class symbol_64(CStructWithStrTable):
-    _fields = [ ("strtabindex","u32"),
-                ("type","u08"),
-                ("sectionindex","u08"),
-                ("description","u16"),
-                ("value","u64")]
+                ("value","ptr")]
+    def strtab(self):
+        return self.parent.parent.parent.parent.parent.get_stringtable()
+    strtab = property(strtab)
 
 # Cf. /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk/usr/include/mach-o/nlist.h
 # The 'n_type' aka. 'type' field
@@ -739,6 +687,7 @@ class relocationSymbol(CStruct):
         fields.extend(["type", "scattered", "symbolNumOrValue"])
         return "<" + self.__class__.__name__ + " " + " -- ".join([x + " " + hex(getattr(self,x)) for x in fields]) + ">"
     def __str__(self):
+        import struct
         if self.scattered:
             return struct.pack("<I",(self.scattered<<31) + (self.pcrel<<30) + (self.length<<28) + (self.type<<24) + self.address) + struct.pack("<I",self.symbolNumOrValue)
         else:

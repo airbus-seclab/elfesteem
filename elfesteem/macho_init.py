@@ -235,8 +235,8 @@ class LoaderSegment(LoaderSegmentBase):
 
 class LoaderSegment_64(LoaderSegmentBase):
     lht = macho.LC_SEGMENT_64
-    lhc = macho.segment_command_64
-    sh_type = macho.sectionHeader_64
+    lhc = macho.segment_command
+    sh_type = macho.sectionHeader
     lh_size = 80
 
 class LoaderSymTab(Loader):
@@ -460,8 +460,8 @@ class LoaderUnixthread(Loader):
         self.data[self.registerInstructionPointer[self.cputype]] = val
     entrypoint = property(entrypoint, set_entrypoint)
     def _parse_content(self):
-        if type(self.parent._parent) == dict: self.cputype = self.parent._parent['cputype']
-        else:                                self.cputype = self.parent._parent.parent.Mhdr.cputype
+        if type(self.parent.parent) == dict: self.cputype = self.parent.parent['cputype']
+        else:                                self.cputype = self.parent.parent.parent.Mhdr.cputype
         if len(self.content.pack()) == 0:
             self.lhc.flavor, self.lhc.count, self.regsize = threadStateParameters[self.cputype]
             self.lh.cmdsize += self.lhc.count*4
@@ -657,8 +657,7 @@ class Section(MachoData):
         if sh != None:
             self.sh = sh
         else:
-            if self.wsize==32 : self.sh = macho.sectionHeader(parent=self,content=None,**kargs)
-            if self.wsize==64 : self.sh = macho.sectionHeader_64(parent=self,content=None,**kargs)   
+            self.sh = macho.sectionHeader(parent=self,content=None,**kargs)
         self._parsecontent()
     def get_offset(self):
         return self.sh.offset
@@ -745,7 +744,7 @@ class SymbolStubList(SymbolList):
             if self.wsize == 32:
                 self.list.append(SymbolStub(self.content[i*len_stub:(i+1)*len_stub], addr, len_stub, self.sh.size))
             elif self.wsize == 64: #FF25 is an indirect relative jump for 64 bits
-                off_next_stub = self.sh.offset + (i+1)*len_stub + self.sh._parent.vmaddr - self.sh._parent.fileoff #function off2addr
+                off_next_stub = self.sh.offset + (i+1)*len_stub + self.sh.parent.vmaddr - self.sh.parent.fileoff #function off2addr
                 self.list.append(SymbolStub(self.content[i*len_stub:(i+1)*len_stub], addr, len_stub, self.sh.size, off_next_stub))
 
 class NLSymbolPtrList(SymbolList):
@@ -850,8 +849,8 @@ class SymbolOpcode(object):
         self.doBind,self.done, = struct.unpack("BB",content[self.opsize:self.opsize+2])
         self.opsize += 2
         #print repr(self)
-        self.addr = self.offset + parent.parent.parent._parent.parent.lh.lhlist[self.segment & 0x0f].vmaddr
-        self.realoffset = self.offset + parent.parent.parent._parent.parent.lh.lhlist[self.segment & 0x0f].fileoff
+        self.addr = self.offset + parent.parent.parent.parent.parent.lh.lhlist[self.segment & 0x0f].vmaddr
+        self.realoffset = self.offset + parent.parent.parent.parent.parent.lh.lhlist[self.segment & 0x0f].fileoff
         if (self.doBind, self.done) != (0x90, 0):
             self.opsize = 0
             return
@@ -935,10 +934,8 @@ class SymbolTable(LinkEditSection):
         count = self.lc.nsyms
         size = self.lc.symsize
         one_sym_size = int(size/count)
-        if   self.wsize == 32: symbol_type = macho.symbol
-        elif self.wsize == 64: symbol_type = macho.symbol_64
         for i in range(count):
-            symbol=symbol_type(parent=self, content=self.content[of:of+one_sym_size])
+            symbol = macho.symbol(parent=self, content=self.content[of:of+one_sym_size])
             symbol.offset = of
             self.symbols.append(symbol)
             of += one_sym_size

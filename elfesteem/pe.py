@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
-from elfesteem.new_cstruct import CStruct, data_null, data_empty
+from elfesteem.cstruct import data_null, data_empty
+from elfesteem.new_cstruct import CStruct
 from elfesteem.strpatchwork import StrPatchwork
 import struct
 import logging
