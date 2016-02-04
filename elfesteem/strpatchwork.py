@@ -21,15 +21,18 @@ class StrPatchwork(object):
     def __getitem__(self, item):
         s = self.s
         if type(item) is slice:
-            end = item.stop
-            l = len(s)
-            if end != None and l < end:
-                # This is inefficient but avoids complicated maths if step is not 1
-                s = s[:]
-                s.extend(array("B",self.paddingbyte*(end-l)))
             r = s[item]
+            end = item.stop
+            if end != None and len(s) < end:
+                if item.step is not None:
+                    TODO
+                elif len(r) > 0:
+                    # We go beyond the end of 's'
+                    r.extend(array("B",self.paddingbyte*(end-len(s))))
+                else:
+                    # We are entirely after the end of 's'
+                    r = array("B",self.paddingbyte*(end-item.start))
             return r.tostring()
-
         else:
             if item > len(s):
                 return self.paddingbyte
