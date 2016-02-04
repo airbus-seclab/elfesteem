@@ -525,10 +525,7 @@ class PE(object):
         if self.SHList is None:
             return None
         for s in self.SHList.shlist:
-            # TODO CHECK:
-            # some binaries have import rva outside section, but addresses
-            # seems to be rounded
-            if s.addr <= rva < (s.addr+s.size+0xfff) & 0xFFFFF000:
+            if s.addr <= rva < s.addr+s.size:
                 return s
         return None
 
@@ -552,7 +549,17 @@ class PE(object):
         return None
 
     def is_rva_ok(self, rva):
-        return  self.getsectionbyrva(rva) is not None
+        # Some binaries have import rva outside section, but addresses seem
+        # to be rounded.
+        # Instead of testing s.addr <= rva < (s.addr+s.size+0xfff) & 0xFFFFF000
+        # in getsectionbyrva, as implemented by patch 68ac083623ff, it is more
+        # robust to call getsectionbyrva with rva & 0xFFFFF000, when parsing
+        # import tables.
+        # Apparently, when parsing imports, getsectionbyrva is only used by
+        # is_rva_ok, which is the only one needing a patch.
+        # We need to check that the 0xFFFFF000 mask is not specific to 32-bit
+        # PE.
+        return  self.getsectionbyrva(rva & 0xFFFFF000) is not None
 
     def rva2off(self, rva):
         # Special case rva in header
