@@ -69,17 +69,15 @@ class drva(object):
                 s_max = max(s.size, s.rawsize)
                 s_start = start - s.addr
                 s_stop = stop - s.addr
-            #print("%x %x"%(s_stop,s_start))
             if s_stop >s_max:
-                #print('yy')
-                #raise ValueError('lack data %d, %d'%(stop, s_max))
                 s_stop = s_max
-            #print("%x %x"%(s_start,s_stop))
             s_len = s_stop - s_start
             total_len -= s_len
             start += s_len
             n_item = slice(s_start, s_stop, step)
             rva_items.append((s, n_item))
+            if s_len <= 0:
+                break
         return rva_items
 
     def __getitem__(self, item):
