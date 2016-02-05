@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-from elfesteem.cstruct import CBase, CStruct
+from elfesteem.cstruct import CBase, CStruct, CArray
 from elfesteem.cstruct import data_null, data_empty
 from elfesteem.new_cstruct import CStruct as NEW_CStruct
 from elfesteem.strpatchwork import StrPatchwork
@@ -505,20 +505,24 @@ class OpthdrXCOFF64(CStruct):
                 ("x64flags","u16"),
                 ]
 
-class OptNThdr(NEW_CStruct):
+class OptNThdr(CStruct):
     _fields = [ ("rva","u32"),
                 ("size","u32") ]
 
-def get_optehdr_num(o):
-    numberofrva = o.numberofrvaandsizes
-    size_e = 8
-    if o.parent_head.COFFhdr.sizeofoptionalheader < numberofrva * size_e+ o.parent_head.Opthdr.bytelen:
-        numberofrva = (o.parent_head.COFFhdr.sizeofoptionalheader-o.parent_head.Opthdr.bytelen)/size_e
-        log.warn('bad number of rva.. using default %d'%numberofrva)
-        numberofrva = 0x10
-    return numberofrva
+class OptNThdrs(CArray):
+    _cls = OptNThdr
+    def count(self):
+        numberofrva = self.parent.numberofrvaandsizes
+        pefile = self.parent.parent
+        sizeofrva = pefile.COFFhdr.sizeofoptionalheader - pefile.Opthdr.bytelen
+        size_e = 8
+        if sizeofrva < numberofrva * size_e:
+            numberofrva = sizeofrva // size_e
+            log.warn('Bad number of rva %#x: using default 0x10', numberofrva)
+            numberofrva = 0x10
+        return numberofrva
 
-class NThdr(NEW_CStruct):
+class NThdr(CStruct):
     _fields = [ ("ImageBase","ptr"),
                 ("sectionalignment","u32"),
                 ("filealignment","u32"),
@@ -540,8 +544,9 @@ class NThdr(NEW_CStruct):
                 ("sizeofheapcommit","ptr"),
                 ("loaderflags","u32"),
                 ("numberofrvaandsizes","u32"),
-                ("optentries", "OptNThdr", lambda c:get_optehdr_num(c))
-                ]
+                ("optentries",OptNThdrs) ]
+    def get_optentries(self):
+        return self.getf('optentries')._array
 
 
 class Shdr(NEW_CStruct):

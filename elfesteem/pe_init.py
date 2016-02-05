@@ -301,16 +301,8 @@ class PE(object):
             self.DOShdr = pe.DOShdr(parent=self)
             self.NTsig = pe.NTsig(parent=self)
             self.COFFhdr = pe.COFFhdr(parent=self)
-
-            if self._wsize == 32:
-                Opthdr = pe.Opthdr32
-            else:
-                Opthdr = pe.Opthdr64
-
-            self.Opthdr = Opthdr(self)
-            self.NThdr = pe.NThdr(self)
-            self.NThdr.optentries = [pe.OptNThdr(self) for x in xrange(0x10)]
-            self.NThdr.CheckSum = 0
+            self.Opthdr = {32: pe.Opthdr32, 64: pe.Opthdr64}[wsize](parent=self)
+            self.NThdr = pe.NThdr(parent=self)
             self.SHList = pe.SHList(self)
             self.SHList.shlist = []
 
@@ -352,6 +344,8 @@ class PE(object):
             self.NThdr.ImageBase = 0x400000
             self.NThdr.sizeofheaders = 0x1000
             self.NThdr.numberofrvaandsizes = 0x10
+            self.NThdr.optentries = pe.OptNThdrs(parent=self)
+            self.NThdr.CheckSum = 0
 
             self.NTsig.signature = 0x4550
 
@@ -411,15 +405,16 @@ class PE(object):
         PEwsize = (PEwsize>>8)*32
         self.Opthdr = {32: pe.Opthdr32, 64: pe.Opthdr64}[PEwsize](parent=self, content=self.content, start=of)
         l = self.Opthdr.bytelen
-
         # Even if the NT header has 64-bit pointers, in 64-bit PE files
         # the Section headers have 32-bit pointers (it is a 32-bit COFF
         # in a 64-bit PE).
-        self._sex = 0
-        self._wsize = PEwsize
-        self.NThdr = pe.NThdr.unpack(self.content, of+l, self)
-        self._wsize = 32
+        self.NThdr = pe.NThdr(parent=self, content=self.content,
+            start=of+l,
+            wsize=PEwsize)
         of += self.COFFhdr.sizeofoptionalheader
+
+        self._sex = 0
+        self._wsize = 32
         self.SHList = pe.SHList.unpack(self.content, of, self)
 
         # load section data
@@ -633,8 +628,7 @@ class PE(object):
         c[off] = self.Opthdr.pack()
         off += self.Opthdr.bytelen
         c[off] = self.NThdr.pack()
-        off += len(self.NThdr)
-        #c[off] = self.OptNThdr.pack()
+        off += self.NThdr.bytelen
 
         off = self.DOShdr.lfanew \
             + self.NTsig.bytelen \
