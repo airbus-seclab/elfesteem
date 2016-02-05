@@ -209,7 +209,7 @@ class CStruct(CStructBase):
                     else:
                         o = struct.pack(self.sex+fmt, value)
                 else:
-                    o = ""
+                    o = data_empty
                     for v in value:
                         if value == None:
                             o += struct.calcsize(fmt)*data_null
@@ -221,11 +221,11 @@ class CStruct(CStructBase):
             elif ffmt in all_cstructs:
                 # sub structures
                 if cpt == None:
-                    o = str(value)
+                    o = value.pack()
                 else:
-                    o = ""
+                    o = data_empty
                     for v in value:
-                        o += str(v)
+                        o += v.pack()
             elif isinstance(ffmt, tuple):
                 f_get, f_set = ffmt
                 o = f_set(self, value)
@@ -240,6 +240,7 @@ class CStruct(CStructBase):
         return len(self.pack())
 
     def __str__(self):
+        raise AttributeError("Use pack() instead of str()")
         return self.pack()
 
     def __repr__(self):
@@ -320,7 +321,7 @@ if __name__ == "__main__":
     c = c1.unpack(s1)
     print(repr(c))
     assert len(c) == 8
-    s2 = str(c)
+    s2 = c.pack()
     assert s1 == s2
     print(repr(s2))
     print(repr(c1.unpack(s2)))
@@ -330,7 +331,7 @@ if __name__ == "__main__":
     assert len(s3) == 16
     c = c2.unpack(s3)
     print(repr(c))
-    s4 = str(c)
+    s4 = c.pack()
     print("%r %r"%(s3,s4))
     assert s3 == s4
     assert c.c2_c.parent_head == c
@@ -344,7 +345,7 @@ if __name__ == "__main__":
     print(c.c)
     print(c.c[0].c1_field1)
 
-    s6 = str(c)
+    s6 = c.pack()
     print("%r %r"%(s5,s6))
     assert s5 == s6
 
@@ -352,7 +353,7 @@ if __name__ == "__main__":
     c.c1_field1 = 1111
     c.c1_field2 = 2222
     c.c1_field3 = 333333333
-    assert str(c) == s1
+    assert c.pack() == s1
 
     s7 = struct.pack('H', 8888)+"fffff\x00"+struct.pack('H', 9999)
     c = c4.unpack(s7)
@@ -361,18 +362,18 @@ if __name__ == "__main__":
     print(repr(c.f))
 
     print(repr(s7))
-    print(repr(str(c)))
-    assert s7 == str(c)
+    print(repr(c.pack()))
+    assert s7 == c.pack()
 
     s8 = struct.pack('H4s', 8888, "abcd")
     c = c5.unpack(s8)
     print(repr(c))
-    assert s8 == str(c)
+    assert s8 == c.pack()
 
 
     s9 = struct.pack('H', 9999)+ "toto\x00" + struct.pack('H', 1010)
     print(repr(s9))
     c = c6.unpack(s9)
-    print("%r %r"%(c,str(c)))
-    assert s9 == str(c)
+    print("%r %r"%(c,c.pack()))
+    assert s9 == c.pack()
 

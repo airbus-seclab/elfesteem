@@ -229,6 +229,8 @@ class StrTable(object):
             self.len += p+1
             c = c[p+1:]
     def __str__(self):
+        raise AttributeError("Use pack() instead of str()")
+    def pack(self):
         res = ""
         k = self.res.keys()
         k.sort()
@@ -264,9 +266,11 @@ class CoffSymbols(object):
             self.symbols.append(s)
             of += 18 * (1 + s.numberofauxsymbols)
     def __str__(self):
-        rep = ""
+        raise AttributeError("Use pack() instead of str()")
+    def pack(self):
+        rep = data_empty
         for s in self.symbols:
-            rep += str(s)
+            rep += s.pack()
         return rep
 
 # PE object
@@ -433,7 +437,7 @@ class PE(object):
                 mm = 0
             else:
                 if s.rawsize % filealignment:
-                    rs = (s.rawsize/filealignment+1)*filealignment
+                    rs = (s.rawsize//filealignment+1)*filealignment
                 else:
                     rs = s.rawsize
                 mm = max(rs, 0x200)
@@ -569,7 +573,7 @@ class PE(object):
         if s is None:
             raise pe.InvalidOffset('cannot get offset for 0x%X'%rva)
             return
-        soff = (s.offset/self.NThdr.filealignment)*self.NThdr.filealignment
+        soff = (s.offset//self.NThdr.filealignment)*self.NThdr.filealignment
         return rva-s.addr+soff
 
     def off2rva(self, off):
@@ -624,7 +628,8 @@ class PE(object):
             s+=struct.unpack('H', data[:2])[0]
             data = data[2:]
         data = array.array('I', data)
-        s = reduce(lambda x,y:x+y, data, s)
+        for y in data:
+            s += y
         s-=olds
         while s>0xFFFFFFFF:
             s = (s>>32)+(s&0xFFFFFFFF)
@@ -664,8 +669,9 @@ class PE(object):
         c[off] = self.SHList.pack()
 
         for s in self.SHList:
-            if off + len(str(self.SHList)) > s.offset:
-                log.warn("section offset overlap pe hdr 0x%x 0x%x"%(off+len(str(self.SHList)), s.offset))
+            data = self.SHList.pack()
+            if off + len(data) > s.offset:
+                log.warn("section offset overlap pe hdr 0x%x 0x%x"%(off+len(data), s.offset))
         self.DirImport.build_content(c)
         self.DirExport.build_content(c)
         self.DirDelay.build_content(c)
@@ -680,6 +686,12 @@ class PE(object):
         return c.pack()
 
     def __str__(self):
+        # For compatibility with previous versions of elftesteem
+        # But it will not work with python3, because __str__ must
+        # return a string, not bytes
+        return self.pack()
+
+    def pack(self):
         return self.build_content()
 
     def export_funcs(self):
@@ -788,7 +800,7 @@ if __name__ == "__main__":
     if e.DirRes.resdesc:
         e.DirRes.set_rva(s_myres.addr)
 
-    e_str = str(e)
+    e_str = e.pack()
     print("f1 %s" % e.DirImport.get_funcvirt('LoadStringW'))
     print("f2 %s" % e.DirExport.get_funcvirt('SetUserGeoID'))
     open('out.bin', 'wb').write(e_str)
@@ -802,4 +814,4 @@ if __name__ == "__main__":
     #print(repr(o.Symbols))
 
     f = PE()
-    open('uu.bin', 'w').write(str(f))
+    open('uu.bin', 'wb').write(f.pack())

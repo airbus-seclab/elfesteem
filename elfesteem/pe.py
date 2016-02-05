@@ -148,8 +148,13 @@ class SHList(CStruct):
                     s_last = s
             offset = s_last.offset+s_last.rawsize
         else:
-            s_null = str(Shdr.unpack(0x100*data_null))
-            offset = self.parent_head.Doshdr.lfanew+len(self.parent_head.NTsig)+len(self.parent_head.Coffhdr)+self.parent_head.Coffhdr.sizeofoptionalheader + len(str(self.parent_head.SHList)+s_null)
+            s_null = Shdr.unpack(0x100*data_null).pack()
+            offset = self.parent_head.Doshdr.lfanew \
+                + len(self.parent_head.NTsig) \
+                + len(self.parent_head.Coffhdr) \
+                + self.parent_head.Coffhdr.sizeofoptionalheader \
+                + len(self.parent_head.SHList.pack()) \
+                + len(s_null)
             addr = 0x2000
         #round addr
         addr = (addr+(s_align-1))&~(s_align-1)
@@ -242,7 +247,7 @@ class DescName(CStruct):
         name = self.parent_head[ofname:self.parent_head._content.find(data_null, ofname)]
         return name, of+len(name)+1
     def sets(self, value):
-        return str(value)+"\x00"
+        return value+data_null
 
 class ImportByName(CStruct):
     _fields = [ ("hint", "u16"),
@@ -284,8 +289,11 @@ class struct_array(object):
             of += l
             i += 1
 
-    def __str__(self):
-        out = "".join([str(x) for x in self.l])
+    def __str__(self): 
+        raise AttributeError("Use pack() instead of str()")
+
+    def pack(self): 
+        out = data_empty.join([x.pack() for x in self.l])
         if self.end != None:
             out += self.end
         return out
@@ -347,7 +355,7 @@ class DirImport(CStruct):
                                                 self.parent_head.rva2off(tmp_thunk[i].rva),
                                                 self.parent_head)
                     except:
-                        log.warning('cannot import from add %s'%str(tmp_thunk[i].rva))
+                        log.warning('cannot import from add %s', tmp_thunk[i].rva)
                         n = 0
                     d.impbynames.append(n)
                 else:
@@ -355,7 +363,7 @@ class DirImport(CStruct):
         return out, of
 
     def sete(self, v):
-        c = "".join([str(x) for x in v])+"\x00"*(4*5) #ImdDesc_e
+        c = data_empty.join([x.pack() for x in v])+data_null*(4*5) #ImdDesc_e
         return c
 
 
@@ -426,14 +434,14 @@ class DirImport(CStruct):
         of1 = dirimp.rva
         if not of1: # No Import
             return
-        x = str(self.impdesc)
-        c[self.parent_head.rva2off(of1)] = str(self)
+        x = self.impdesc.pack()
+        c[self.parent_head.rva2off(of1)] = self.pack()
         for i, d in enumerate(self.impdesc):
-            c[self.parent_head.rva2off(d.name)] = str(d.dlldescname)
+            c[self.parent_head.rva2off(d.name)] = d.dlldescname.pack()
             if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                c[self.parent_head.rva2off(d.originalfirstthunk)] = str(d.originalfirstthunks)
+                c[self.parent_head.rva2off(d.originalfirstthunk)] = d.originalfirstthunks.pack()
             if d.firstthunk:
-                c[self.parent_head.rva2off(d.firstthunk)] = str(d.firstthunks)
+                c[self.parent_head.rva2off(d.firstthunk)] = d.firstthunks.pack()
             if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
@@ -442,7 +450,7 @@ class DirImport(CStruct):
                 raise "no thunk!!"
             for j, imp in enumerate(d.impbynames):
                 if isinstance(imp, ImportByName):
-                    c[self.parent_head.rva2off(tmp_thunk[j].rva)] = str(imp)
+                    c[self.parent_head.rva2off(tmp_thunk[j].rva)] = imp.pack()
 
     def get_dlldesc(self):
         out = []
@@ -507,7 +515,7 @@ class DirImport(CStruct):
                     ibn.name = nf
                     ibn.hint = 0
                 else:
-                    raise 'unknown func type %s'%str(nf)
+                    raise 'unknown func type %s'%nf
                 impbynames.append(ibn)
                 d.originalfirstthunks.append(f)
                 ff = Rva(self.parent_head)
@@ -535,7 +543,7 @@ class DirImport(CStruct):
         if self.parent_head._wsize == 32:
             mask_ptr = 0x80000000-1
         elif self.parent_head._wsize == 64:
-            mask_ptr = 0x8000000000000000L-1
+            mask_ptr = 0x8000000000000000-1
         for i, d in enumerate(self.impdesc):
             if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
@@ -554,7 +562,7 @@ class DirImport(CStruct):
                         if tmp_thunk[j].rva&mask_ptr == f:
                             return d.firstthunk+j*self.parent_head._wsize/8
             else:
-                raise ValueError('unknown func tpye %s'%str(f))
+                raise ValueError('unknown func type %s'%f)
     def get_funcvirt(self, f):
         rva = self.get_funcrva(f)
         if rva==None:
@@ -608,23 +616,22 @@ class DirExport(CStruct):
         return expdesc, of_sav
 
     def sete(self, v):
-        c = str(self.expdesc)
-        return c
+        return self.expdesc.pack()
 
     def build_content(self, c):
         direxp = self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_EXPORT]
         of1 = direxp.rva
         if self.expdesc is None: # No Export
             return
-        c[self.parent_head.rva2off(of1)] = str(self.expdesc)
-        c[self.parent_head.rva2off(self.expdesc.name)] = str(self.dlldescname)
-        c[self.parent_head.rva2off(self.expdesc.addressoffunctions)] = str(self.f_address)
+        c[self.parent_head.rva2off(of1)] = self.expdesc.pack()
+        c[self.parent_head.rva2off(self.expdesc.name)] = self.dlldescname.pack()
+        c[self.parent_head.rva2off(self.expdesc.addressoffunctions)] = self.f_address.pack()
         if self.expdesc.addressofnames!=0:
-            c[self.parent_head.rva2off(self.expdesc.addressofnames)] = str(self.f_names)
+            c[self.parent_head.rva2off(self.expdesc.addressofnames)] = self.f_names.pack()
         if self.expdesc.addressofordinals!=0:
-            c[self.parent_head.rva2off(self.expdesc.addressofordinals)] = str(self.f_nameordinals)
+            c[self.parent_head.rva2off(self.expdesc.addressofordinals)] = self.f_nameordinals.pack()
         for n in self.f_names:
-            c[self.parent_head.rva2off(n.rva)] = str(n.name)
+            c[self.parent_head.rva2off(n.rva)] = n.name.pack()
 
         # XXX BUG names must be alphanumeric ordered
         names = [n.name for n in self.f_names]
@@ -831,7 +838,7 @@ class DirDelay(CStruct):
         return out, of
 
     def sete(self, v):
-        c = "".join([str(x) for x in v])+"\x00"*(4*8) #DelayDesc_e
+        c = data_empty.join([x.pack() for x in v])+data_null*(4*8) #DelayDesc_e
         return c
 
 
@@ -898,13 +905,13 @@ class DirDelay(CStruct):
         of1 = dirdelay.rva
         if not of1: # No Delay Import
             return
-        c[self.parent_head.rva2off(of1)] = str(self)
+        c[self.parent_head.rva2off(of1)] = self.pack()
         for i, d in enumerate(self.delaydesc):
-            c[self.parent_head.rva2off(d.name)] = str(d.dlldescname)
+            c[self.parent_head.rva2off(d.name)] = d.dlldescname.pack()
             if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                c[self.parent_head.rva2off(d.originalfirstthunk)] = str(d.originalfirstthunks)
+                c[self.parent_head.rva2off(d.originalfirstthunk)] = d.originalfirstthunks.pack()
             if d.firstthunk:
-                c[self.parent_head.rva2off(d.firstthunk)] = str(d.firstthunks)
+                c[self.parent_head.rva2off(d.firstthunk)] = d.firstthunks.pack()
             if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
@@ -913,7 +920,7 @@ class DirDelay(CStruct):
                 raise "no thunk!!"
             for j, imp in enumerate(d.impbynames):
                 if isinstance(imp, ImportByName):
-                    c[self.parent_head.rva2off(tmp_thunk[j].rva)] = str(imp)
+                    c[self.parent_head.rva2off(tmp_thunk[j].rva)] = imp.pack()
 
     def __repr__(self):
         rep = ["<%s>"%self.__class__.__name__]
@@ -965,7 +972,7 @@ class DirDelay(CStruct):
                     ibn.name = nf
                     ibn.hint = 0
                 else:
-                    raise 'unknown func type %s'%str(nf)
+                    raise ValueError('unknown func type %s'%nf)
                 impbynames.append(ibn)
                 d.originalfirstthunks.append(f)
 
@@ -1014,7 +1021,7 @@ class DirDelay(CStruct):
                         if isfromva(tmp_thunk[j].rva&0x7FFFFFFF) == f:
                             return isfromva(d.firstthunk)+j*4
             else:
-                raise ValueError('unknown func tpye %s'%str(f))
+                raise ValueError('unknown func type %s'%f)
     def get_funcvirt(self, f):
         rva = self.get_funcrva(f)
         if rva==None:
@@ -1070,9 +1077,9 @@ class DirReloc(CStruct):
     def sete(self, v):
         rep = []
         for n in v:
-            rep.append(str(n))
-            rep.append(str(n.rels))
-        return "".join(rep)
+            rep.append(n.pack())
+            rep.append(n.rels.pack())
+        return data_empty.join(rep)
 
     def set_rva(self, rva, size = None):
         if self.reldesc is None:
@@ -1089,7 +1096,7 @@ class DirReloc(CStruct):
         of1 = dirrel.rva
         if self.reldesc is None: # No Reloc
             return
-        c[self.parent_head.rva2off(of1)] = str(self)
+        c[self.parent_head.rva2off(of1)] = self.pack()
 
     def __len__(self):
         if self.reldesc is None:
@@ -1100,11 +1107,14 @@ class DirReloc(CStruct):
         return l
 
     def __str__(self):
+        raise AttributeError("Use pack() instead of str()")
+
+    def pack(self):
         rep = []
         for n in self.reldesc:
-            rep.append(str(n))
-            rep.append(str(n.rels))
-        return "".join(rep)
+            rep.append(n.pack())
+            rep.append(n.rels.pack())
+        return data_empty.join(rep)
 
 
     def __repr__(self):
@@ -1251,21 +1261,21 @@ class DirRes(CStruct):
         if self.resdesc is None:
             return
         of1 = self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_RESOURCE].rva
-        c[self.parent_head.rva2off(of1)] = str(self.resdesc)
+        c[self.parent_head.rva2off(of1)] = self.resdesc.pack()
         dir_todo = {self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_RESOURCE].rva:self.resdesc}
         dir_done = {}
         while dir_todo:
             of1, my_dir = dir_todo.popitem()
             dir_done[of1] = my_dir
-            c[self.parent_head.rva2off(of1)] = str(my_dir)
-            c[self.parent_head.rva2off(of1+len(my_dir))] = str(my_dir.resentries)
+            c[self.parent_head.rva2off(of1)] = my_dir.pack()
+            c[self.parent_head.rva2off(of1+len(my_dir))] = my_dir.resentries.pack()
             for e in my_dir.resentries:
                 if e.name_s:
-                    c[self.parent_head.rva2off(e.name)] = str(e.name_s)
+                    c[self.parent_head.rva2off(e.name)] = e.name_s.pack()
                 of1 = e.offsettosubdir
                 if not of1:
-                    c[self.parent_head.rva2off(e.offsettodata)] = str(e.data)
-                    c[self.parent_head.rva2off(e.data.offsettodata)] = str(e.data.s)
+                    c[self.parent_head.rva2off(e.offsettodata)] = e.data.pack()
+                    c[self.parent_head.rva2off(e.data.offsettodata)] = e.data.s.pack()
                     continue
                 dir_todo[of1] = e.subdir
 
@@ -1512,9 +1522,9 @@ class CoffSymbol(CStruct):
             of += 18
         return aux, of
     def setaux(self, value):
-        res = ""
+        res = data_empty
         for aux in value:
-            res += str(aux)
+            res += aux.pack()
         return res
     def __repr__(self):
         s  = repr(self.name)
