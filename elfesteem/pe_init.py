@@ -315,9 +315,9 @@ class PE(object):
             self.Doshdr.lfanew = 0xe0
 
             if wsize == 32:
-                self.Opthdr.magic = 0x10b
+                self.Opthdr.magic = pe.IMAGE_NT_OPTIONAL_HDR32_MAGIC
             elif wsize == 64:
-                self.Opthdr.magic = 0x20b
+                self.Opthdr.magic = pe.IMAGE_NT_OPTIONAL_HDR64_MAGIC
             else:
                 raise ValueError('unknown pe size %r'%wsize)
 
