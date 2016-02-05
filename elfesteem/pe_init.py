@@ -35,7 +35,7 @@ class drva(object):
              return
         data_out = ""
         for s, n_item in rva_items:
-            if s:
+            if s is not None:
                 data_out += s.data.__getitem__(n_item)
             else:
                 data_out += self.parent.__getitem__(n_item)
@@ -217,7 +217,7 @@ class virt(object):
             if s is None:
                 data_out += self.parent.__getitem__(n_item)
             else:
-                data_out += s.data.__getitem__(n_item)
+                data_out += s.data.data.__getitem__(n_item)
 
         return data_out
 
@@ -303,8 +303,7 @@ class PE(object):
             self.COFFhdr = pe.COFFhdr(parent=self)
             self.Opthdr = {32: pe.Opthdr32, 64: pe.Opthdr64}[wsize](parent=self)
             self.NThdr = pe.NThdr(parent=self)
-            self.SHList = pe.SHList(self)
-            self.SHList.shlist = []
+            self.SHList = pe.SHList(parent=self)
 
             self.DirImport = pe.DirImport(self)
             self.DirExport = pe.DirExport(self)
@@ -412,16 +411,12 @@ class PE(object):
             start=of+l,
             wsize=PEwsize)
         of += self.COFFhdr.sizeofoptionalheader
+        self.SHList = pe.SHList(parent=self, content=self.content,
+            start=of,
+            wsize=32)
 
         self._sex = 0
         self._wsize = 32
-        self.SHList = pe.SHList.unpack(self.content, of, self)
-
-        # load section data
-        filealignment = self.NThdr.filealignment
-        for s in self.SHList.shlist:
-            s.data = StrPatchwork()
-            s.data[0] = self.content[s.scnptr:s.scnptr+s.rsize]
         try:
             self.DirImport = pe.DirImport.unpack(self.content,
                                                  self.NThdr.optentries[pe.DIRECTORY_ENTRY_IMPORT].rva,
@@ -486,7 +481,6 @@ class PE(object):
         return self.content[item]
     def __setitem__(self, item, data):
         self.content.__setitem__(item, data)
-        return
 
     def getsectionbyrva(self, rva):
         if self.SHList is None:
@@ -538,14 +532,14 @@ class PE(object):
             return rva
         s = self.getsectionbyrva(rva)
         if s is None:
-            return
+            return None
         soff = (s.scnptr//self.NThdr.filealignment)*self.NThdr.filealignment
         return rva-s.vaddr+soff
 
     def off2rva(self, off):
         s = self.getsectionbyoff(off)
         if s is None:
-            return
+            return None
         return off-s.scnptr+s.vaddr
 
     def virt2rva(self, virt):
@@ -611,15 +605,14 @@ class PE(object):
         c = StrPatchwork()
         c[0] = self.DOShdr.pack()
 
-        for s in self.SHList.shlist:
-            c[s.scnptr:s.scnptr+s.rawsize] = s.data.pack()
-
         # fix image size
-        s_last = self.SHList.shlist[-1]
-        size = s_last.vaddr + s_last.rawsize + (self.NThdr.sectionalignment-1)
-        size &= ~(self.NThdr.sectionalignment-1)
-        self.NThdr.sizeofimage = size
+        if len(self.SHList):
+            s_last = self.SHList.shlist[-1]
+            size = s_last.vaddr + s_last.rsize + (self.NThdr.sectionalignment-1)
+            size &= ~(self.NThdr.sectionalignment-1)
+            self.NThdr.sizeofimage = size
 
+        # headers
         off = self.DOShdr.lfanew
         c[off] = self.NTsig.pack()
         off += self.NTsig.bytelen
@@ -630,16 +623,20 @@ class PE(object):
         c[off] = self.NThdr.pack()
         off += self.NThdr.bytelen
 
+        # section headers
         off = self.DOShdr.lfanew \
             + self.NTsig.bytelen \
             + self.COFFhdr.bytelen \
             + self.COFFhdr.sizeofoptionalheader
         c[off] = self.SHList.pack()
-
+        off += self.SHList.bytelen
+        # section data
         for s in self.SHList:
-            data = self.SHList.pack()
-            if off + len(data) > s.scnptr:
-                log.warn("section offset overlap pe hdr 0x%x 0x%x"%(off+len(data), s.scnptr))
+            if off > s.scnptr and s.rawsize != 0:
+                log.warn("section %s offset %#x overlap pe hdr %#x",
+                    s.name, s.scnptr, off)
+            c[s.scnptr:s.scnptr+s.rawsize] = s.data.data.pack()
+
         self.DirImport.build_content(c)
         self.DirExport.build_content(c)
         self.DirDelay.build_content(c)
@@ -745,7 +742,6 @@ class Coff(PE):
                 0xA1: 'TMS320C5500+',
                 }.get(m, 'unknown')
             of += 2
-            pe.Shdr.set_fields_TI()
         kargs = { 'parent': self, 'content': self.content, 'start': of }
         if   self.COFFhdr.sizeofoptionalheader == 28:
             self.Opthdr = pe.Opthdr32(**kargs)
@@ -785,10 +781,13 @@ class Coff(PE):
         filesz = len(self.content)
         if self.COFFhdr.numberofsections == 0:
             raise ValueError("COFF cannot have no sections")
+        if self.COFFhdr.numberofsections > 0x1000:
+            raise ValueError("COFF too many sections %d"%self.COFFhdr.numberofsections)
         if of + self.COFFhdr.numberofsections * 40 > filesz:
             raise ValueError("COFF too many sections %d"%self.COFFhdr.numberofsections)
-        self.SHList = pe.SHList.unpack(self.content, of, self)
-        pe.Shdr.set_fields_reset()
+        if self.COFFhdr.pointertosymboltable > filesz:
+            raise ValueError("COFF invalid ptr to symbol table")
+        self.SHList = pe.SHList(parent=self, content=self.content, start=of)
         
         if self.COFFhdr.pointertosymboltable != 0:
             of = self.COFFhdr.pointertosymboltable
@@ -878,8 +877,6 @@ if __name__ == "__main__":
     for s in e.SHList.shlist:
         s.offset+=0xC00
     """
-
-    e.SHList.align_sections(0x1000, 0x1000)
 
     e.DirImport.set_rva(s_myimp.addr)
     e.DirExport.set_rva(s_myexp.addr)

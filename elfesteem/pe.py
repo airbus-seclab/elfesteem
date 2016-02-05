@@ -2,6 +2,7 @@
 
 from elfesteem.cstruct import CBase, CStruct, CArray
 from elfesteem.cstruct import data_null, data_empty
+from elfesteem.cstruct import bytes_to_name, name_to_bytes
 from elfesteem.new_cstruct import CStruct as NEW_CStruct
 from elfesteem.strpatchwork import StrPatchwork
 import struct
@@ -548,8 +549,54 @@ class NThdr(CStruct):
     def get_optentries(self):
         return self.getf('optentries')._array
 
+####################################################################
+# Sections
 
-class Shdr(NEW_CStruct):
+class SectionData(CBase):
+    def pack(self):
+        # section data is not in Shdr, therefore the answer is of size 0,
+        # to avoid that Shdr packing includes the data.
+        return data_empty
+    def _initialize(self):
+        # section data is not in Shdr, therefore it is made of size 0,
+        # to avoid that Shdr packing includes the data
+        self._size = 0
+    def unpack(self, c, o):
+        pefile = self.parent.parent.parent
+        if hasattr(pefile, 'NThdr'):
+            filealignment = pefile.NThdr.filealignment
+        else:
+            if self.parent.pack()[1::2] == data_null*(self.parent._size//2):
+                # May happen if a file is wrongly parsed as COFF
+                raise ValueError("Not COFF section")
+            filealignment = 0
+        if pefile.loadfrommem:
+            raw_off = self.parent.vaddr
+        elif filealignment == 0:
+            raw_off = self.parent.scnptr
+        else:
+            raw_off = filealignment*(self.parent.scnptr//filealignment)
+        if raw_off != self.parent.scnptr:
+            log.warn('unaligned raw section!')
+        self.data = StrPatchwork()
+        rs = self.parent.rsize
+        if rs != 0 and filealignment != 0:
+            if rs % filealignment:
+                rs = (rs//filealignment+1)*filealignment
+            rs = max(rs, 0x200)
+        if raw_off+rs > len(c):
+            rs = len(c) - raw_off
+        self.data[0] = c[raw_off:raw_off+rs]
+    def update(self, **kargs):
+        if 'data' in kargs:
+            self.data = StrPatchwork()
+            self.data[0] = kargs['data']
+    def __getitem__(self, item):
+        return self.data.__getitem__(item)
+    def __setitem__(self, item, value):
+        return self.data.__setitem__(item, value)
+
+class Shdr(CStruct):
     # 40-bytes long for 32-bit COFF ; 64-bytes long for 64-bit COFF
     # We use the field names mainly from http://wiki.osdev.org/COFF
     # They are not the same names as for PE files, but the usual names
@@ -567,6 +614,9 @@ class Shdr(NEW_CStruct):
     #   memory, and that if paddr is greater than rsize it is padded with
     #   zeroes, and that for object files paddr is zero
     #   ... but this is not true for all PE files.
+    # Recent OS (e.g. Windows 7) checks that the virtual mapping of sections 
+    # in memory is contiguous, by computing the section size using the
+    # max of 'rsize' and 'paddr' rounded to the section alignment.
     _fields = [ ("name_data","8s"),
                 ("paddr","ptr"),   # was named 'size'
                 ("vaddr","ptr"),   # was named 'addr'
@@ -576,37 +626,35 @@ class Shdr(NEW_CStruct):
                 ("lnnoptr","ptr"), # was named 'pointertolinenumbers'
                 ("nreloc","u16"),  # was named 'numberofrelocations'
                 ("nlnno","u16"),   # was named 'numberoflinenumbers'
-                ("flags","u32") ]
-    def get_name(self):
-        # If Python2, is of type 'str', if Python3, we convert from 'bytes'
-        if type(self.name_data) == str: return self.name_data
-        return str(self.name_data, encoding='latin1')
-    def set_name(self, value):
-        TODO
-    name = property(get_name, set_name)
+                ("flags","u32"),
+                ("data",SectionData) ]
+    def name(self):
+        # Offset in the string table, if more than 8 bytes long
+        n = self.name_data
+        if n[:4] == data_null*4 and n != data_null*8:
+            n, = struct.unpack("I", n[4:])
+            n = self.parent.parent.SymbolStrings.getby_offset(n)
+        else:
+            n = n.rstrip(data_null)
+        return bytes_to_name(n)
+    name = property(name)
     # For API compatibility with previous versions of elfesteem
     rawsize = property(lambda self: self.rsize)
     offset  = property(lambda self: self.scnptr)
     addr    = property(lambda self: self.vaddr)
     def size(self):
         # Return the virtual size (for PE) or the RAW size (for COFF)
-        if self.parent.parent_head.isPE(): return self.paddr
-        else:                              return self.rawsize
+        if self.parent.parent.isPE(): return self.paddr
+        else:                         return self.rawsize
     size    = property(size)
-    # Redefine _fields for some non-standard cases
-    # This way of doing is a dirty hack, until we know more about what
-    # COFF section entries should really be like
-    def set_fields_reset(self):
-        if hasattr(self, '_fields_orig'): self._fields = self._fields_orig
-    set_fields_reset = classmethod(set_fields_reset)
-    def set_fields_TI(self):
-        # 48 bytes long, when the standard COFF is 40 bytes long
-        self._fields_orig = self._fields
-        self._fields = [
-                ("name_data","8s"),
+
+class ShdrTI(Shdr):
+    # 48 bytes long, when the standard COFF is 40 bytes long
+    # Documented in http://www.ti.com/lit/an/spraao8/spraao8.pdf
+    _fields = [ ("name_data","8s"),
                 ("paddr","u32"),
                 ("vaddr","u32"),
-                ("rsize","u32"), # in 2-byte words
+                ("rsize","u32"),
                 ("scnptr","u32"),
                 ("relptr","u32"),
                 ("lnnoptr","u32"),
@@ -615,110 +663,118 @@ class Shdr(NEW_CStruct):
                 ("flags","u32"),
                 ("reserved","u16"),
                 ("mem_page","u16"),
-              ]
-    set_fields_TI = classmethod(set_fields_TI)
+                ("data",SectionData) ]
+    def rawsize(self):
+        # NB: rawsize is the size in bytes
+        # Based on the documentation by TI, for some CPU the "size" is
+        # in word, therefore we need to multiply by 2
+        # But in our sample file, this is not the case for .debug_* sections
+        # (probably because of a compiler bug)
+        # This sample file is https://github.com/slavaprokopiy/Mini-TMS320C28346/blob/master/For_user/C28346_Load_Program_to_Flash/Debug/C28346_Load_Program_to_Flash.out
+        if self.parent.parent.CPU in ('TMS320C2800', 'TMS320C5400') \
+                and not self.name.startswith('.debug_'):
+            return self.rsize*2
+        return self.rsize
+    rawsize = property(rawsize)
 
-
-class SHList(NEW_CStruct):
-    _fields = [ ("shlist", "Shdr", lambda c:c.parent_head.COFFhdr.numberofsections)]
-
-    def add_section(self, name="default", data = "", **args):
-        s_align = self.parent_head.NThdr.sectionalignment
-        s_align = max(0x1000, s_align)
-
-        f_align = self.parent_head.NThdr.filealignment
-        f_align = max(0x200, f_align)
-        size = len(data)
-        rawsize = len(data)
+class SHList(CArray):
+    def _cls(self):
+        if self.parent.COFFhdr.machine == IMAGE_FILE_MACHINE_TI:
+            return ShdrTI
+        return Shdr
+    _cls = property(_cls)
+    count = lambda self: self.parent.COFFhdr.numberofsections
+    def shlist(self):
+        return self._array
+    shlist = property(shlist)
+    def __repr__(self):
+        rep = ["#  section         scnptr   size   vaddr     flags   paddr  "]
+        for i, s in enumerate(self):
+            l = "%-15s"%s.name.strip('\x00')
+            l+="%(scnptr)08x %(size)06x %(vaddr)08x %(flags)08x %(paddr)08x" % s
+            l = ("%2i " % i)+ l
+            rep.append(l)
+        return "\n".join(rep)
+    
+    def add_section(self, name="default", data = data_empty, **args):
         if len(self):
-            vaddr = self[-1].vaddr+self[-1].rsize
+            # Check that there is enough free space in the headers
+            # to add a new section
+            first_section_offset = 0
+            for s in self.parent.SHList:
+                if first_section_offset < s.scnptr:
+                    first_section_offset = s.scnptr
+            # Should be equal to self.parent.NThdr.sizeofheaders
+            if first_section_offset < (
+                    self.parent.DOShdr.lfanew +
+                    self.parent.NTsig._size +
+                    self.parent.COFFhdr._size +
+                    self.parent.COFFhdr.sizeofoptionalheader +
+                    (1+len(self))*Shdr(parent=self)._size):
+                log.error("Cannot add section %s: not enough space for section list", name)
+                # Could be solved by changing the section offsets, but some
+                # sections may contain data that depends on the offset.
+                # Could be solved by changing lfanew, but it will be an unusual
+                # PE file that may break some PE readers.
+                return None
+            # Cf. https://code.google.com/archive/p/corkami/wikis/PE.wiki
+            # Section vaddr have to be in increasing order
+            # This web page also says that "sections don't have to be
+            # virtually contiguous", but it is not always true; for
+            # example Windows 7 reject PE files with non-contiguous
+            # sections, but Wine accepts them
+            vaddr = self[-1].vaddr+self[-1].rawsize
             s_last = self[0]
             for s in self:
-                if s_last.scnptr+s_last.rsize<s.scnptr+s.rsize:
+                if s_last.scnptr+s_last.rawsize<s.scnptr+s.rawsize:
                     s_last = s
-            scnptr = s_last.scnptr+s_last.rsize
+            scnptr = s_last.scnptr+s_last.rawsize
         else:
-            s_null = Shdr.unpack(0x100*data_null).pack()
-            scnptr = self.parent_head.DOShdr.lfanew \
-                + len(self.parent_head.NTsig) \
-                + len(self.parent_head.COFFhdr) \
-                + self.parent_head.COFFhdr.sizeofoptionalheader \
-                + len(self.parent_head.SHList.pack()) \
-                + len(s_null)
-            vaddr = 0x2000
+            # First section
+            vaddr = 0x1000
+            scnptr = self.parent.DOShdr.lfanew
+            scnptr += self.parent.NTsig._size
+            scnptr += self.parent.COFFhdr._size
+            scnptr += self.parent.COFFhdr.sizeofoptionalheader
+            # space for 10 sections
+            scnptr += Shdr(parent=self)._size * 10
         # alignment
+        s_align = self.parent.NThdr.sectionalignment
+        s_align = max(0x1000, s_align)
+        f_align = self.parent.NThdr.filealignment
         vaddr = (vaddr+(s_align-1))&~(s_align-1)
         scnptr = (scnptr+(f_align-1))&~(f_align-1)
-
+    
         name += (8-len(name))*data_null
+        rsize = (len(data)+(f_align-1))&~(f_align-1)
         f = {"name_data":name,
-             "paddr":size,    # was named 'size'
-             "vaddr":vaddr,   # was named 'addr'
-             "rsize":size,    # was named 'rawsize'
-             "scnptr":scnptr, # was named 'offset'
+             "paddr":len(data), # was named 'size'
+             "vaddr":vaddr,     # was named 'addr'
+             "rsize":rsize,     # was named 'rawsize'
+             "scnptr":scnptr,   # was named 'offset'
              "relptr":0,  # was named 'pointertorelocations'
              "lnnoptr":0, # was named 'pointertolinenumbers'
              "nreloc":0,  # was named 'numberofrelocations'
              "nlnno":0,   # was named 'numberoflinenumbers'
              "flags":0xE0000020,
-             "data":data
+             "data":None
              }
         f.update(args)
-        s = Shdr(_sex = self.parent_head._sex, _wsize = self.parent_head._wsize, **f)
-        s.data = data
-
-        if s.rsize > len(data):
+        s = Shdr(parent=self, **f)
+    
+        if s.rawsize > len(data):
             # In PE file, paddr usually contains the size of the non-padded data
             s.paddr = len(data)
-            s.data = s.data+data_null*(s.rsize-len(data))
-        c = StrPatchwork()
-        c[0] = s.data
-        s.data = c
-        s.rsize = max(s_align, s.rsize)
-
+            data = data+data_null*(s.rawsize-len(data))
+        s.data = SectionData(parent=s, data=data)
+    
         self.append(s)
-        self.parent_head.COFFhdr.numberofsections = len(self)
-
-        l = (s.vaddr+s.rsize+(s_align-1))&~(s_align-1)
-        self.parent_head.NThdr.sizeofimage = l
+        self.parent.COFFhdr.numberofsections = len(self)
+    
+        l = (s.vaddr+s.rawsize+(s_align-1))&~(s_align-1)
+        self.parent.NThdr.sizeofimage = l
         return s
 
-
-
-    def align_sections(self, f_align = None, s_align = None):
-        if f_align == None:
-            f_align = self.parent_head.NThdr.filealignment
-            f_align = max(0x200, f_align)
-        if s_align == None:
-            s_align = self.parent_head.NThdr.sectionalignment
-            s_align = max(0x1000, s_align)
-
-        if self is None:
-            return
-
-        addr = self[0].offset
-        for s in self:
-            raw_off = f_align*((addr+f_align-1)/f_align)
-            s.offset = raw_off
-            s.rawsize = len(s.data)
-            addr = raw_off+s.rawsize
-
-    def __repr__(self):
-        rep = ["#  section         offset   size   addr     flags   rawsize  "]
-        for i,s in enumerate(self):
-            l = "%-15s"%repr(s.name.strip(data_null))
-            l+="%(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x" % s
-            l = ("%2i " % i)+ l
-            rep.append(l)
-        return "\n".join(rep)
-
-    def __getitem__(self, item):
-        return self.shlist[item]
-    def __len__(self):
-        return len(self.shlist)
-
-    def append(self, s):
-        self.shlist.append(s)
 
 class Rva(NEW_CStruct):
     _fields = [ ("rva","ptr"),

@@ -138,7 +138,8 @@ def print_layout(e, filesz):
             # interpretation of $ in section names, which is compatible
             # with ignoring sections starting with $
             continue
-        layout.append((s.scnptr, s.rsize,
+        # We use rawsize instead of rsize, because we want the size in bytes
+        layout.append((s.scnptr, s.rawsize,
                         'Section '+s.name.strip('\0')))
         if s.nreloc:
             layout.append((s.relptr, s.nreloc*10,
