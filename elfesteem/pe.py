@@ -1,7 +1,8 @@
 #! /usr/bin/env python
 
+from elfesteem.cstruct import CBase, CStruct
 from elfesteem.cstruct import data_null, data_empty
-from elfesteem.new_cstruct import CStruct
+from elfesteem.new_cstruct import CStruct as NEW_CStruct
 from elfesteem.strpatchwork import StrPatchwork
 import struct
 import logging
@@ -308,7 +309,10 @@ for t in constants.keys():
 class InvalidOffset(Exception):
     pass
 
-class Doshdr(CStruct):
+####################################################################
+# Headers
+
+class DOShdr(CStruct):
     _fields = [ ("magic", "u16"),
                 ("cblp","u16"),
                 ("cp","u16"),
@@ -327,13 +331,12 @@ class Doshdr(CStruct):
                 ("oemid","u16"),
                 ("oeminfo","u16"),
                 ("res2","20s"),
-                ("lfanew","u32") ]
+                ("lfanew","u32") ] # must be 4-bytes aligned
 
 class NTsig(CStruct):
-    _fields = [ ("signature","u32"),
-                ]
+    _fields = [ ("signature","u32") ]
 
-class Coffhdr(CStruct):
+class COFFhdr(CStruct):
     _fields = [ ("machine","u16"),
                 ("numberofsections","u16"),
                 ("timedatestamp","u32"),
@@ -351,19 +354,6 @@ class XCOFFhdr64(CStruct):
                 ("characteristics","u16"),
                 ("numberofsymbols","u32"),
                 ]
-
-class Optehdr(CStruct):
-    _fields = [ ("rva","u32"),
-                ("size","u32") ]
-
-def get_optehdr_num(o):
-    numberofrva = o.numberofrvaandsizes
-    size_e = 8
-    if o.parent_head.Coffhdr.sizeofoptionalheader < numberofrva * size_e+ len(o.parent_head.Opthdr):
-        numberofrva = (o.parent_head.Coffhdr.sizeofoptionalheader-len(o.parent_head.Opthdr))/size_e
-        log.warn('bad number of rva.. using default %d'%numberofrva)
-        numberofrva = 0x10
-    return numberofrva
 
 # COFF Optional headers can have many variants
 class Opthdr32(CStruct):
@@ -515,7 +505,20 @@ class OpthdrXCOFF64(CStruct):
                 ("x64flags","u16"),
                 ]
 
-class NThdr(CStruct):
+class OptNThdr(NEW_CStruct):
+    _fields = [ ("rva","u32"),
+                ("size","u32") ]
+
+def get_optehdr_num(o):
+    numberofrva = o.numberofrvaandsizes
+    size_e = 8
+    if o.parent_head.COFFhdr.sizeofoptionalheader < numberofrva * size_e+ o.parent_head.Opthdr.bytelen:
+        numberofrva = (o.parent_head.COFFhdr.sizeofoptionalheader-o.parent_head.Opthdr.bytelen)/size_e
+        log.warn('bad number of rva.. using default %d'%numberofrva)
+        numberofrva = 0x10
+    return numberofrva
+
+class NThdr(NEW_CStruct):
     _fields = [ ("ImageBase","ptr"),
                 ("sectionalignment","u32"),
                 ("filealignment","u32"),
@@ -537,11 +540,11 @@ class NThdr(CStruct):
                 ("sizeofheapcommit","ptr"),
                 ("loaderflags","u32"),
                 ("numberofrvaandsizes","u32"),
-                ("optentries", "Optehdr", lambda c:get_optehdr_num(c))
+                ("optentries", "OptNThdr", lambda c:get_optehdr_num(c))
                 ]
 
 
-class Shdr(CStruct):
+class Shdr(NEW_CStruct):
     # 40-bytes long for 32-bit COFF ; 64-bytes long for 64-bit COFF
     # We use the field names mainly from http://wiki.osdev.org/COFF
     # They are not the same names as for PE files, but the usual names
@@ -611,8 +614,8 @@ class Shdr(CStruct):
     set_fields_TI = classmethod(set_fields_TI)
 
 
-class SHList(CStruct):
-    _fields = [ ("shlist", "Shdr", lambda c:c.parent_head.Coffhdr.numberofsections)]
+class SHList(NEW_CStruct):
+    _fields = [ ("shlist", "Shdr", lambda c:c.parent_head.COFFhdr.numberofsections)]
 
     def add_section(self, name="default", data = "", **args):
         s_align = self.parent_head.NThdr.sectionalignment
@@ -631,10 +634,10 @@ class SHList(CStruct):
             scnptr = s_last.scnptr+s_last.rsize
         else:
             s_null = Shdr.unpack(0x100*data_null).pack()
-            scnptr = self.parent_head.Doshdr.lfanew \
+            scnptr = self.parent_head.DOShdr.lfanew \
                 + len(self.parent_head.NTsig) \
-                + len(self.parent_head.Coffhdr) \
-                + self.parent_head.Coffhdr.sizeofoptionalheader \
+                + len(self.parent_head.COFFhdr) \
+                + self.parent_head.COFFhdr.sizeofoptionalheader \
                 + len(self.parent_head.SHList.pack()) \
                 + len(s_null)
             vaddr = 0x2000
@@ -669,7 +672,7 @@ class SHList(CStruct):
         s.rsize = max(s_align, s.rsize)
 
         self.append(s)
-        self.parent_head.Coffhdr.numberofsections = len(self)
+        self.parent_head.COFFhdr.numberofsections = len(self)
 
         l = (s.vaddr+s.rsize+(s_align-1))&~(s_align-1)
         self.parent_head.NThdr.sizeofimage = l
@@ -712,15 +715,15 @@ class SHList(CStruct):
     def append(self, s):
         self.shlist.append(s)
 
-class Rva(CStruct):
+class Rva(NEW_CStruct):
     _fields = [ ("rva","ptr"),
                 ]
 
-class Rva32(CStruct):
+class Rva32(NEW_CStruct):
     _fields = [ ("rva","u32"),
                 ]
 
-class DescName(CStruct):
+class DescName(NEW_CStruct):
     _fields = [ ("name", (lambda c, s, of:c.gets(s, of),
                           lambda c, value:c.sets(value)))
                 ]
@@ -735,12 +738,12 @@ class DescName(CStruct):
     def sets(self, value):
         return value+data_null
 
-class ImportByName(CStruct):
+class ImportByName(NEW_CStruct):
     _fields = [ ("hint", "u16"),
                 ("name", "sz")
                 ]
 
-class ImpDesc_e(CStruct):
+class ImpDesc_e(NEW_CStruct):
     _fields = [ ("originalfirstthunk","u32"),
                 ("timestamp","u32"),
                 ("forwarderchain","u32"),
@@ -795,7 +798,7 @@ class struct_array(object):
     def insert(self, index, i):
         self.l.insert(index, i)
 
-class DirImport(CStruct):
+class DirImport(NEW_CStruct):
     _fields = [ ("impdesc", (lambda c, s, of:c.gete(s, of),
                              lambda c, value:c.sete(value)))]
     def gete(self, s, of):
@@ -1055,7 +1058,7 @@ class DirImport(CStruct):
         return self.parent_head.rva2virt(rva)
 
 
-class ExpDesc_e(CStruct):
+class ExpDesc_e(NEW_CStruct):
     _fields = [ ("characteristics","u32"),
                 ("timestamp","u32"),
                 ("majorv","u16"),
@@ -1069,7 +1072,7 @@ class ExpDesc_e(CStruct):
                 ("addressofordinals","u32"),
               ]
 
-class DirExport(CStruct):
+class DirExport(NEW_CStruct):
     _fields = [ ("expdesc", (lambda c, s, of:c.gete(s, of),
                              lambda c, value:c.sete(value)))]
     def gete(self, s, of):
@@ -1254,7 +1257,7 @@ class DirExport(CStruct):
         return self.parent_head.rva2virt(rva)
 
 
-class Delaydesc_e(CStruct):
+class Delaydesc_e(NEW_CStruct):
     _fields = [ ("attrs","u32"),
                 ("name","u32"),
                 ("hmod","u32"),
@@ -1265,7 +1268,7 @@ class Delaydesc_e(CStruct):
                 ("timestamp","u32"),
               ]
 
-class DirDelay(CStruct):
+class DirDelay(NEW_CStruct):
     _fields = [ ("delaydesc", (lambda c, s, of:c.gete(s, of),
                                lambda c, value:c.sete(value)))]
 
@@ -1513,12 +1516,12 @@ class DirDelay(CStruct):
         return self.parent_head.rva2virt(rva)
 
 
-class Rel(CStruct):
+class Rel(NEW_CStruct):
     _fields = [ ("rva","u32"),
                 ("size","u32")
                 ]
 
-class Reloc(CStruct):
+class Reloc(NEW_CStruct):
     _fields = [ ("rel",(lambda c, s, of:c.gete(s, of),
                         lambda c, value:c.sete(value))) ]
     def gete(self, s, of):
@@ -1529,7 +1532,7 @@ class Reloc(CStruct):
     def __repr__(self):
         return '<%d %d>'%(self.rel[0], self.rel[1])
 
-class DirReloc(CStruct):
+class DirReloc(NEW_CStruct):
     _fields = [ ("reldesc", (lambda c, s, of:c.gete(s, of),
                              lambda c, value:c.sete(value)))]
 
@@ -1672,7 +1675,7 @@ class DirReloc(CStruct):
                     i+=1
 
 
-class DirRes(CStruct):
+class DirRes(NEW_CStruct):
     _fields = [ ("resdesc", (lambda c, s, of:c.gete(s, of),
                              lambda c, value:c.sete(value)))]
 
@@ -1869,13 +1872,13 @@ class DirRes(CStruct):
             rep += ' '*4*i + c + '\n'
         return rep
 
-class Ordinal(CStruct):
+class Ordinal(NEW_CStruct):
     _fields = [ ("ordinal","u16"),
                 ]
 
 
 
-class ResDesc_e(CStruct):
+class ResDesc_e(NEW_CStruct):
     _fields = [ ("characteristics","u32"),
                 ("timestamp","u32"),
                 ("majorv","u16"),
@@ -1884,7 +1887,7 @@ class ResDesc_e(CStruct):
                 ("numberofidentries","u16")
               ]
 
-class SUnicode(CStruct):
+class SUnicode(NEW_CStruct):
     _fields = [ ("length", "u16"),
                 ("value", (lambda c, s, of:c.gets(s, of),
                            lambda c, value:c.sets(value)))
@@ -1895,7 +1898,7 @@ class SUnicode(CStruct):
     def sets(self, value):
         return self.value
 
-class ResEntry(CStruct):
+class ResEntry(NEW_CStruct):
     _fields = [ ("name",(lambda c, s, of:c.getn(s, of),
                          lambda c, value:c.setn(value))),
                 ("offsettodata",(lambda c, s, of:c.geto(s, of),
@@ -1950,7 +1953,7 @@ class ResEntry(CStruct):
 
 
 
-class ResDataEntry(CStruct):
+class ResDataEntry(NEW_CStruct):
     _fields = [ ("offsettodata","u32"),
                 ("size","u32"),
                 ("codepage","u32"),
@@ -1958,13 +1961,13 @@ class ResDataEntry(CStruct):
                 ]
 
 
-class Symb(CStruct):
+class Symb(NEW_CStruct):
     _fields = [ ("name","8s"),
                 ("res1","u32"),
                 ("res2","u32"),
                 ("res3","u16")]
 
-class CoffSymbol(CStruct):
+class CoffSymbol(NEW_CStruct):
     _fields = [ ("name", (lambda c, s, of:c.getname(s, of),
                           lambda c, value:c.setname(value))),
                 ("value","u32"),
@@ -2029,7 +2032,7 @@ class CoffSymbol(CStruct):
         s += " aux=%r" % self.aux
         return "<CoffSymbol " + s + ">"
 
-class SymbolAuxFile(CStruct):
+class SymbolAuxFile(NEW_CStruct):
     _fields = [ ("name", (lambda c, s, of:c.getname(s, of),
                           lambda c, value:c.setname(value)))]
     def getname(self, s, of):
@@ -2048,14 +2051,14 @@ class SymbolAuxFile(CStruct):
             value += data_null*18
             return value[0:18]
 
-class SymbolAuxFunc(CStruct):
+class SymbolAuxFunc(NEW_CStruct):
     _fields = [ ("tagIndex","u32"),
                 ("totalSize","u32"),
                 ("pointerToLineNum","u32"),
                 ("pointerToNextFunc","u32"),
                 ("padding","u16")]
 
-class SymbolAuxSect(CStruct):
+class SymbolAuxSect(NEW_CStruct):
     _fields = [ ("length","u32"),
                 ("numberOfRelocations","u16"),
                 ("numberOfLinenumbers","u16"),
