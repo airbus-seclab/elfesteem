@@ -436,7 +436,7 @@ class PE(object):
                     rs = (s.rawsize/filealignment+1)*filealignment
                 else:
                     rs = s.rawsize
-                mm = max(rs, 0x1000)
+                mm = max(rs, 0x200)
             s.data[0] = self.content[raw_off:raw_off+mm]
         try:
             self.DirImport = pe.DirImport.unpack(self.content,
