@@ -434,8 +434,7 @@ class DirImport(CStruct):
         of1 = dirimp.rva
         if not of1: # No Import
             return
-        x = self.impdesc.pack()
-        c[self.parent_head.rva2off(of1)] = self.pack()
+        c[self.parent_head.rva2off(of1)] = self.impdesc.pack()
         for i, d in enumerate(self.impdesc):
             c[self.parent_head.rva2off(d.name)] = d.dlldescname.pack()
             if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
