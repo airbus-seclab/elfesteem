@@ -1342,8 +1342,6 @@ class DirRes(CStruct):
             of1, my_dir = dir_todo.popitem()
             dir_done[of1] = my_dir
             c[self.parent_head.rva2off(of1)] = str(my_dir)
-            c[self.parent_head.rva2off(of1 + len(my_dir))] = str(
-                my_dir.resentries)
             for e in my_dir.resentries:
                 if e.name_s:
                     c[self.parent_head.rva2off(e.name)] = str(e.name_s)
