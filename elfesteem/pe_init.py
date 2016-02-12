@@ -91,12 +91,6 @@ class ContectRva(object):
             rva_items.append((s, n_item))
         return rva_items
 
-    def __getitem__(self, item):
-        raise DeprecationWarning(
-            "Replace code by rva.get(start, [stop, step])")
-
-    def __setitem__(self, item, data):
-        raise DeprecationWarning("Replace code by rva.set(start, data)")
 
     def get(self, rva_start, rva_stop=None):
         """
@@ -131,6 +125,20 @@ class ContectRva(object):
                 self.parent.content = self.parent.content[
                     :file_off] + data_slice + self.parent.content[file_off + len(data_slice):]
         return
+
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            assert(item.step is None)
+            return self.get(item.start, item.stop)
+        else:
+            return self.get(item)
+
+    def __setitem__(self, item, data):
+        if isinstance(item, slice):
+            rva = item.start
+        else:
+            rva = item
+        self.set(rva, data)
 
 
 class ContentVirtual:
