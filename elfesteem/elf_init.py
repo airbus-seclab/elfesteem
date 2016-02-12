@@ -651,8 +651,8 @@ class virt(object):
             return self.get_rvaitem(item)
         start = item.start
         stop = item.stop
-        step = item.step
-        return self.get_rvaitem(start, stop, step)
+        assert(item.step is None)
+        return self.get_rvaitem(start, stop)
 
     def get(self, ad_start, ad_stop=None):
         rva_items = self.get_rvaitem(ad_start, ad_stop)
@@ -675,7 +675,7 @@ class virt(object):
 
         return data_out
 
-    def set(self, ad_start, data):
+    def set(self, item, data):
         if not type(item) is slice:
             item = slice(item, item + len(data), None)
         virt_item = self.item2virtitem(item)
