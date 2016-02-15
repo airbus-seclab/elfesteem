@@ -466,14 +466,14 @@ class DirImport(CStruct):
         return out
 
     def __repr__(self):
-        rep = ["<%s>"%self.__class__.__name__]
+        rep = "<%s>\n" % self.__class__.__name__
+        if self.impdesc is None:
+            return rep
         for i,s in enumerate(self.impdesc):
-            l = "%2d %-25s %s"%(i, repr(s.dlldescname) ,repr(s))
-            rep.append(l)
+            rep += "%2d %-25r %r\n" % (i, s.dlldescname, s)
             for ii, f in enumerate(s.impbynames):
-                l = "    %2d %-16s"%(ii, repr(f))
-                rep.append(l)
-        return "\n".join(rep)
+                rep += "    %2d %-16r\n" % (ii, f)
+        return rep
 
     def add_dlldesc(self, new_dll):
         if self.parent_head._wsize == 32:
@@ -673,22 +673,21 @@ class DirExport(CStruct):
         return l
 
     def __repr__(self):
-        rep = ["<%s>"%self.__class__.__name__]
+        rep = "<%s>\n" % self.__class__.__name__
         if self.expdesc is None:
-            return "\n".join(rep)
-
-        rep = ["<%s %d (%s) %s>"%(self.__class__.__name__,
-                                  self.expdesc.numberoffunctions, self.dlldescname, repr(self.expdesc))]
+            return rep
+        rep = "<%s %d (%r) %r>\n" % (self.__class__.__name__,
+                                     self.expdesc.numberoffunctions,
+                                     self.dlldescname,
+                                     self.expdesc)
         tmp_names = [[] for x in xrange(self.expdesc.numberoffunctions)]
         for i, n in enumerate(self.f_names):
             tmp_names[self.f_nameordinals[i].ordinal].append(n.name)
         for i,s in enumerate(self.f_address):
-            tmpn = []
             if not s.rva:
                 continue
-            l = "%2d %.8X %s"%(i+self.expdesc.base, s.rva ,repr(tmp_names[i]))
-            rep.append(l)
-        return "\n".join(rep)
+            rep += "%2d %.8X %r\n" % (i+self.expdesc.base, s.rva, tmp_names[i])
+        return rep
 
     def create(self, name = 'default.dll'):
         self.expdesc = ExpDesc_e(self.parent_head)
@@ -922,14 +921,14 @@ class DirDelay(CStruct):
                     c[self.parent_head.rva2off(tmp_thunk[j].rva)] = imp.pack()
 
     def __repr__(self):
-        rep = ["<%s>"%self.__class__.__name__]
+        rep = "<%s>\n" % self.__class__.__name__
+        if self.delaydesc is None:
+            return rep
         for i,s in enumerate(self.delaydesc):
-            l = "%2d %-25s %s"%(i, repr(s.dlldescname) ,repr(s))
-            rep.append(l)
+            rep += "%2d %-25r %r\n" % (i, s.dlldescname, s)
             for ii, f in enumerate(s.impbynames):
-                l = "    %2d %-16s"%(ii, repr(f))
-                rep.append(l)
-        return "\n".join(rep)
+                rep += "    %2d %-16r\n" % (ii, f)
+        return rep
 
     def add_dlldesc(self, new_dll):
         if self.parent_head._wsize == 32:
@@ -1117,21 +1116,18 @@ class DirReloc(CStruct):
 
 
     def __repr__(self):
-        rep = ["<%s>"%self.__class__.__name__]
+        rep = "<%s>\n" % self.__class__.__name__
         if self.reldesc is None:
-            return "\n".join(rep)
+            return rep
         for i, n in enumerate(self.reldesc):
-            l = "%2d %s"%(i, repr(n) )
-            rep.append(l)
+            rep += "%2d %r\n" % (i, n)
             """
-            #display too many lines...
+            #displays too many lines...
             for ii, m in enumerate(n.rels):
-                l = "\t%2d %s"%(ii, repr(m) )
-                rep.append(l)
+                rep += "\t%2d %r\n" % (ii, m)
             """
-            l = "\t%2d rels..."%(len(n.rels))
-            rep.append(l)
-        return "\n".join(rep)
+            rep += "\t%2d rels...\n" % (len(n.rels))
+        return rep
 
     def add_reloc(self, rels, rtype = 3, patchrel = True):
         dirrel = self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_BASERELOC]
@@ -1362,9 +1358,9 @@ class DirRes(CStruct):
                 e.offsettosubdir = dir_inv[e.subdir]
 
     def __repr__(self):
-        rep = ["<%s>"%(self.__class__.__name__ )]
+        rep = "<%s>\n" % self.__class__.__name__
         if self.resdesc is None:
-            return "\n".join(rep)
+            return rep
         dir_todo = [self.resdesc]
         out = []
         index = -1
@@ -1384,8 +1380,8 @@ class DirRes(CStruct):
             else:
                 raise "zarb"
         for i, c in out:
-            rep.append(' '*4*i+c)
-        return "\n".join(rep)
+            rep += ' '*4*i + c + '\n'
+        return rep
 
 class Ordinal(CStruct):
     _fields = [ ("ordinal","u16"),
