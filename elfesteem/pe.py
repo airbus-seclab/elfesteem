@@ -444,12 +444,19 @@ class DirImport(CStruct):
         c[self.parent_head.rva2off(of1)] = str(self)
         for i, d in enumerate(self.impdesc):
             c[self.parent_head.rva2off(d.name)] = str(d.dlldescname)
-            if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                c[self.parent_head.rva2off(d.originalfirstthunk)] = str(
-                    d.originalfirstthunks)
+            if (d.originalfirstthunk and
+                self.parent_head.rva2off(d.originalfirstthunk)):
+                # Add thunks list and terminating null entry
+                off = self.parent_head.rva2off(d.originalfirstthunk)
+                c[off] = (str(d.originalfirstthunks) +
+                          "\x00" * (self.parent_head._wsize / 8))
             if d.firstthunk:
-                c[self.parent_head.rva2off(d.firstthunk)] = str(d.firstthunks)
-            if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
+                # Add thunks list and terminating null entry
+                off = self.parent_head.rva2off(d.firstthunk)
+                c[off] = (str(d.firstthunks) +
+                          "\x00" * (self.parent_head._wsize / 8))
+            if (d.originalfirstthunk and
+                self.parent_head.rva2off(d.originalfirstthunk)):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
