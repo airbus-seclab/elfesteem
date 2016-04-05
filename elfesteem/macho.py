@@ -378,6 +378,24 @@ GENERIC_RELOC_PB_LA_PTR      = 3 # prebound lazy pointer */
 GENERIC_RELOC_LOCAL_SECTDIFF = 4
 GENERIC_RELOC_TLV            = 5 # thread local variables */
 
+# /usr/include/mach-o/x86_64/reloc.h
+# Relocations for x86_64 are a bit different than for other architectures in
+# Mach-O: Scattered relocations are not used.  Almost all relocations produced
+# by the compiler are external relocations.  An external relocation has the
+# r_extern bit set to 1 and the r_symbolnum field contains the symbol table
+# index of the target label.
+# (...)
+X86_64_RELOC_UNSIGNED    = 0 # for absolute addresses
+X86_64_RELOC_SIGNED      = 1 # for signed 32-bit displacement
+X86_64_RELOC_BRANCH      = 2 # a CALL/JMP instruction with 32-bit displacement
+X86_64_RELOC_GOT_LOAD    = 3 # a MOVQ load of a GOT entry
+X86_64_RELOC_GOT         = 4 # other GOT references
+X86_64_RELOC_SUBTRACTOR  = 5 # must be followed by a X86_64_RELOC_UNSIGNED
+X86_64_RELOC_SIGNED_1    = 6 # for signed 32-bit displacement with a -1 addend
+X86_64_RELOC_SIGNED_2    = 7 # for signed 32-bit displacement with a -2 addend
+X86_64_RELOC_SIGNED_4    = 8 # for signed 32-bit displacement with a -4 addend
+X86_64_RELOC_TLV         = 9 # for thread local variables
+
 
 def enumerate_constants(constants, globs):
     for type in constants:
