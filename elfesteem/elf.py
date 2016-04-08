@@ -118,12 +118,12 @@ class Rel64(Rel32):
 class Rela32(Rel32):
     _fields = [ ("offset","ptr"),
                 ("info","u32"),
-                ("addend","ptr") ]
+                ("addend","s32") ]
 
 class Rela64(Rel64):
     _fields = [ ("offset","ptr"),
                 ("info","u64"),
-                ("addend","ptr") ]
+                ("addend","s64") ]
 
 class Dyn32(CStruct):
     _fields = [ ("type","u32"),

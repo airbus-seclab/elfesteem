@@ -73,7 +73,8 @@ def display_reloc(e, sh):
         type = 'R_%s_%s' % (machine, elf.constants['R'][machine][r.type])
         output = format%(r.offset, r.info, type, r.value, name)
         if sh.sht == elf.SHT_RELA:
-            output = output + " + %x"%r.addend
+            if r.addend < 0: output = output + " - %x"%-r.addend
+            else:            output = output + " + %x"%r.addend
         print(output)
 
 def display_sections(e):
