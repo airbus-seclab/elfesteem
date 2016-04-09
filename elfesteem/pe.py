@@ -1277,20 +1277,24 @@ class DirRes(CStruct):
         nbr = resdesc.numberofnamedentries + resdesc.numberofidentries
 
         out = []
+        tmp_of = of
         for i in xrange(nbr):
-            if of >= ofend:
+            if tmp_of >= ofend:
                 break
-            if of + l >= len(s):
+            if tmp_of + l >= len(s):
                 log.warn('warning bad resource offset')
                 break
             try:
-                entry, l = ResEntry.unpack_l(s, of, self.parent_head)
+                entry, l = ResEntry.unpack_l(s, tmp_of, self.parent_head)
             except RuntimeError:
                 log.warn('bad resentry')
-                return None, of
+                return None, tmp_of
             out.append(entry)
-            of += l
-        resdesc.resentries = out
+            tmp_of += l
+        resdesc.resentries = struct_array(self, s,
+                                          of,
+                                          ResEntry,
+                                          nbr)
         dir_todo = {of_orig: resdesc}
         dir_done = {}
         xx = 0
