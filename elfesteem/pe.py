@@ -448,13 +448,11 @@ class DirImport(CStruct):
                 self.parent_head.rva2off(d.originalfirstthunk)):
                 # Add thunks list and terminating null entry
                 off = self.parent_head.rva2off(d.originalfirstthunk)
-                c[off] = (str(d.originalfirstthunks) +
-                          "\x00" * (self.parent_head._wsize / 8))
+                c[off] = str(d.originalfirstthunks)
             if d.firstthunk:
                 # Add thunks list and terminating null entry
                 off = self.parent_head.rva2off(d.firstthunk)
-                c[off] = (str(d.firstthunks) +
-                          "\x00" * (self.parent_head._wsize / 8))
+                c[off] = str(d.firstthunks)
             if (d.originalfirstthunk and
                 self.parent_head.rva2off(d.originalfirstthunk)):
                 tmp_thunk = d.originalfirstthunks
