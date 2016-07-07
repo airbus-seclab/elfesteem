@@ -418,13 +418,13 @@ class DirImport(CStruct):
                 elif isinstance(d.firstthunks, struct_array):
                     tmp_thunk = d.firstthunks
                 else:
-                    raise "no thunk!!"
+                    raise RuntimeError("No thunk!")
             elif d.originalfirstthunk:  # and self.parent_head.rva2off(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
             else:
-                raise "no thunk!!"
+                raise RuntimeError("No thunk!")
 
             if tmp_thunk == d.originalfirstthunks:
                 d.firstthunks = tmp_thunk
@@ -459,7 +459,7 @@ class DirImport(CStruct):
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
             else:
-                raise "no thunk!!"
+                raise RuntimeError("No thunk!")
             for j, imp in enumerate(d.impbynames):
                 if isinstance(imp, ImportByName):
                     c[self.parent_head.rva2off(tmp_thunk[j].rva)] = str(imp)
@@ -577,7 +577,7 @@ class DirImport(CStruct):
                         if tmp_thunk[j].rva & mask_ptr == funcname:
                             return d.firstthunk + j * self.parent_head._wsize / 8
             else:
-                raise ValueError('unknown func tpye %s' % str(f))
+                raise ValueError('Unknown: %s %s' % (dllname, funcname))
 
     def get_funcvirt(self, dllname, funcname):
         rva = self.get_funcrva(dllname, funcname)
@@ -944,7 +944,7 @@ class DirDelay(CStruct):
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
             else:
-                raise "no thunk!!"
+                raise RuntimeError("No thunk!")
             for i, imp in enumerate(d.impbynames):
                 if isinstance(imp, ImportByName):
                     tmp_thunk[i].rva = isfromva(rva)
@@ -971,7 +971,7 @@ class DirDelay(CStruct):
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
             else:
-                raise "no thunk!!"
+                raise RuntimeError("No thunk!")
             for j, imp in enumerate(d.impbynames):
                 if isinstance(imp, ImportByName):
                     c[self.parent_head.rva2off(tmp_thunk[j].rva)] = str(imp)
@@ -1063,7 +1063,7 @@ class DirDelay(CStruct):
             elif d.firstthunk:
                 tmp_thunk = d.firstthunks
             else:
-                raise "no thunk!!"
+                raise RuntimeError("No thunk!")
             if type(f) is str:
                 for j, imp in enumerate(d.impbynames):
                     if isinstance(imp, ImportByName):
