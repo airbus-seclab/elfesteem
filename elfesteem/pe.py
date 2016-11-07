@@ -680,7 +680,7 @@ class DirExport(CStruct):
                                      self.expdesc.numberoffunctions,
                                      self.dlldescname,
                                      self.expdesc)
-        tmp_names = [[] for x in xrange(self.expdesc.numberoffunctions)]
+        tmp_names = [[] for x in range(self.expdesc.numberoffunctions)]
         for i, n in enumerate(self.f_names):
             tmp_names[self.f_nameordinals[i].ordinal].append(n.name)
         for i,s in enumerate(self.f_address):
@@ -823,7 +823,7 @@ class DirDelay(CStruct):
                 tmp_thunk = d.firstthunks
             else:
                 raise ValueError("no thunk in delay dir!! ")
-            for i in xrange(len(tmp_thunk)):
+            for i in range(len(tmp_thunk)):
                 if tmp_thunk[i].rva&mask_ptr == 0:
                     n = ImportByName.unpack(s,
                                             self.parent_head.rva2off(isfromva(tmp_thunk[i].rva)),
