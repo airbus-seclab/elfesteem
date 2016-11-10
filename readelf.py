@@ -70,12 +70,21 @@ def display_reloc(e, sh):
         machine = elf.constants['EM'][e.Ehdr.machine]
         if machine == 'SPARC32PLUS': machine = 'SPARC'
         if machine == 'SPARCV9':     machine = 'SPARC'
-        type = 'R_%s_%s' % (machine, elf.constants['R'][machine][r.type])
+        if hasattr(r, 'type1'):
+            # MIPS64
+            type = 'R_%s_%s' % (machine, elf.constants['R'][machine][r.type1])
+        else:
+            type = 'R_%s_%s' % (machine, elf.constants['R'][machine][r.type])
         output = format%(r.offset, r.info, type, r.value, name)
         if sh.sht == elf.SHT_RELA:
             if r.addend < 0: output = output + " - %x"%-r.addend
             else:            output = output + " + %x"%r.addend
         print(output)
+        if hasattr(r, 'type1'):
+            type = 'R_%s_%s' % (machine, elf.constants['R'][machine][r.type2])
+            print("                    Type2: %-16s" % type)
+            type = 'R_%s_%s' % (machine, elf.constants['R'][machine][r.type3])
+            print("                    Type3: %-16s" % type)
 
 def display_sections(e):
     if e.wsize == 32:
@@ -85,6 +94,7 @@ def display_sections(e):
         header = "  [Nr] Name              Type             Address           Offset\n       Size              EntSize          Flags  Link  Info  Align"
         format = "  [%2d] %-17s %-15s  %016x  %08x\n       %016x  %016x %3s      %2d    %2d    %2d"
     print(header)
+    m = elf.constants['EM'][e.Ehdr.machine]
     for i, sh in enumerate(e.sh):
         flags = ""
         if sh.sh.flags & elf.SHF_WRITE:            flags += "W"
@@ -98,7 +108,18 @@ def display_sections(e):
         if sh.sh.flags & elf.SHF_GROUP:            flags += "G"
         if sh.sh.flags & elf.SHF_TLS:              flags += "T"
         if sh.sh.flags & elf.SHF_EXCLUDE:          flags += "E"
-        type = elf.constants['SHT'][sh.sh.type]
+        if m in elf.constants['SHT'] and sh.sh.type in elf.constants['SHT'][m]:
+            type = m+'_'+elf.constants['SHT'][m][sh.sh.type]
+        elif sh.sh.type in elf.constants['SHT']:
+            type = elf.constants['SHT'][sh.sh.type]
+        elif elf.SHT_LOOS <= sh.sh.type <= elf.SHT_HIOS:
+            type = "LOOS+%x"%(sh.sh.type - elf.SHT_LOOS)
+        elif elf.SHT_LOPROC <= sh.sh.type <= elf.SHT_HIPROC:
+            type = "LOPROC+%x"%(sh.sh.type - elf.SHT_LOPROC)
+        elif elf.SHT_LOUSER <= sh.sh.type <= elf.SHT_HIUSER:
+            type = "LOUSER+%x"%(sh.sh.type - elf.SHT_LOUSER)
+        else:
+            type = "Unknown%#x"%sh.sh.type
         if type == 'GNU_verdef':   type = 'VERDEF'
         if type == 'GNU_verneed':  type = 'VERNEED'
         if type == 'GNU_versym':   type = 'VERSYM'

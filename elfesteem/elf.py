@@ -86,34 +86,69 @@ class Dym(CStruct):
     _fields = [ ("tag","u32"),
                 ("val","u32") ]
 
-class Rel32(CStruct):
+class RelBase(CStruct):
+    def symbol(self):
+        if not hasattr(self._parent.linksection, 'symtab'):
+            # In some (invalid?) binaries, most sections are of
+            # type NOBITS, including the symbols section, which
+            # therefore has no symtab member
+            # We could force this section type to SYMTAB, but it
+            # has side effects
+            class VoidName(object):
+                name = None
+            return VoidName()
+        return self._parent.linksection.symtab[self.sym_idx]
+    symbol = property(symbol)
+    def shndx(self):
+        return self.symbol.shndx
+    shndx = property(shndx)
+    def value(self):
+        return self.symbol.value
+    value = property(value)
+    def sym(self):
+        return self.symbol.name
+    sym = property(sym)
+
+class Rel32(RelBase):
+    # sym_idx is 24-bit long, cannot be defined as a field type
+    # we get it by parsing 'info'
     _fields = [ ("offset","ptr"),
                 ("info","u32") ]
     def type(self):
         return self.info & 0xff
     type = property(type)
-    def symtab(self):
-        return self._parent.linksection.symtab[self.info>>8]
-    symtab = property(symtab)
-    def shndx(self):
-        return self.symtab.shndx
-    shndx = property(shndx)
-    def value(self):
-        return self.symtab.value
-    value = property(value)
-    def sym(self):
-        return self.symtab.name
-    sym = property(sym)
+    def sym_idx(self):
+        return self.info>>8
+    sym_idx = property(sym_idx)
 
-class Rel64(Rel32):
+class Rel64(RelBase):
     _fields = [ ("offset","ptr"),
                 ("info","u64") ]
     def type(self):
         return self.info & 0xffffffff
     type = property(type)
-    def symtab(self):
-        return self._parent.linksection.symtab[self.info>>32]
-    symtab = property(symtab)
+    def sym_idx(self):
+        return self.info>>32
+    sym_idx = property(sym_idx)
+
+class Rel64MIPS(RelBase):
+    # e.g. http://www.openwall.com/lists/musl/2016/01/22/2
+    _fields = [ ("offset","ptr"),
+                ("sym_idx","u32"),
+                ("ssym","u08"),
+                ("type3","u08"),
+                ("type2","u08"),
+                ("type1","u08") ]
+    def type(self):
+        raise ValueError("MIPS64 relocation type is a combination of 3 relocation types each of size 1 byte")
+    type = property(type)
+    def info(self):
+        return self.type1 \
+            + (self.type2<<8) \
+            + (self.type3<<16) \
+            + (self.ssym<<24) \
+            + (self.sym_idx<<32)
+    info = property(info)
 
 class Rela32(Rel32):
     _fields = [ ("offset","ptr"),
@@ -310,6 +345,63 @@ SHT_GNU_versym =    0x6fffffff    # Version symbol table.
 SHT_HISUNW =        0x6fffffff    # Sun-specific high bound.
 SHT_HIOS =          0x6fffffff    # End OS-specific type
 SHT_LOPROC =        0x70000000    # Start of processor-specific
+# http://infocenter.arm.com/help/topic/com.arm.doc.ihi0044c/IHI0044C_aaelf.pdf
+SHT_ARM_EXIDX =          0x70000001 # Exception Index table
+SHT_ARM_PREEMPTMAP =     0x70000002 # DLL dynamic linking pre-emption map
+SHT_ARM_ATTRIBUTES =     0x70000003 # Object file compatibility attributes
+SHT_ARM_DEBUGOVERLAY =   0x70000004
+SHT_ARM_OVERLAYSECTION = 0x70000005
+# https://refspecs.linuxfoundation.org/elf/elf-pa.pdf
+# https://sourceware.org/ml/binutils/2005-08/msg00141.html
+SHT_PARISC_EXT =    0x70000000 # Section contains product-specific extension bits
+SHT_PARISC_UNWIND = 0x70000001 # Section contains unwind table entries
+SHT_PARISC_DOC =    0x70000002 # Section contains debug information for optimized code
+SHT_PARISC_ANNOT =  0x70000003 # Section contains code annotations
+SHT_PARISC_DLKM =   0x70000004 # DLKM special section
+# https://dmz-portal.mips.com/wiki/MIPS_section_types
+SHT_MIPS_LIBLIST =       0x70000000 # DSO library information used to link
+SHT_MIPS_MSYM =          0x70000001 # MIPS symbol table extension
+SHT_MIPS_CONFLICT =      0x70000002 # Symbol conflicting with DSO defined symbols
+SHT_MIPS_GPTAB =         0x70000003 # Global pointer table
+SHT_MIPS_UCODE =         0x70000004 # Reserved
+SHT_MIPS_DEBUG =         0x70000005 # Reserved (obsolete debug information)
+SHT_MIPS_REGINFO =       0x70000006 # Register usage information
+SHT_MIPS_PACKAGE =       0x70000007 # OSF reserved
+SHT_MIPS_PACKSYM =       0x70000008 # OSF reserved
+SHT_MIPS_RELD =          0x70000009 # Dynamic relocations (obsolete)
+#                        0x7000000a
+SHT_MIPS_IFACE =         0x7000000b # Subprogram interface information
+SHT_MIPS_CONTENT =       0x7000000c # Section content information
+SHT_MIPS_OPTIONS =       0x7000000d # General options
+#                        0x7000000e
+#                        0x7000000f
+SHT_MIPS_SHDR =          0x70000010
+SHT_MIPS_FDESC =         0x70000011
+SHT_MIPS_EXTSYM =        0x70000012
+SHT_MIPS_DENSE =         0x70000013
+SHT_MIPS_PDESC =         0x70000014
+SHT_MIPS_LOCSYM =        0x70000015
+SHT_MIPS_AUXSYM =        0x70000016
+SHT_MIPS_OPTSYM =        0x70000017
+SHT_MIPS_LOCSTR =        0x70000018
+SHT_MIPS_LINE =          0x70000019
+SHT_MIPS_RFDESC =        0x7000001a
+SHT_MIPS_DELTASYM =      0x7000001b # Delta C++ symbol table (obsolete)
+SHT_MIPS_DELTAINST =     0x7000001c # Delta C++ instance table (obsolete)
+SHT_MIPS_DELTACLASS =    0x7000001d # Delta C++ class table (obsolete)
+SHT_MIPS_DWARF =         0x7000001e # Dwarf debug information
+SHT_MIPS_DELTADECL =     0x7000001f # Delta C++ declarations (obsolete)
+SHT_MIPS_SYMBOL_LIB =    0x70000020 # Symbol to library mapping
+SHT_MIPS_EVENTS =        0x70000021 # Section event mapping
+SHT_MIPS_TRANSLATE =     0x70000022 # Old pixie translation table (obsolete)
+SHT_MIPS_PIXIE =         0x70000023 # Pixie specific sections (SGI)
+SHT_MIPS_XLATE =         0x70000024 # Address translation table
+SHT_MIPS_XLATE_DEBUG =   0x70000025 # SGI internal address translation table
+SHT_MIPS_WHIRL =         0x70000026 # Intermediate code (MipsPro compiler)
+SHT_MIPS_EH_REGION =     0x70000027 # C++ exception handling region information
+SHT_MIPS_XLATE_OLD =     0x70000028
+SHT_MIPS_PDR_EXCEPTION = 0x70000029 # Runtime procedure descriptor table exception information (ucode)
+SHT_MIPS_ABIFLAGS =      0x7000002a
 SHT_HIPROC =        0x7fffffff    # End of processor-specific
 SHT_LOUSER =        0x80000000    # Start of application-specific
 SHT_HIUSER =        0x8fffffff    # End of application-specific
@@ -1607,10 +1699,12 @@ def enumerate_constants(constants, globs):
             if not globs[val] in constants[type]:
                 constants[type][globs[val]] = val[len(type)+1:]
     for subtype in constants['EM'].values():
-        for val in filter(lambda x:x[:len(subtype)+3]=="R_"+subtype+"_", globs.keys()):
-            if not subtype in constants['R']:
-                constants['R'][subtype] = {}
-            constants['R'][subtype][globs[val]] = val[len(subtype)+3:]
+        for pfx in ('R', 'SHT'):
+            l = len(subtype)+len(pfx)+2
+            for val in filter(lambda x:x[:l]==pfx+"_"+subtype+"_", globs.keys()):
+                if not subtype in constants[pfx]:
+                    constants[pfx][subtype] = {}
+                constants[pfx][subtype][globs[val]] = val[l:]
 
 constants = {
   'SHT' : {}, # sh_type

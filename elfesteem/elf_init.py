@@ -305,6 +305,8 @@ class RelTable(Section):
             Rel = { 32: elf.Rel32,  64: elf.Rel64 }[self.wsize]
         elif self.__class__.sht == elf.SHT_RELA:
             Rel = { 32: elf.Rela32, 64: elf.Rela64 }[self.wsize]
+        if self.parent.parent.Ehdr.machine == elf.EM_MIPS and self.wsize == 64:
+            Rel = elf.Rel64MIPS
         c = self.content
         self.reltab=[]
         self.rel = {}
