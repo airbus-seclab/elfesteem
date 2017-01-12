@@ -233,6 +233,7 @@ EM_960 =         19              # Intel 80960
 EM_PPC =         20              # PowerPC
 EM_PPC64 =       21              # PowerPC 64-bit
 EM_S390 =        22              # IBM S390
+EM_SPU =         23              # Cell Broadband Engine SPU
 
 EM_V800 =        36              # NEC V800 series
 EM_FR20 =        37              # Fujitsu FR20
@@ -359,6 +360,7 @@ EM_AVR32 =      185              # Atmel Corporation 32-bit microprocessor famil
 EM_STM8 =       186              # STMicroeletronics STM8 8-bit microcontroller
 EM_TILE64 =     187              # Tilera TILE64 multicore architecture family
 EM_TILEPRO =    188              # Tilera TILEPro multicore architecture family
+EM_MICROBLAZE = 189              # Xilinx MicroBlaze
 EM_CUDA =       190              # NVIDIA CUDA architecture
 EM_TILEGX =     191              # Tilera TILE-Gx multicore architecture family
 EM_CLOUDSHIELD = 192             # CloudShield architecture family
@@ -389,11 +391,17 @@ EM_COGE =       216              # Cognitive Smart Memory Processor
 EM_COOL =       217              # iCelero CoolEngine
 EM_NORC =       218              # Nanoradio Optimized RISC
 EM_CSR_KALIMBA = 219             # CSR Kalimba architecture family
+EM_VISIUM =     221              # 
+EM_FT32 =       222              # FTDI FT32
+EM_MOXIE =      223              # Moxie
 EM_AMDGPU =     224              # AMD GPU architecture
 EM_RISCV =      243              # RISC-V
 EM_LANAI =      244              # Lanai 32-bit processor
 EM_BPF =        247              # Linux kernel bpf virtual machine
-EM_WEBASSEMBLY = 0x4157          # WebAssembly architecture
+EM_EPIPHANY =    0x1223          # Adapteva's Epiphany
+EM_FRV =         0x5441
+EM_STORMY16 =    0xad45
+EM_IQ2000 =      0xfeba          # Vitesse IQ2000
 EM_ALPHA =       0x9026
 
 # Special section indices.
@@ -1790,6 +1798,22 @@ R_M32R_GOTOFF_HI_SLO    = 63      # High 16 bit offset to GOT with signed low
 R_M32R_GOTOFF_LO        = 64      # Low 16 bit offset to GOT
 R_M32R_NUM              = 256     # Keep this the last entry.
 #
+
+# NEC/Renesas V8xx series
+R_V800_NONE             = 0x30    # V810
+R_V800_BYTE             = 0x31    # V810
+R_V800_HWORD            = 0x32    # V810
+R_V800_WORD             = 0x33    # V810
+R_V800_WLO              = 0x34    # V810
+R_V800_WHI              = 0x35    # V810
+R_V800_WHI1             = 0x36    # V810
+R_V800_GPBYTE           = 0x37    # V810
+R_V800_GPHWORD          = 0x38    # V810
+R_V800_GPWORD           = 0x39    # V810
+R_V800_GPWLO            = 0x3a    # V810
+R_V800_GPWHI            = 0x3b    # V810
+R_V800_GPWHI1           = 0x3c    # V810
+R_V800_HWLO             = 0x3d    # V850
 
 def enumerate_constants(constants, globs):
     for type in constants:

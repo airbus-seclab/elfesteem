@@ -7,6 +7,84 @@ if sys.version_info[0] == 2 and sys.version_info[1] < 5:
 
 from elfesteem import elf_init, elf
 
+def display_headers(e):
+    print("ELF Header:")
+    def expand_code(table, val):
+        if val in table: return table[val]
+        return '<unknown>: %#x' % val
+    import struct
+    ident = struct.unpack('16B', e.Ehdr.ident)
+    print("  Magic:   %s"%' '.join(['%02x'%_ for _ in ident]))
+    print("  Class:                             %s"%expand_code({
+        elf.ELFCLASS32: 'ELF32',
+        elf.ELFCLASS64: 'ELF64',
+        }, ident[elf.EI_CLASS]))
+    print("  Data:                              %s"%expand_code({
+        elf.ELFDATA2LSB: "2's complement, little endian",
+        elf.ELFDATA2MSB: "2's complement, big endian",
+        }, ident[elf.EI_DATA]))
+    print("  Version:                           %s"%expand_code({
+        1: '1 (current)',
+        }, ident[elf.EI_VERSION]))
+    print("  OS/ABI:                            %s"%expand_code({
+        0: 'UNIX - System V',
+        }, ident[elf.EI_OSABI]))
+    print("  ABI Version:                       %d"%ident[elf.EI_ABIVERSION])
+    print("  Type:                              %s"%expand_code({
+        elf.ET_REL: 'REL (Relocatable file)',
+        elf.ET_EXEC: 'EXEC (Executable file)',
+        elf.ET_DYN: 'DYN (Shared object file)',
+        elf.ET_CORE: 'CORE (Core file)',
+        }, e.Ehdr.type))
+    machine_code = dict(elf.constants['EM'])
+    # Same textual output as readelf, from readelf.c
+    machine_code[elf.EM_M32]            = 'ME32100'
+    machine_code[elf.EM_SPARC]          = 'Sparc'
+    machine_code[elf.EM_386]            = 'Intel 80386'
+    machine_code[elf.EM_68K]            = 'MC68000'
+    machine_code[elf.EM_88K]            = 'MC88000'
+    machine_code[elf.EM_486]            = 'Intel 80486'
+    machine_code[elf.EM_860]            = 'Intel 80860'
+    machine_code[elf.EM_MIPS]           = 'MIPS R3000'
+    machine_code[elf.EM_S370]           = 'IBM System/370'
+    machine_code[elf.EM_MIPS_RS3_LE]    = 'MIPS R4000 big-endian'
+    machine_code[elf.EM_PARISC]         = 'HPPA'
+    machine_code[elf.EM_SPARC32PLUS]    = 'Sparc v8+'
+    machine_code[elf.EM_960]            = 'Intel 80960'
+    machine_code[elf.EM_PPC]            = 'PowerPC'
+    machine_code[elf.EM_PPC64]          = 'PowerPC64'
+    machine_code[elf.EM_V800]           = 'NEC V800'
+    machine_code[elf.EM_FR20]           = 'Fujitsu FR20'
+    machine_code[elf.EM_RH32]           = 'TRW RH32'
+    machine_code[elf.EM_ARM]            = 'ARM'
+    machine_code[elf.EM_FAKE_ALPHA]     = 'Digital Alpha (old)'
+    machine_code[elf.EM_SH]             = 'Renesas / SuperH SH'
+    machine_code[elf.EM_SPARCV9]        = 'Sparc v9'
+    machine_code[elf.EM_TRICORE]        = 'Siemens Tricore'
+    machine_code[elf.EM_ARC]            = 'ARC'
+    machine_code[elf.EM_H8_300]         = 'Renesas H8/300'
+    machine_code[elf.EM_H8_300H]        = 'Renesas H8/300H'
+    machine_code[elf.EM_H8S]            = 'Renesas H8S'
+    machine_code[elf.EM_H8_500]         = 'Renesas H8/500'
+    machine_code[elf.EM_IA_64]          = 'Intel IA-64'
+    machine_code[elf.EM_MIPS_X]         = 'Stanford MIPS-X'
+    machine_code[elf.EM_COLDFIRE]       = 'Motorola Coldfire'
+    print("  Machine:                           %s"%expand_code(machine_code, e.Ehdr.machine))
+    """
+    TO BE CONTINUED
+                ("version","u32"),
+                ("entry","ptr"),
+                ("phoff","ptr"),
+                ("shoff","ptr"),
+                ("flags","u32"),
+                ("ehsize","u16"),
+                ("phentsize","u16"),
+                ("phnum","u16"),
+                ("shentsize","u16"),
+                ("shnum","u16"),
+                ("shstrndx","u16") ]
+    """
+
 def display_program_headers(e):
     # Output format similar to readelf -l
     if len(e.ph.phlist) == 0:
@@ -70,7 +148,9 @@ def display_reloc(e, sh):
         machine = elf.constants['EM'][e.Ehdr.machine]
         if machine == 'SPARC32PLUS': machine = 'SPARC'
         if machine == 'SPARCV9':     machine = 'SPARC'
-        if hasattr(r, 'type1'):
+        if not machine in elf.constants['R']:
+            type = '%d aka. %#x' % (r.type, r.type)
+        elif hasattr(r, 'type1'):
             # MIPS64
             type = 'R_%s_%s' % (machine, elf.constants['R'][machine][r.type1])
         else:
@@ -175,11 +255,12 @@ def display_symbols(e, table_name):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument('-H', dest='options', action='append_const', const='headers',  help='Headers')
     parser.add_argument('-S', dest='options', action='append_const', const='sections', help='Sections')
     parser.add_argument('-r', dest='options', action='append_const', const='reltab',   help='Relocation sections')
     parser.add_argument('-s', dest='options', action='append_const', const='symtab',   help='Symbol table')
     parser.add_argument('-d', dest='options', action='append_const', const='dynsym',   help='Dynamic symbols')
-    parser.add_argument('-l', dest='options', action='append_const', const='program',   help='Program headers')
+    parser.add_argument('-l', dest='options', action='append_const', const='program',  help='Program headers')
     parser.add_argument('-g', dest='options', action='append_const', const='groups',   help='Section groups')
     parser.add_argument('file', nargs='+', help='ELF file(s)')
     args = parser.parse_args()
@@ -191,6 +272,8 @@ if __name__ == '__main__':
             print("\nFile: %s" % file)
         raw = open(file, 'rb').read()
         e = elf_init.ELF(raw)
+        if 'headers' in args.options:
+            display_headers(e)
         if 'sections' in args.options:
             display_sections(e)
         if 'reltab' in args.options:
