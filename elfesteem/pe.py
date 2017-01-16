@@ -212,7 +212,7 @@ class SHList(CStruct):
     def __repr__(self):
         rep = ["#  section         offset   size   addr     flags   rawsize  "]
         for i,s in enumerate(self):
-            l = "%-15s"%s.name.strip(data_null)
+            l = "%-15s"%repr(s.name.strip(data_null))
             l+="%(offset)08x %(size)06x %(addr)08x %(flags)08x %(rawsize)08x" % s
             l = ("%2i " % i)+ l
             rep.append(l)
@@ -225,6 +225,25 @@ class SHList(CStruct):
 
     def append(self, s):
         self.shlist.append(s)
+
+class ShdrTICOFF(Shdr):
+    _fields = [ ("name_data","8s"),
+                ("size","u32"),
+                ("addr","u32"),
+                ("rawsize","u32"), # in 2-byte words
+                ("offset","u32"),
+                ("pointertorelocations","u32"),
+                ("pointertolinenumbers","u32"),
+                ("numberofrelocations","u32"),
+                ("numberoflinenumbers","u32"),
+                ("flags","u32"),
+                ("reserved","u16"),
+                ("mem_page","u16"),
+              ]
+
+class SHListTICOFF(SHList):
+    _fields = [ ("shlist", "ShdrTICOFF",
+                 lambda c:c.parent_head.Coffhdr.numberofsections)]
 
 class Rva(CStruct):
     _fields = [ ("rva","ptr"),

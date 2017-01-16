@@ -725,12 +725,34 @@ class PE(object):
         self.NThdr.ImageBase = imgbase
 
 class Coff(PE):
-    def parse_content(self):
-        self.Coffhdr = Coffhdr(self, 0)
-        self.Opthdr = Opthdr(self, pe.Coffhdr._size)
-        self.SHList = SHList(self, pe.Coffhdr._size+self.Coffhdr.Coffhdr.sizeofoptionalheader)
-
-        self.Symbols = ClassArray(self, WSymb, self.Coffhdr.Coffhdr.pointertosymboltable, self.Coffhdr.Coffhdr.numberofsymbols)
+    def parse_content(self,
+                      parse_resources = True,
+                      parse_delay = True,
+                      parse_reloc = True):
+        # COFF for Texas Instruments
+        # Cf. http://www.ti.com/lit/an/spraao8/spraao8.pdf
+        # and https://gist.github.com/eliotb/1073231
+        of = 0
+        self._sex = 0
+        self._wsize = 32
+        self.Coffhdr, l = pe.Coffhdr.unpack_l(self.content,
+                                              of,
+                                              self)
+        of += l
+        m = struct.unpack('H', self.content[of:of+2])[0]
+        of += 2
+        # Consistency check
+        {
+            0x97: 'TMS470',
+            0x98: 'TMS320C5400',
+            0x99: 'TMS320C6000',
+            0x9C: 'TMS320C5500',
+            0x9D: 'TMS320C2800',
+            0xA0: 'MSP430',
+            0xA1: 'TMS320C5500+',
+        }[m]
+        of += self.Coffhdr.sizeofoptionalheader
+        self.SHList = pe.SHListTICOFF.unpack(self.content, of, self)
 
 
 
