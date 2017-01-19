@@ -75,7 +75,11 @@ wsize = parent.wsize)
         if type(data) != str: data = data.pack()
         return data
     def get_linksection(self):
-        return self.parent[self.sh.link]
+        try:
+            linksection = self.parent[self.sh.link]
+        except IndexError:
+            linksection = None
+        return linksection
     def set_linksection(self, val):
         if isinstance(val, Section):
             val = self.parent.shlist.find(val)
@@ -341,7 +345,13 @@ class SHList(object):
             shstr = parent[of1:of2]
             self.shlist.append( Section.create(self, shstr=shstr) )
             of1=of2
+        # The shstrtab section is not always valid :-(
         self._shstrtab = self.shlist[ehdr.shstrndx]
+        if not isinstance(self._shstrtab, StrTable):
+            class NoStrTab(object):
+                def get_name(self, idx):
+                    return "<no-name>"
+            self._shstrtab = NoStrTab()
 
         for s in self.shlist:
             if not isinstance(s, NoBitsSection):
@@ -352,7 +362,7 @@ class SHList(object):
         done = []
         while todo:
             s = todo.pop(0)
-            if ( (s.linksection == zero or s.linksection in done)
+            if ( (s.linksection in done + [zero, None])
                  and  (s.infosection in  [zero, None] or s.infosection in done)):
                 done.append(s)
                 s.parse_content()
@@ -790,9 +800,9 @@ class ELF(object):
             log.warn("No section (e.g. core file)")
         else:
             if self.sh[self.Ehdr.shstrndx].sh.type != elf.SHT_STRTAB:
-                raise ValueError("Section of index shstrndx is of type %d instead of %d"%(self.sh[self.Ehdr.shstrndx].sh.type, elf.SHT_STRTAB))
-            if self.sh[self.Ehdr.shstrndx].sh.name != '.shstrtab':
-                raise ValueError("Section of index shstrndx is of name '%s' instead of '%s'"%(self.sh[self.Ehdr.shstrndx].sh.name, '.shstrtab'))
+                log.error("Section of index shstrndx is of type %d instead of %d"%(self.sh[self.Ehdr.shstrndx].sh.type, elf.SHT_STRTAB))
+            elif self.sh[self.Ehdr.shstrndx].sh.name != '.shstrtab':
+                log.error("Section of index shstrndx is of name '%s' instead of '%s'"%(self.sh[self.Ehdr.shstrndx].sh.name, '.shstrtab'))
 
     def __str__(self):
         raise AttributeError("Use pack() instead of str()")
