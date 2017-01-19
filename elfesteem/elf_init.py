@@ -203,6 +203,8 @@ class Dynamic(Section):
         self.dyntab = []
         self.dynamic = {}
         sz = self.sh.entsize
+        if sz == 0:
+            sz = self.wsize // 4
         idx = 0
         while len(c) > sz*idx:
             s = c[sz*idx:sz*(idx+1)]
@@ -744,8 +746,9 @@ class ELF(object):
 
     content = ContentManager()
     def parse_content(self):
-        h = self.content[:8]
-        if type(h) == str: h = struct.unpack("B"*8, h)
+        h = struct.unpack("B"*8, self.content[:8])
+        if h[:4] != ( 0x7f,0x45,0x4c,0x46 ): # magic number, \x7fELF
+            raise ValueError("Not an ELF")
         self.wsize = h[4]*32
         self.sex   = {1:'<', 2:'>'} [h[5]]
         self.Ehdr = elf.Ehdr(parent=self, content=self.content)

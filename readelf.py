@@ -123,6 +123,59 @@ def display_program_headers(e):
             res += s.sh.name
         print(res)
 
+def display_dynamic(e):
+    machine = elf.constants['EM'][e.Ehdr.machine]
+    for i, sh in enumerate(e.sh):
+        if sh.sh.type != elf.SHT_DYNAMIC:
+            continue
+        if e.wsize == 32:
+            header = "  Tag        Type                         Name/Value"
+            format = "%#010x %-28s  %s"
+            dyntab = sh.dyntab[:-2]
+        elif e.wsize == 64:
+            header = "  Tag        Type                         Name/Value"
+            format = "%#018x %-20s  %s"
+            dyntab = sh.dyntab[:-1]
+        print("\nDynamic section at offset %#x contains %d entries:" % (sh.sh.offset, len(dyntab)))
+        print(header)
+        for d in dyntab:
+            type = elf.constants['DT'].get(machine, {}).get(d.type, None)
+            if type is None: type = elf.constants['DT'].get(d.type, None)
+            else: type = machine + '_' + type
+            if type in ('NEEDED',):
+                name = 'Shared library: [%s]' % d.name
+            elif type in ('STRSZ','SYMENT','RELSZ','RELENT','PLTRELSZ','RELASZ'):
+                name = '%d (bytes)' % d.name
+            elif type in ('PLTGOT','HASH','STRTAB','SYMTAB','INIT','FINI','REL',
+                          'JMPREL','DEBUG','RELA',
+                          'CHECKSUM','VERNEED',
+                          'MIPS_BASE_ADDRESS','MIPS_LIBLIST','MIPS_GOTSYM',
+                          'MIPS_HIDDEN_GOTIDX','MIPS_PROTECTED_GOTIDX',
+                          'MIPS_LOCAL_GOTIDX','MIPS_LOCALPAGE_GOTIDX',
+                          'MIPS_SYMBOL_LIB','MIPS_MSYM','MIPS_CONFLICT',
+                          'MIPS_RLD_MAP','MIPS_OPTIONS',
+                          'MIPS_INTERFACE','MIPS_INTERFACE_SIZE'):
+                name = '%#x' % d.name
+            elif type == 'PLTREL':
+                name = elf.constants['DT'].get(d.name, d.name)
+            elif type == 'MIPS_FLAGS':
+                if d.name == 0:
+                    name = 'NONE'
+                else:
+                    flags = ('QUICKSTART', 'NOTPOT', 'NO_LIBRARY_REPLACEMENT',
+                             'NO_MOVE', 'SGI_ONLY', 'GUARANTEE_INIT',
+                             'DELTA_C_PLUS_PLUS', 'GUARANTEE_START_INIT',
+                             'PIXIE', 'DEFAULT_DELAY_LOAD', 'REQUICKSTART',
+                             'REQUICKSTARTED', 'CORD', 'NO_UNRES_UNDEF',
+                             'RLD_ORDER_SAFE')
+                    name = ' '.join([ f for (f,b)
+                                        in zip(flags,reversed(bin(d.name)[2:]))
+                                        if b == '1' ])
+            else:
+                name = d.name
+            output = format%(d.type, '('+type+')', name)
+            print(output)
+
 def display_reloc(e, sh):
     # Output format similar to readelf -r
     if not 'rel' in dir(sh):
@@ -259,7 +312,8 @@ if __name__ == '__main__':
     parser.add_argument('-S', dest='options', action='append_const', const='sections', help='Sections')
     parser.add_argument('-r', dest='options', action='append_const', const='reltab',   help='Relocation sections')
     parser.add_argument('-s', dest='options', action='append_const', const='symtab',   help='Symbol table')
-    parser.add_argument('-d', dest='options', action='append_const', const='dynsym',   help='Dynamic symbols')
+    parser.add_argument('-D', dest='options', action='append_const', const='dynsym',   help='Dynamic symbols')
+    parser.add_argument('-d', dest='options', action='append_const', const='dynamic',  help='Dynamic section')
     parser.add_argument('-l', dest='options', action='append_const', const='program',  help='Program headers')
     parser.add_argument('-g', dest='options', action='append_const', const='groups',   help='Section groups')
     parser.add_argument('file', nargs='+', help='ELF file(s)')
@@ -283,6 +337,8 @@ if __name__ == '__main__':
             display_symbols(e, 'symtab')
         if 'dynsym' in args.options:
             display_symbols(e, 'dynsym')
+        if 'dynamic' in args.options:
+            display_dynamic(e)
         if 'program' in args.options:
             display_program_headers(e)
         if 'groups' in args.options:

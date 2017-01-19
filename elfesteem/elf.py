@@ -683,7 +683,7 @@ DT_POSFLAG_1    = 0x6ffffdfd      # Flags for DT_* entries, effecting the follow
 DT_SYMINSZ      = 0x6ffffdfe      # Size of syminfo table (in bytes)
 DT_SYMINENT     = 0x6ffffdff      # Entry size of syminfo
 DT_VALRNGHI     = 0x6ffffdff
-DT_VALNUM = 12
+#DT_VALNUM = 12
 
 # DT_* entries which fall between DT_ADDRRNGHI & DT_ADDRRNGLO use the
 # Dyn.d_un.d_ptr field of the Elf*_Dyn structure.
@@ -700,7 +700,7 @@ DT_PLTPAD       = 0x6ffffefd      # PLT padding.
 DT_MOVETAB      = 0x6ffffefe      # Move table.
 DT_SYMINFO      = 0x6ffffeff      # Syminfo table.
 DT_ADDRRNGHI    = 0x6ffffeff
-DT_ADDRNUM = 10
+#DT_ADDRNUM = 10
 
 # The versioning entry types.  The next are defined as part of the
 # GNU extension.
@@ -715,13 +715,14 @@ DT_VERDEF       = 0x6ffffffc      # Address of version definition table
 DT_VERDEFNUM    = 0x6ffffffd      # Number of version definitions
 DT_VERNEED      = 0x6ffffffe      # Address of table with needed versions
 DT_VERNEEDNUM   = 0x6fffffff      # Number of needed versions
-DT_VERSIONTAGNUM = 16
+#DT_VERSIONTAGNUM = 16
 
 # Sun added these machine-independent extensions in the "processor-specific"
 # range.  Be compatible.
 DT_AUXILIARY    = 0x7ffffffd      # Shared object to load before self
 DT_FILTER       = 0x7fffffff      # Shared object to get values from
-DT_EXTRANUM     = 3
+#DT_EXTRANUM     = 3
+
 
 # Values of `d_un.d_val' in the DT_FLAGS entry.
 DF_ORIGIN       = 0x00000001      # Object may use DF_ORIGIN
@@ -758,6 +759,54 @@ DTF_1_CONFEXP   = 0x00000002
 DF_P1_LAZYLOAD  = 0x00000001      # Lazyload following object.
 DF_P1_GROUPPERM = 0x00000002      # Symbols from next object are not generally available.
 
+
+# MIPS specific dynamic array tags.
+
+DT_MIPS_RLD_VERSION   = 0x70000001 # 32 bit version number for runtime linker interface.
+DT_MIPS_TIME_STAMP    = 0x70000002 # Time stamp.
+DT_MIPS_ICHECKSUM     = 0x70000003 # Checksum of external strings and common sizes.
+DT_MIPS_IVERSION      = 0x70000004 # Index of version string in string table.
+DT_MIPS_FLAGS         = 0x70000005 # 32 bits of flags.
+DT_MIPS_BASE_ADDRESS  = 0x70000006 # Base address of the segment.
+DT_MIPS_MSYM          = 0x70000007
+DT_MIPS_CONFLICT      = 0x70000008 # Address of .conflict section.
+DT_MIPS_LIBLIST       = 0x70000009 # Address of .liblist section.
+DT_MIPS_LOCAL_GOTNO   = 0x7000000a # Number of local global offset table entries.
+DT_MIPS_CONFLICTNO    = 0x7000000b # Number of entries in the .conflict section.
+DT_MIPS_LIBLISTNO     = 0x70000010 # Number of entries in the .liblist section.
+DT_MIPS_SYMTABNO      = 0x70000011 # Number of entries in the .dynsym section.
+DT_MIPS_UNREFEXTNO    = 0x70000012 # Index of first external dynamic symbol not referenced locally.
+DT_MIPS_GOTSYM        = 0x70000013 # Index of first dynamic symbol in global offset table.
+DT_MIPS_HIPAGENO      = 0x70000014 # Number of page table entries in global offset table.
+DT_MIPS_RLD_MAP       = 0x70000016 # Address of run time loader map, used for debugging.
+DT_MIPS_DELTA_CLASS   = 0x70000017 # Delta C++ class definition.
+DT_MIPS_DELTA_CLASS_NO= 0x70000018 # Number of entries in DT_MIPS_DELTA_CLASS.
+DT_MIPS_DELTA_INSTANCE= 0x70000019 # Delta C++ class instances.
+DT_MIPS_DELTA_INSTANCE_NO     = 0x7000001a # Number of entries in DT_MIPS_DELTA_INSTANCE.
+DT_MIPS_DELTA_RELOC   = 0x7000001b # Delta relocations.
+DT_MIPS_DELTA_RELOC_NO= 0x7000001c # Number of entries in DT_MIPS_DELTA_RELOC.
+DT_MIPS_DELTA_SYM     = 0x7000001d # Delta symbols that Delta relocations refer to.
+DT_MIPS_DELTA_SYM_NO  = 0x7000001e # Number of entries in DT_MIPS_DELTA_SYM.
+DT_MIPS_DELTA_CLASSSYM= 0x70000020 # Delta symbols that hold class declarations.
+DT_MIPS_DELTA_CLASSSYM_NO     = 0x70000021 # Number of entries in DT_MIPS_DELTA_CLASSSYM.
+DT_MIPS_CXX_FLAGS     = 0x70000022 # Flags indicating information about C++ flavor.
+DT_MIPS_PIXIE_INIT    = 0x70000023 # Pixie information (???).
+DT_MIPS_SYMBOL_LIB    = 0x70000024 # Address of .MIPS.symlib
+DT_MIPS_LOCALPAGE_GOTIDX      = 0x70000025 # The GOT index of the first PTE for a segment
+DT_MIPS_LOCAL_GOTIDX  = 0x70000026 # The GOT index of the first PTE for a local symbol
+DT_MIPS_HIDDEN_GOTIDX = 0x70000027 # The GOT index of the first PTE for a hidden symbol
+DT_MIPS_PROTECTED_GOTIDX      = 0x70000028 # The GOT index of the first PTE for a protected symbol
+DT_MIPS_OPTIONS       = 0x70000029 # Address of `.MIPS.options'.
+DT_MIPS_INTERFACE     = 0x7000002a # Address of `.interface'.
+DT_MIPS_DYNSTR_ALIGN  = 0x7000002b # ???
+DT_MIPS_INTERFACE_SIZE= 0x7000002c # Size of the .interface section.
+DT_MIPS_RLD_TEXT_RESOLVE_ADDR = 0x7000002d # Size of rld_text_resolve function stored in the GOT.
+DT_MIPS_PERF_SUFFIX   = 0x7000002e # Default suffix of DSO to be added by rld on dlopen() calls.
+DT_MIPS_COMPACT_SIZE  = 0x7000002f # Size of compact relocation section (O32).
+DT_MIPS_GP_VALUE      = 0x70000030 # GP value for auxiliary GOTs.
+DT_MIPS_AUX_DYNAMIC   = 0x70000031 # Address of auxiliary .dynamic.
+DT_MIPS_PLTGOT        = 0x70000032 # Address of the base of the PLTGOT.
+DT_MIPS_RWPLT         = 0x70000034 # Points to the base of a writable PLT.
 
 # Relocs 
 
@@ -1823,7 +1872,7 @@ def enumerate_constants(constants, globs):
             if not globs[val] in constants[type]:
                 constants[type][globs[val]] = val[len(type)+1:]
     for subtype in constants['EM'].values():
-        for pfx in ('R', 'SHT'):
+        for pfx in ('R', 'SHT', 'DT'):
             l = len(subtype)+len(pfx)+2
             for val in filter(lambda x:x[:l]==pfx+"_"+subtype+"_", globs.keys()):
                 if not subtype in constants[pfx]:
@@ -1838,6 +1887,7 @@ constants = {
   'EM'  : {}, # e_machine
   'ET'  : {}, # e_type
   'PT'  : {}, # p_type
+  'DT'  : {}, # dynamic entry type
   'R'   : {}, # special case, two levels of dictionary
   }
 enumerate_constants(constants, globals())
