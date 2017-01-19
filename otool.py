@@ -37,7 +37,7 @@ def print_lc(e):
             if name in ["vmaddr", "vmsize"]:
                 if lc.cmd == macho.LC_SEGMENT_64: value = "0x%016x" % value
                 else:                             value = "0x%08x" % value
-            elif name in ["maxprot", "initprot", "cksum"]:
+            elif name in ["maxprot", "initprot", "cksum", "header addr"]:
                 value = "0x%08x" % value
             elif name == "flags":
                 value = "0x%x" % value
@@ -51,6 +51,9 @@ def print_lc(e):
                 shift = 0
                 name = name[:-8]
                 value = "version " + split_integer(value, 8, 3)
+            elif name == "pad_segname":
+                name = "segname"
+                value = value.rstrip('\0')
             elif lc.cmd == macho.LC_VERSION_MIN_MACOSX:
                 shift = 2
                 value = split_integer(value, 8, 3, truncate=1)
@@ -63,6 +66,7 @@ def print_lc(e):
             elif lc.cmd == macho.LC_UNIXTHREAD:
                 shift = 4
                 break
+
             lc_value.append((name, value))
         if lc.cmd == macho.LC_UUID:
             lc_value.append(("uuid", "%.8X-%.4X-%.4X-%.4X-%.4X%.8X" % lc.uuid))
@@ -133,7 +137,7 @@ def print_lc(e):
                 print("   r30  0x%016x r31 0x%016x cr   0x%08x" %(lc.data[32], lc.data[33], lc.data[34]))
                 print("   xer  0x%016x lr  0x%016x ctr  0x%016x" %(lc.data[35], lc.data[36], lc.data[37]))
                 print("vrsave  0x%08x        srr0 0x%016x srr1 0x%016x" %(lc.data[38], lc.data[0], lc.data[1]))
-            elif e.Mhdr.cputype == macho.CPU_TYPE_I386:
+            elif e.Mhdr.cputype == macho.CPU_TYPE_I386 and lc.flavor == 1:
                 print("     flavor i386_THREAD_STATE")
                 print("      count i386_THREAD_STATE_COUNT")
                 print("\t    eax 0x%08x ebx    0x%08x ecx 0x%08x edx 0x%08x" %(lc.data[0], lc.data[1],lc.data[2], lc.data[3]))
@@ -159,6 +163,12 @@ def print_lc(e):
                 print("\t    r8  0x%08x r9     0x%08x r10 0x%08x r11 0x%08x" %(lc.data[8], lc.data[9],lc.data[10],lc.data[11]))
                 print("\t    r12 0x%08x sp     0x%08x lr  0x%08x pc  0x%08x" %(lc.data[12], lc.data[13],lc.data[14],lc.data[15]))
                 print("\t   cpsr 0x%08x" %lc.data[16])
+            else:
+                print("     flavor %d (unknown)" % lc.flavor)
+                print("      count %d" % lc.count)
+                print("      state:")
+                for k in range(lc.count//8):
+                    print("".join(["%08x "%_ for _ in lc.data[8*k:8*(k+1)]]))
 
         elif lc.cmd == macho.LC_LINKER_OPTION:
             for i, s in enumerate(lc.strings):

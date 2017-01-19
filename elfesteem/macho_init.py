@@ -11,6 +11,13 @@ from elfesteem import intervals
 import copy
 #import traceback
 
+import logging
+log = logging.getLogger("mach-o")
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
+log.addHandler(console_handler)
+log.setLevel(logging.WARN)
+
 def inherit_sex_wsize(self, parent, kargs):
     for f in ['sex', 'wsize']:
         if f in kargs:
@@ -308,6 +315,14 @@ class LoaderDylinker(LoaderLib):
     lht = macho.LC_LOAD_DYLINKER
     lhc = macho.dylinker_command
 
+class LoaderIDfvmLib(LoaderLib):
+    lht = macho.LC_IDFVMLIB
+    lhc = macho.fvmlib_command
+
+class LoaderLOADfvmLib(LoaderLib):
+    lht = macho.LC_LOADFVMLIB
+    lhc = macho.fvmlib_command
+
 class LoaderUUID(Loader):
     lht = macho.LC_UUID
     lhc = None
@@ -454,11 +469,11 @@ class LoaderUnixthread(Loader):
         else:
             flavor, count, self.regsize = threadStateParameters[self.cputype]
             if (self.lhc.flavor, self.lhc.count) != (flavor, count):
-                print("THREAD_STATE %d COUNT %d" % (self.lhc.flavor, self.lhc.count))
-                print("Wanted %d %d" % (flavor, count))
-                raise ValueError("Inconsistent values for CPU %d" % self.cputype)
+                log.warn("Inconsistent values (THREAD_STATE, COUNT) for CPU %d"
+                    % self.cputype)
+                log.warn("  observed (%d, %d) ; wanted (%d, %d)"
+                    % (self.lhc.flavor, self.lhc.count, flavor, count))
             data = self.content[8:8+(self.lhc.count)*4]
-        #print "THREAD_STATE %d COUNT %d" % (self.lhc.flavor, self.lhc.count)
         self.packstring = "%s%d%s" % (
             self.sex,
             int(self.lhc.count/self.regsize),

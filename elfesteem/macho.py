@@ -548,6 +548,11 @@ class unixthread_command(CStruct):
     _fields = [ ("flavor","u32"),
                 ("count","u32")]
 
+class fvmlib_command(CStruct):
+    _fields = [ ("stroffset","u32"),
+                ("minor version","u32"),
+                ("header addr","u32")]
+
 class twolevel_hints_command(CStruct):
     _fields = [ ("offset","u32"),
                 ("nhints","u32")]
