@@ -127,6 +127,51 @@ class Shdr(CStruct):
     def set_name(self, value):
         TODO
     name = property(get_name, set_name)
+    # Redefine _fields for some non-standard cases
+    # This way of doing is a dirty hack, until we know more about what
+    # COFF section entries should really be like
+    def set_fields_reset(self):
+        if hasattr(self, '_fields_orig'): self._fields = self._fields_orig
+    set_fields_reset = classmethod(set_fields_reset)
+    def set_fields_TI(self):
+        # 48 bytes long, when the standard COFF is 40 bytes long
+        self._fields_orig = self._fields
+        self._fields = [
+                ("name_data","8s"),
+                ("size","u32"),
+                ("addr","u32"),
+                ("rawsize","u32"), # in 2-byte words
+                ("offset","u32"),
+                ("pointertorelocations","u32"),
+                ("pointertolinenumbers","u32"),
+                ("numberofrelocations","u32"),
+                ("numberoflinenumbers","u32"),
+                ("flags","u32"),
+                ("reserved","u16"),
+                ("mem_page","u16"),
+              ]
+    set_fields_TI = classmethod(set_fields_TI)
+    def set_fields_ALPHA(self):
+        # 64 bytes long, when the standard COFF is 40 bytes long
+        self._fields_orig = self._fields
+        self._fields = [
+                ("name_data","8s"),
+                ("addr","u32"),
+                ("size","u32"),
+                ("allone","u32"),
+                ("flags2","u32"),
+                ("rawsize","u32"),
+                ("dummy0","u32"),
+                ("offset","u32"),
+                ("dummy1","u32"),
+                ("dummy2","u32"),
+                ("dummy3","u32"),
+                ("dummy4","u32"),
+                ("dummy5","u32"),
+                ("dummy6","u32"),
+                ("flags","u32"),
+              ]
+    set_fields_ALPHA = classmethod(set_fields_ALPHA)
 
 
 class SHList(CStruct):
@@ -225,25 +270,6 @@ class SHList(CStruct):
 
     def append(self, s):
         self.shlist.append(s)
-
-class ShdrTICOFF(Shdr):
-    _fields = [ ("name_data","8s"),
-                ("size","u32"),
-                ("addr","u32"),
-                ("rawsize","u32"), # in 2-byte words
-                ("offset","u32"),
-                ("pointertorelocations","u32"),
-                ("pointertolinenumbers","u32"),
-                ("numberofrelocations","u32"),
-                ("numberoflinenumbers","u32"),
-                ("flags","u32"),
-                ("reserved","u16"),
-                ("mem_page","u16"),
-              ]
-
-class SHListTICOFF(SHList):
-    _fields = [ ("shlist", "ShdrTICOFF",
-                 lambda c:c.parent_head.Coffhdr.numberofsections)]
 
 class Rva(CStruct):
     _fields = [ ("rva","ptr"),
@@ -1669,12 +1695,24 @@ RT = {
 # plus the ones known by pefile.py
 IMAGE_FILE_MACHINE_UNKNOWN   = 0x0
 IMAGE_FILE_MACHINE_AM33      = 0x13
+IMAGE_FILE_MACHINE_TI        = 0xC2
+IMAGE_FILE_MACHINE_MIPSIII   = 0x142
+IMAGE_FILE_MACHINE_iAPX286SMALL   = 0x14A
 IMAGE_FILE_MACHINE_I386      = 0x14C
+IMAGE_FILE_MACHINE_mc68k     = 0x150
+IMAGE_FILE_MACHINE_iAPX286LARGE   = 0x152
+IMAGE_FILE_MACHINE_MIPSEB    = 0x160
 IMAGE_FILE_MACHINE_R3000     = 0x162
 IMAGE_FILE_MACHINE_R4000     = 0x166
 IMAGE_FILE_MACHINE_R10000    = 0x168
 IMAGE_FILE_MACHINE_WCEMIPSV2 = 0x169 
+IMAGE_FILE_MACHINE_WE32000   = 0x170
+IMAGE_FILE_MACHINE_I386_BIS  = 0x175
+IMAGE_FILE_MACHINE_CLIPPER   = 0x17F
+IMAGE_FILE_MACHINE_ALPHA_BIS = 0x183
 IMAGE_FILE_MACHINE_ALPHA     = 0x184
+IMAGE_FILE_MACHINE_APOLLOa88k= 0x194
+IMAGE_FILE_MACHINE_APOLLOm68k= 0x197
 IMAGE_FILE_MACHINE_SH3       = 0x1A2
 IMAGE_FILE_MACHINE_SH3DSP    = 0x1A3
 IMAGE_FILE_MACHINE_SH3E      = 0x1A4

@@ -724,35 +724,64 @@ class PE(object):
                 self.drva[off:off+4] = struct.pack('I', v & 0xFFFFFFFF)
         self.NThdr.ImageBase = imgbase
 
+# The COFF file format happens to have many variants,
+# quite different from the COFF embedded in PE files...
 class Coff(PE):
     def parse_content(self,
                       parse_resources = True,
                       parse_delay = True,
                       parse_reloc = True):
-        # COFF for Texas Instruments
-        # Cf. http://www.ti.com/lit/an/spraao8/spraao8.pdf
-        # and https://gist.github.com/eliotb/1073231
         of = 0
-        self._sex = 0
         self._wsize = 32
+        # sizeofoptionalheader should be 28 for executable, 0 for other
+        # it may be 56 for ECOFF, 44 for Apollo m68k COFF, 36 for CLIPPER COFF,
+        # 144 for ALPHA, ...
+        # This can be used to detect endianess
+        sizeofoptionalheader = struct.unpack("BB", self.content[16:18])
+        if   sizeofoptionalheader == (28, 0): self._sex = 0
+        elif sizeofoptionalheader == (0, 28): self._sex = 1
+        elif sizeofoptionalheader == (0, 44): self._sex = 1
+        elif sizeofoptionalheader == (0, 56): self._sex = 1
+        else:                                 self._sex = 0
         self.Coffhdr, l = pe.Coffhdr.unpack_l(self.content,
                                               of,
                                               self)
+        if self.Coffhdr.sizeofoptionalheader not in (0, 28, 36, 44, 56, 144):
+            log.debug("COFF %r", self.Coffhdr)
         of += l
-        m = struct.unpack('H', self.content[of:of+2])[0]
-        of += 2
-        # Consistency check
-        {
-            0x97: 'TMS470',
-            0x98: 'TMS320C5400',
-            0x99: 'TMS320C6000',
-            0x9C: 'TMS320C5500',
-            0x9D: 'TMS320C2800',
-            0xA0: 'MSP430',
-            0xA1: 'TMS320C5500+',
-        }[m]
-        of += self.Coffhdr.sizeofoptionalheader
-        self.SHList = pe.SHListTICOFF.unpack(self.content, of, self)
+        log.debug("MACHINE %2d %s",
+            self.Coffhdr.sizeofoptionalheader,
+            pe.constants['IMAGE_FILE_MACHINE'].get(self.Coffhdr.machine,
+                                             '%#x'%self.Coffhdr.machine),
+            )
+        if   self.Coffhdr.machine == pe.IMAGE_FILE_MACHINE_TI:
+            m = struct.unpack('H', self.content[of:of+2])[0]
+            self.CPU = {
+                # COFF for Texas Instruments
+                # Cf. http://www.ti.com/lit/an/spraao8/spraao8.pdf
+                # and https://gist.github.com/eliotb/1073231
+                0x97: 'TMS470',
+                0x98: 'TMS320C5400',
+                0x99: 'TMS320C6000',
+                0x9C: 'TMS320C5500',
+                0x9D: 'TMS320C2800',
+                0xA0: 'MSP430',
+                0xA1: 'TMS320C5500+',
+                }.get(m, 'unknown')
+            of += 2
+            of += self.Coffhdr.sizeofoptionalheader
+            pe.Shdr.set_fields_TI()
+        elif self.Coffhdr.machine == pe.IMAGE_FILE_MACHINE_ALPHA_BIS:
+            of += 84
+            pe.Shdr.set_fields_ALPHA()
+        else:
+            of += self.Coffhdr.sizeofoptionalheader
+        if of + self.Coffhdr.numberofsections * 40 > len(self.content):
+            # Probably not a COFF!
+            self.SHList = []
+        else:
+            self.SHList = pe.SHList.unpack(self.content, of, self)
+        pe.Shdr.set_fields_reset()
 
 
 

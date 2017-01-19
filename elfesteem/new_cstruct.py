@@ -104,6 +104,7 @@ class Cstruct_Metaclass(type):
         of1 = off
         for field in c._fields:
             cpt = None
+            of2 = of1
             if len(field) == 2:
                 fname, ffmt = field
             elif len(field) == 3:
