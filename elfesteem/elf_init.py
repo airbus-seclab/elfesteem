@@ -413,15 +413,36 @@ class ProgramHeader(object):
         self.parent = parent
         inherit_sex_wsize(self, parent, kargs)
         self.ph = PHtype(parent=self, content=phstr)
-        self.shlist = []
+        self.shlist = [] # based on readelf's "Section to Segment mapping"
+        self.shlist_partial = [] # These are other sections of interest
+        ph_file_end = self.ph.offset+self.ph.filesz
+        ph_mem_end  = self.ph.vaddr+self.ph.memsz
         for s in self.parent.parent.sh:
             if isinstance(s, NullSection):
                 continue
-            if ( (   isinstance(s,NoBitsSection)
-                     and s.sh.offset == self.ph.offset+self.ph.filesz )
-                 or  self.ph.offset <= s.sh.offset < self.ph.offset+self.ph.filesz ):
-                s.phparent = self
-                self.shlist.append(s)
+            if self.ph.type != elf.PT_TLS and (
+               (s.sh.flags & elf.SHF_TLS) and s.sh.type == elf.SHT_NOBITS):
+                # .tbss is special.  It doesn't contribute memory space
+                # to normal segments.
+                continue
+            if s.sh.flags & elf.SHF_ALLOC:
+                if   (self.ph.vaddr <= s.sh.addr) and \
+                     (s.sh.addr+s.sh.size <= ph_mem_end):
+                    s.phparent = self
+                    self.shlist.append(s)
+            else:
+                if   (self.ph.offset <= s.sh.offset) and \
+                     (s.sh.offset+s.sh.size <= ph_file_end):
+                    s.phparent = self
+                    self.shlist.append(s)
+            if s in self.shlist:
+                continue
+            if   self.ph.offset <= s.sh.offset           < ph_file_end:
+                # Section start in Segment
+                self.shlist_partial.append(s)
+            elif self.ph.offset < s.sh.offset+s.sh.size <= ph_file_end:
+                # Section end in Segment
+                self.shlist_partial.append(s)
     def resize(self, sec, diff):
         self.ph.filesz += diff
         self.ph.memsz += diff
