@@ -173,6 +173,9 @@ class Dyn64(Dyn32):
     _fields = [ ("type","u64"),
                 ("name_idx","u64") ]
 
+
+no_show = {} # Values that will not appear in 'constants'
+
 # Legal values for e_ident (identification indexes)
 
 EI_MAG0 =       0       # File identification
@@ -444,6 +447,7 @@ SHT_GNU_HASH =      0x6ffffff6
 SHT_GNU_LIBLIST =   0x6ffffff7    # Prelink library list
 SHT_CHECKSUM =      0x6ffffff8    # Checksum for DSO content.
 SHT_LOSUNW =        0x6ffffffa    # Sun-specific low bound.
+no_show['SHT_LOSUNW'] = True
 SHT_SUNW_move =     0x6ffffffa 
 SHT_SUNW_COMDAT =   0x6ffffffb 
 SHT_SUNW_syminfo =  0x6ffffffc 
@@ -452,6 +456,8 @@ SHT_GNU_verneed =   0x6ffffffe    # Version needs section.
 SHT_GNU_versym =    0x6fffffff    # Version symbol table.
 SHT_HISUNW =        0x6fffffff    # Sun-specific high bound.
 SHT_HIOS =          0x6fffffff    # End OS-specific type
+no_show['SHT_HISUNW'] = True
+no_show['SHT_HIOS'] = True
 SHT_LOPROC =        0x70000000    # Start of processor-specific
 # http://infocenter.arm.com/help/topic/com.arm.doc.ihi0044c/IHI0044C_aaelf.pdf
 SHT_ARM_EXIDX =          0x70000001 # Exception Index table
@@ -555,8 +561,14 @@ PT_SUNWBSS =      0x6ffffffa      # Sun Specific segment
 PT_SUNWSTACK =    0x6ffffffb      # Stack segment
 PT_HISUNW =       0x6fffffff 
 PT_HIOS =         0x6fffffff      # End of OS-specific
+no_show['PT_LOOS'] = True
+no_show['PT_LOSUNW'] = True
+no_show['PT_HISUNW'] = True
+no_show['PT_HIOS'] = True
 PT_LOPROC =       0x70000000      # Start of processor-specific
 PT_HIPROC =       0x7fffffff      # End of processor-specific
+no_show['PT_LOPROC'] = True
+no_show['PT_HIPROC'] = True
 
 # Legal values for p_flags (segment flags).
 
@@ -658,6 +670,7 @@ DT_FINI_ARRAYSZ = 28              # Size in bytes of DT_FINI_ARRAY
 DT_RUNPATH      = 29              # Library search path
 DT_FLAGS        = 30              # Flags for the object being loaded
 DT_ENCODING     = 32              # Start of encoded range
+no_show['DT_ENCODING'] = True
 DT_PREINIT_ARRAY = 32             # Array with addresses of preinit fct
 DT_PREINIT_ARRAYSZ = 33           # size in bytes of DT_PREINIT_ARRAY
 DT_NUM          = 34              # Number used
@@ -666,11 +679,13 @@ DT_HIOS         = 0x6ffff000      # End of OS-specific
 DT_LOPROC       = 0x70000000      # Start of processor-specific
 DT_HIPROC       = 0x7fffffff      # End of processor-specific
 #DT_PROCNUM      = DT_MIPS_NUM     # Most used by any processor
+no_show['DT_LOPROC'] = True
+no_show['DT_HIPROC'] = True
 
 # DT_* entries which fall between DT_VALRNGHI & DT_VALRNGLO use the
 # Dyn.d_un.d_val field of the Elf*_Dyn structure.  This follows Sun's
 # approach.
-DT_VALRNGLO     = 0x6ffffd00
+DT_VALRNGLO     = 0x6ffffd00      ; no_show['DT_VALRNGLO'] = True
 DT_GNU_PRELINKED = 0x6ffffdf5     # Prelinking timestamp
 DT_GNU_CONFLICTSZ = 0x6ffffdf6    # Size of conflict section
 DT_GNU_LIBLISTSZ = 0x6ffffdf7     # Size of library list
@@ -682,15 +697,15 @@ DT_FEATURE_1    = 0x6ffffdfc      # Feature selection (DTF_*).
 DT_POSFLAG_1    = 0x6ffffdfd      # Flags for DT_* entries, effecting the following DT_* entry.
 DT_SYMINSZ      = 0x6ffffdfe      # Size of syminfo table (in bytes)
 DT_SYMINENT     = 0x6ffffdff      # Entry size of syminfo
-DT_VALRNGHI     = 0x6ffffdff
-#DT_VALNUM = 12
+DT_VALRNGHI     = 0x6ffffdff      ; no_show['DT_VALRNGHI'] = True
+DT_VALNUM = 12                    ; no_show['DT_VALNUM'] = True
 
 # DT_* entries which fall between DT_ADDRRNGHI & DT_ADDRRNGLO use the
 # Dyn.d_un.d_ptr field of the Elf*_Dyn structure.
 #
 # If any adjustment is made to the ELF object after it has been
 # built these entries will need to be adjusted.
-DT_ADDRRNGLO    = 0x6ffffe00
+DT_ADDRRNGLO    = 0x6ffffe00      ; no_show['DT_EXTRANUM'] = True
 DT_GNU_CONFLICT = 0x6ffffef8      # Start of conflict section
 DT_GNU_LIBLIST  = 0x6ffffef9      # Library list
 DT_CONFIG       = 0x6ffffefa      # Configuration information.
@@ -699,8 +714,8 @@ DT_AUDIT        = 0x6ffffefc      # Object auditing.
 DT_PLTPAD       = 0x6ffffefd      # PLT padding.
 DT_MOVETAB      = 0x6ffffefe      # Move table.
 DT_SYMINFO      = 0x6ffffeff      # Syminfo table.
-DT_ADDRRNGHI    = 0x6ffffeff
-#DT_ADDRNUM = 10
+DT_ADDRRNGHI    = 0x6ffffeff      ; no_show['DT_ADDRRNGHI'] = True
+DT_ADDRNUM = 10                   ; no_show['DT_ADDRNUM'] = True
 
 # The versioning entry types.  The next are defined as part of the
 # GNU extension.
@@ -715,13 +730,13 @@ DT_VERDEF       = 0x6ffffffc      # Address of version definition table
 DT_VERDEFNUM    = 0x6ffffffd      # Number of version definitions
 DT_VERNEED      = 0x6ffffffe      # Address of table with needed versions
 DT_VERNEEDNUM   = 0x6fffffff      # Number of needed versions
-#DT_VERSIONTAGNUM = 16
+DT_VERSIONTAGNUM = 16             ; no_show['DT_VERSIONTAGNUM'] = True
 
 # Sun added these machine-independent extensions in the "processor-specific"
 # range.  Be compatible.
 DT_AUXILIARY    = 0x7ffffffd      # Shared object to load before self
 DT_FILTER       = 0x7fffffff      # Shared object to get values from
-#DT_EXTRANUM     = 3
+DT_EXTRANUM     = 3               ; no_show['DT_EXTRANUM'] = True
 
 
 # Values of `d_un.d_val' in the DT_FLAGS entry.
@@ -1445,7 +1460,7 @@ R_PPC64_REL16_HA        = 252     # half16   (sym+add-.)@ha
 DT_PPC64_GLINK  = (DT_LOPROC + 0)
 DT_PPC64_OPD    = (DT_LOPROC + 1)
 DT_PPC64_OPDSZ  = (DT_LOPROC + 2)
-DT_PPC64_NUM    = 3
+DT_PPC64_NUM    = 3               ; no_show['DT_PPC64_NUM'] = True
 
 # ARM relocations
 
@@ -1865,19 +1880,36 @@ R_V800_GPWHI1           = 0x3c    # V810
 R_V800_HWLO             = 0x3d    # V850
 
 def enumerate_constants(constants, globs):
+    # First, enumerate the machine types
+    type = 'EM'
+    for val in filter(lambda x:x[:len(type)+1]==type+"_", globs.keys()):
+        if not globs[val] in constants[type]:
+            constants[type][globs[val]] = val[len(type)+1:]
+    # Then enumerate the other constants, possibly machine-dependent
+    subtypes = list(constants['EM'].values())
+    subtypes.append('390') # Instead of 'S390'
+    subtypes.append('IA64') # Instead of 'IA_64'
     for type in constants:
-        if type == 'R':
+        if type == 'EM':
             continue
         for val in filter(lambda x:x[:len(type)+1]==type+"_", globs.keys()):
-            if not globs[val] in constants[type]:
-                constants[type][globs[val]] = val[len(type)+1:]
-    for subtype in constants['EM'].values():
-        for pfx in ('R', 'SHT', 'DT'):
-            l = len(subtype)+len(pfx)+2
-            for val in filter(lambda x:x[:l]==pfx+"_"+subtype+"_", globs.keys()):
-                if not subtype in constants[pfx]:
-                    constants[pfx][subtype] = {}
-                constants[pfx][subtype][globs[val]] = val[l:]
+            if val in no_show:
+                continue
+            for subtype in subtypes:
+                if val.startswith(type+"_"+subtype+"_"):
+                    if not subtype in constants[type]:
+                        constants[type][subtype] = {}
+                    l = len(subtype)+len(type)+2
+                    constants[type][subtype][globs[val]] = val[l:]
+                    break
+            else:
+                if not globs[val] in constants[type]:
+                    constants[type][globs[val]] = val[len(type)+1:]
+                else:
+                    # There should be no duplicate,
+                    # thanks to the no_show blacklist
+                    print('DUP %25s %20s %#20x'
+                        % (val,constants[type][globs[val]],globs[val]))
 
 constants = {
   'SHT' : {}, # sh_type

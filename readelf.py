@@ -7,11 +7,18 @@ if sys.version_info[0] == 2 and sys.version_info[1] < 5:
 
 from elfesteem import elf_init, elf
 
+et_strings = {
+    elf.ET_REL: 'REL (Relocatable file)',
+    elf.ET_EXEC: 'EXEC (Executable file)',
+    elf.ET_DYN: 'DYN (Shared object file)',
+    elf.ET_CORE: 'CORE (Core file)',
+    }
+def expand_code(table, val):
+    if val in table: return table[val]
+    return '<unknown>: %#x' % val
+
 def display_headers(e):
     print("ELF Header:")
-    def expand_code(table, val):
-        if val in table: return table[val]
-        return '<unknown>: %#x' % val
     import struct
     ident = struct.unpack('16B', e.Ehdr.ident)
     print("  Magic:   %s"%' '.join(['%02x'%_ for _ in ident]))
@@ -30,12 +37,7 @@ def display_headers(e):
         0: 'UNIX - System V',
         }, ident[elf.EI_OSABI]))
     print("  ABI Version:                       %d"%ident[elf.EI_ABIVERSION])
-    print("  Type:                              %s"%expand_code({
-        elf.ET_REL: 'REL (Relocatable file)',
-        elf.ET_EXEC: 'EXEC (Executable file)',
-        elf.ET_DYN: 'DYN (Shared object file)',
-        elf.ET_CORE: 'CORE (Core file)',
-        }, e.Ehdr.type))
+    print("  Type:                              %s"%expand_code(et_strings, e.Ehdr.type))
     machine_code = dict(elf.constants['EM'])
     # Same textual output as readelf, from readelf.c
     machine_code[elf.EM_M32]            = 'ME32100'
@@ -90,16 +92,16 @@ def display_program_headers(e):
     if len(e.ph.phlist) == 0:
         print("\nThere are no program headers in this file.")
         return
-    print("\nElf file type is", elf.constants['ET'][e.Ehdr.type])
+    print("\nElf file type is %s" % expand_code(et_strings, e.Ehdr.type))
     print("Entry point 0x%x" % e.Ehdr.entry)
     print("There are %d program headers, starting at offset %d" % (e.Ehdr.phnum, e.Ehdr.phoff))
     print("\nProgram Headers:")
     if e.wsize == 32:
-        header = " Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align"
-        format = " %-14s 0x%06x 0x%08x 0x%08x 0x%05x 0x%05x %-3s 0x%x"
+        header = "  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align"
+        format = "  %-14s 0x%06x 0x%08x 0x%08x 0x%05x 0x%05x %-3s 0x%x"
     elif e.wsize == 64:
-        header = " Type           Offset             VirtAddr           PhysAddr\n                FileSiz            MemSiz              Flags  Align"
-        format = " %-14s 0x%016x 0x%016x 0x%016x\n                0x%016x 0x%016x  %-3s    %x"
+        header = "  Type           Offset             VirtAddr           PhysAddr\n                FileSiz            MemSiz              Flags  Align"
+        format = "  %-14s 0x%016x 0x%016x 0x%016x\n                0x%016x 0x%016x  %-3s    %x"
     print(header)
     for p in e.ph:
         flags = [' ', ' ', ' ']
@@ -112,15 +114,15 @@ def display_program_headers(e):
                          p.ph.align))
         if p.ph.type == elf.PT_INTERP:
             s = p.shlist[0]
-            print('     [Requesting program interpreter: %s]' % e[s.sh.offset:s.sh.offset+s.sh.size])
+            print('      [Requesting program interpreter: %s]' % e[s.sh.offset:s.sh.offset+s.sh.size].strip('\0'))
     if len(e.sh.shlist) == 0:
         return
-    print("\nSection to Segment mapping:")
-    print(" Segment Sections...")
+    print("\n Section to Segment mapping:")
+    print("  Segment Sections...")
     for i, p in enumerate(e.ph):
-        res = "  %02d    " % i
+        res = "   %02d     " % i
         for s in p.shlist:
-            res += s.sh.name
+            res += s.sh.name + " "
         print(res)
 
 def display_dynamic(e):
@@ -220,9 +222,12 @@ def display_reloc(e, sh):
             print("                    Type3: %-16s" % type)
 
 def display_sections(e):
+    print("There are %d section headers, starting at offset %#x:"
+        % (len(e.sh.shlist),e.Ehdr.shoff))
+    print("\nSection Headers:")
     if e.wsize == 32:
         header = "  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al"
-        format = "  [%2d] %-17s %-15s %08x %06x %06x %02x %3s %2d  %2d %2d"
+        format = "  [%2d] %-17s %-15s %08x %06x %06x %02x %3s %2d %3d %2d"
     elif e.wsize == 64:
         header = "  [Nr] Name              Type             Address           Offset\n       Size              EntSize          Flags  Link  Info  Align"
         format = "  [%2d] %-17s %-15s  %016x  %08x\n       %016x  %016x %3s      %2d    %2d    %2d"
@@ -256,10 +261,15 @@ def display_sections(e):
         if type == 'GNU_verdef':   type = 'VERDEF'
         if type == 'GNU_verneed':  type = 'VERNEED'
         if type == 'GNU_versym':   type = 'VERSYM'
-        print(format%(i, sh.sh.name, type,
+        print(format%(i, sh.sh.name[:17], type,
                          sh.sh.addr, sh.sh.offset,
                          sh.sh.size, sh.sh.entsize, flags,
                          sh.sh.link, sh.sh.info, sh.sh.addralign))
+    print("Key to Flags:")
+    print("  W (write), A (alloc), X (execute), M (merge), S (strings)")
+    print("  I (info), L (link order), G (group), T (TLS), E (exclude), x (unknown)")
+    print("  O (extra OS processing required) o (OS specific), p (processor specific)")
+
 
 def display_groups(e):
     for i, sh in enumerate(e.sh):
