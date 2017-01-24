@@ -73,12 +73,12 @@ def print_petype(e):
 
 def print_sections(e):
     print("\nSECTIONS")
-    print("No               Name     offset    rawsize      vsize      vaddr      flags")
+    print("No               Name     offset      rsize  vsize/paddr    vaddr      flags")
     for i, s in enumerate(e.SHList):
         print("%2d %18s %#10x %#10x %#10x %#10x %#10x" %(i,
                s.name.strip('\0'),
-               s.offset, s.rawsize,
-               s.size, s.addr,
+               s.scnptr, s.rsize,
+               s.paddr, s.vaddr,
                s.flags))
     if hasattr(e, 'NThdr'):
         print("\nNT HEADERS")
@@ -125,7 +125,7 @@ def print_layout(e, filesz):
     if hasattr(e, 'NThdr'):
         layout.append((DOShdr.lfanew, of-DOShdr.lfanew, 'PE header'))
     for i, s in enumerate(e.SHList):
-        if s.size == 0:
+        if s.rsize == 0:
             # Empty section, not in the file!
             continue
         if s.flags & (pe.STYP_BSS|pe.STYP_SBSS|pe.STYP_DSECT):
@@ -137,17 +137,17 @@ def print_layout(e, filesz):
             # interpretation of $ in section names, which is compatible
             # with ignoring sections starting with $
             continue
-        layout.append((s.offset, s.size,
+        layout.append((s.scnptr, s.rsize,
                         'Section '+s.name.strip('\0')))
-        if s.numberofrelocations:
-            layout.append((s.pointertorelocations, s.numberofrelocations*10,
+        if s.nreloc:
+            layout.append((s.relptr, s.nreloc*10,
                             'Relocs  '+s.name.strip('\0')))
-        if s.numberoflinenumbers:
-            nlnno = s.numberoflinenumbers
-            if s.pointertolinenumbers+s.numberoflinenumbers*6 > filesz:
-                nlnno = (filesz-s.pointertolinenumbers)//6
-                print("LINENO for section %s is %d and should probably be %s" % (s.name.strip('\0'), s.numberoflinenumbers, nlnno))
-            layout.append((s.pointertolinenumbers, nlnno*6,
+        if s.nlnno:
+            nlnno = s.nlnno
+            if s.lnnoptr+s.nlnno*6 > filesz:
+                nlnno = (filesz-s.lnnoptr)//6
+                print("LINENO for section %s is %d and should probably be %s" % (s.name.strip('\0'), s.nlnno, nlnno))
+            layout.append((s.lnnoptr, nlnno*6,
                             'LineNo  '+s.name.strip('\0')))
 
     if COFFhdr.pointertosymboltable != 0 and COFFhdr.numberofsymbols != 0:

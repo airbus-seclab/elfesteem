@@ -542,15 +542,31 @@ class NThdr(CStruct):
 
 class Shdr(CStruct):
     # 40-bytes long for 32-bit COFF ; 64-bytes long for 64-bit COFF
+    # We use the field names mainly from http://wiki.osdev.org/COFF
+    # They are not the same names as for PE files, but the usual names
+    # for PE files don't always describe what is in the file!
+    # The main problems are the fields that contain size information:
+    # - The fourth field (rsize) always contains the size of the section
+    #   in the PE/COFF file.
+    # - The second field (paddr) usually contains the same value as
+    #   vaddr in COFF files (e.g. this is always the case as per OSF1
+    #   documentation, which also says that paddr is ignored) but some
+    #   COFF files differ, e.g. Window .OBJ files where vaddr is always 0,
+    #   but paddr not always, depending on the compiler.
+    #   For PE files, the official documentation says that for executable
+    #   images paddr is the virtual size, i.e. the size of the section in
+    #   memory, and that if paddr is greater than rsize it is padded with
+    #   zeroes, and that for object files paddr is zero
+    #   ... but this is not true for all PE files.
     _fields = [ ("name_data","8s"),
-                ("size","ptr"),
-                ("addr","ptr"),
-                ("rawsize","ptr"),
-                ("offset","ptr"),
-                ("pointertorelocations","ptr"),
-                ("pointertolinenumbers","ptr"),
-                ("numberofrelocations","u16"),
-                ("numberoflinenumbers","u16"),
+                ("paddr","ptr"),   # was named 'size'
+                ("vaddr","ptr"),   # was named 'addr'
+                ("rsize","ptr"),   # was named 'rawsize'
+                ("scnptr","ptr"),  # was named 'offset'
+                ("relptr","ptr"),  # was named 'pointertorelocations'
+                ("lnnoptr","ptr"), # was named 'pointertolinenumbers'
+                ("nreloc","u16"),  # was named 'numberofrelocations'
+                ("nlnno","u16"),   # was named 'numberoflinenumbers'
                 ("flags","u32") ]
     def get_name(self):
         # If Python2, is of type 'str', if Python3, we convert from 'bytes'
@@ -559,6 +575,11 @@ class Shdr(CStruct):
     def set_name(self, value):
         TODO
     name = property(get_name, set_name)
+    # For API compatibility with previous versions of elfesteem
+    rawsize = property(lambda self: self.rsize)
+    offset  = property(lambda self: self.scnptr)
+    addr    = property(lambda self: self.vaddr)
+    size    = property(lambda self: self.paddr)
     # Redefine _fields for some non-standard cases
     # This way of doing is a dirty hack, until we know more about what
     # COFF section entries should really be like
@@ -570,14 +591,14 @@ class Shdr(CStruct):
         self._fields_orig = self._fields
         self._fields = [
                 ("name_data","8s"),
-                ("size","u32"),
-                ("addr","u32"),
-                ("rawsize","u32"), # in 2-byte words
-                ("offset","u32"),
-                ("pointertorelocations","u32"),
-                ("pointertolinenumbers","u32"),
-                ("numberofrelocations","u32"),
-                ("numberoflinenumbers","u32"),
+                ("paddr","u32"),
+                ("vaddr","u32"),
+                ("rsize","u32"), # in 2-byte words
+                ("scnptr","u32"),
+                ("relptr","u32"),
+                ("lnnoptr","u32"),
+                ("nreloc","u32"),
+                ("nlnno","u32"),
                 ("flags","u32"),
                 ("reserved","u16"),
                 ("mem_page","u16"),
@@ -597,33 +618,35 @@ class SHList(CStruct):
         size = len(data)
         rawsize = len(data)
         if len(self):
-            addr = self[-1].addr+self[-1].size
+            vaddr = self[-1].vaddr+self[-1].rsize
             s_last = self[0]
             for s in self:
-                if s_last.offset+s_last.rawsize<s.offset+s.rawsize:
+                if s_last.scnptr+s_last.rsize<s.scnptr+s.rsize:
                     s_last = s
-            offset = s_last.offset+s_last.rawsize
+            scnptr = s_last.scnptr+s_last.rsize
         else:
             s_null = Shdr.unpack(0x100*data_null).pack()
-            offset = self.parent_head.Doshdr.lfanew \
+            scnptr = self.parent_head.Doshdr.lfanew \
                 + len(self.parent_head.NTsig) \
                 + len(self.parent_head.Coffhdr) \
                 + self.parent_head.Coffhdr.sizeofoptionalheader \
                 + len(self.parent_head.SHList.pack()) \
                 + len(s_null)
-            addr = 0x2000
-        #round addr
-        addr = (addr+(s_align-1))&~(s_align-1)
-        offset = (offset+(f_align-1))&~(f_align-1)
+            vaddr = 0x2000
+        # alignment
+        vaddr = (vaddr+(s_align-1))&~(s_align-1)
+        scnptr = (scnptr+(f_align-1))&~(f_align-1)
 
         name += (8-len(name))*data_null
-        f = {"name_data":name, "size":size,
-             "addr":addr, "rawsize":rawsize,
-             "offset": offset,
-             "pointertorelocations":0,
-             "pointertolinenumbers":0,
-             "numberofrelocations":0,
-             "numberoflinenumbers":0,
+        f = {"name_data":name,
+             "paddr":size,    # was named 'size'
+             "vaddr":vaddr,   # was named 'addr'
+             "rsize":size,    # was named 'rawsize'
+             "scnptr":scnptr, # was named 'offset'
+             "relptr":0,  # was named 'pointertorelocations'
+             "lnnoptr":0, # was named 'pointertolinenumbers'
+             "nreloc":0,  # was named 'numberofrelocations'
+             "nlnno":0,   # was named 'numberoflinenumbers'
              "flags":0xE0000020,
              "data":data
              }
@@ -631,18 +654,19 @@ class SHList(CStruct):
         s = Shdr(_sex = self.parent_head._sex, _wsize = self.parent_head._wsize, **f)
         s.data = data
 
-        if s.rawsize > len(data):
-            s.data = s.data+data_null*(s.rawsize-len(data))
-            s.size = s.rawsize
+        if s.rsize > len(data):
+            # In PE file, paddr usually contains the size of the non-padded data
+            s.paddr = len(data)
+            s.data = s.data+data_null*(s.rsize-len(data))
         c = StrPatchwork()
         c[0] = s.data
         s.data = c
-        s.size = max(s_align, s.size)
+        s.rsize = max(s_align, s.rsize)
 
         self.append(s)
         self.parent_head.Coffhdr.numberofsections = len(self)
 
-        l = (s.addr+s.size+(s_align-1))&~(s_align-1)
+        l = (s.vaddr+s.rsize+(s_align-1))&~(s_align-1)
         self.parent_head.NThdr.sizeofimage = l
         return s
 
@@ -735,7 +759,7 @@ class struct_array(object):
                                  c.parent_head._sex,
                                  c.parent_head._wsize)
             # Special case: off between header and first section
-            if c.parent_head.NThdr.sizeofheaders <= of < c.parent_head.SHList[0].offset:
+            if c.parent_head.NThdr.sizeofheaders <= of < c.parent_head.SHList[0].scnptr:
                 self.end = data_null*l
                 break
             if num == None:

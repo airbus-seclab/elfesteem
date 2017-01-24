@@ -48,17 +48,17 @@ class drva(object):
             s = self.parent.getsectionbyrva(start)
             if s is None:
                 return [(None, start)]
-            start = start-s.addr
+            start = start-s.vaddr
             return [(s, start)]
         total_len = stop - start
         rva_items = []
         while total_len:
             # special case if look at pe hdr address
-            if 0 <= start < min(self.parent.SHList[0].addr,
+            if 0 <= start < min(self.parent.SHList[0].vaddr,
                                 self.parent.NThdr.sizeofheaders):
                 s_start = start
                 s_stop = stop
-                s_max = min(self.parent.SHList[0].addr,
+                s_max = min(self.parent.SHList[0].vaddr,
                             self.parent.NThdr.sizeofheaders)
                 s = None
             else:
@@ -66,9 +66,13 @@ class drva(object):
                 if s is None:
                     log.warn('unknown rva address! %x'%start)
                     return []
-                s_max = max(s.size, s.rawsize)
-                s_start = start - s.addr
-                s_stop = stop - s.addr
+                s_max = s.rawsize
+                if hasattr(self.parent, 'NThdr'):
+                    # PE, not COFF
+                    # paddr contains the virtual size
+                    s_max = max(s.paddr, s_max)
+                s_start = start - s.vaddr
+                s_stop = stop - s.vaddr
             if s_stop >s_max:
                 s_stop = s_max
             s_len = s_stop - s_start
@@ -95,7 +99,7 @@ class drva(object):
             s.data.__setitem__(n_item, data_slice)
             off = i.stop
             #XXX test patch content
-            file_off = self.parent.rva2off(s.addr+n_item.start)
+            file_off = self.parent.rva2off(s.vaddr+n_item.start)
             if self.parent.content:
                 self.parent.content = self.parent.content[:file_off]+ data_slice + self.parent.content[file_off+len(data_slice):]
         return #s.data.__setitem__(n_item, data)
@@ -133,7 +137,7 @@ class virt(object):
         return self.max_addr()
     def max_addr(self):
          s = self.parent.SHList[-1]
-         l = s.addr+s.size+self.parent.NThdr.ImageBase
+         l = s.vaddr+s.size+self.parent.NThdr.ImageBase
          return int(l)
 
     def find(self, pattern, start = 0, end = None):
@@ -145,24 +149,24 @@ class virt(object):
         sections = []
         for s in self.parent.SHList:
             s_max = max(s.size, s.rawsize)
-            if s.addr+s_max <= start:
+            if s.vaddr+s_max <= start:
                 continue
-            if end == None or s.addr < end:
+            if end == None or s.vaddr < end:
                 sections.append(s)
 
         if not sections:
             return -1
         for s in sections:
-            if s.addr < start:
-                off = start - s.addr
+            if s.vaddr < start:
+                off = start - s.vaddr
             else:
                 off = 0
             ret = s.data.find(pattern, off)
             if ret == -1:
                 continue
-            if end != None and s.addr + ret >= end:
+            if end != None and s.vaddr + ret >= end:
                 return -1
-            return self.parent.rva2virt(s.addr + ret)
+            return self.parent.rva2virt(s.vaddr + ret)
         return -1
 
     def rfind(self, pattern, start = 0, end = None):
@@ -174,25 +178,25 @@ class virt(object):
         sections = []
         for s in self.parent.SHList:
             s_max = max(s.size, s.rawsize)
-            if s.addr+s_max <= start:
+            if s.vaddr+s_max <= start:
                 continue
-            if end == None or s.addr < end:
+            if end == None or s.vaddr < end:
                 sections.append(s)
         if not sections:
             return -1
 
         for s in reversed(sections):
-            if s.addr < start:
-                off = start - s.addr
+            if s.vaddr < start:
+                off = start - s.vaddr
             else:
                 off = 0
             if end == None:
                 ret = s.data.rfind(pattern, off)
             else:
-                ret = s.data.rfind(pattern, off, end-s.addr)
+                ret = s.data.rfind(pattern, off, end-s.vaddr)
             if ret == -1:
                 continue
-            return self.parent.rva2virt(s.addr + ret)
+            return self.parent.rva2virt(s.vaddr + ret)
         return -1
 
     def is_addr_in(self, ad):
@@ -426,25 +430,8 @@ class PE(object):
         # load section data
         filealignment = self.NThdr.filealignment
         for s in self.SHList.shlist:
-            if self.loadfrommem:
-                s.offset = s.addr
-            if filealignment ==0:
-                raw_off = s.offset
-            else:
-                raw_off = int(filealignment*(s.offset/filealignment))
-            if raw_off != s.offset:
-                log.warn('unaligned raw section!')
             s.data = StrPatchwork()
-            # min section is 0x1000???
-            if s.rawsize == 0:
-                mm = 0
-            else:
-                if s.rawsize % filealignment:
-                    rs = (s.rawsize//filealignment+1)*filealignment
-                else:
-                    rs = s.rawsize
-                mm = max(rs, 0x200)
-            s.data[0] = self.content[raw_off:raw_off+mm]
+            s.data[0] = self.content[s.scnptr:s.scnptr+s.rsize]
         try:
             self.DirImport = pe.DirImport.unpack(self.content,
                                                  self.NThdr.optentries[pe.DIRECTORY_ENTRY_IMPORT].rva,
@@ -536,7 +523,11 @@ class PE(object):
         if self.SHList is None:
             return None
         for s in self.SHList.shlist:
-            if s.addr <= rva < s.addr+s.size:
+            if hasattr(self, 'NThdr'): # PE file
+                vsize = s.paddr
+            else: # COFF file
+                vsize = s.rsize
+            if s.vaddr <= rva < s.vaddr+vsize:
                 return s
         return None
 
@@ -547,7 +538,7 @@ class PE(object):
         if self.SHList is None:
             return None
         for s in self.SHList.shlist:
-            if s.offset <= off < s.offset+s.rawsize:
+            if s.scnptr <= off < s.scnptr+s.rsize:
                 return s
         return None
 
@@ -578,16 +569,15 @@ class PE(object):
             return rva
         s = self.getsectionbyrva(rva)
         if s is None:
-            raise pe.InvalidOffset('cannot get offset for 0x%X'%rva)
             return
-        soff = (s.offset//self.NThdr.filealignment)*self.NThdr.filealignment
-        return rva-s.addr+soff
+        soff = (s.scnptr//self.NThdr.filealignment)*self.NThdr.filealignment
+        return rva-s.vaddr+soff
 
     def off2rva(self, off):
         s = self.getsectionbyoff(off)
         if s is None:
             return
-        return off-s.offset+s.addr
+        return off-s.scnptr+s.vaddr
 
     def virt2rva(self, virt):
         if virt == None:
@@ -610,7 +600,7 @@ class PE(object):
             return False
         ad = self.virt2rva(ad)
         for s in self.SHList.shlist:
-            if s.addr <= ad < s.addr + s.size:
+            if s.vaddr <= ad < s.vaddr + s.size:
                 return True
         return False
 
@@ -653,11 +643,11 @@ class PE(object):
         c[0] = self.Doshdr.pack()
 
         for s in self.SHList.shlist:
-            c[s.offset:s.offset+s.rawsize] = s.data.pack()
+            c[s.scnptr:s.scnptr+s.rawsize] = s.data.pack()
 
         # fix image size
         s_last = self.SHList.shlist[-1]
-        size = s_last.addr + s_last.size + (self.NThdr.sectionalignment-1)
+        size = s_last.vaddr + s_last.rawsize + (self.NThdr.sectionalignment-1)
         size &= ~(self.NThdr.sectionalignment-1)
         self.NThdr.sizeofimage = size
 
@@ -677,8 +667,8 @@ class PE(object):
 
         for s in self.SHList:
             data = self.SHList.pack()
-            if off + len(data) > s.offset:
-                log.warn("section offset overlap pe hdr 0x%x 0x%x"%(off+len(data), s.offset))
+            if off + len(data) > s.scnptr:
+                log.warn("section offset overlap pe hdr 0x%x 0x%x"%(off+len(data), s.scnptr))
         self.DirImport.build_content(c)
         self.DirExport.build_content(c)
         self.DirDelay.build_content(c)
@@ -862,9 +852,9 @@ if __name__ == "__main__":
     e.NThdr.optentries[pe.DIRECTORY_ENTRY_BOUND_IMPORT].size = 0
 
     # Create new sections with all zero content
-    s_redir = e.SHList.add_section(name = "redir", rawsize = 0x1000)
-    s_test = e.SHList.add_section(name = "test", rawsize = 0x1000)
-    s_rel = e.SHList.add_section(name = "rel", rawsize = 0x5000)
+    s_redir = e.SHList.add_section(name = "redir", size = 0x1000)
+    s_test  = e.SHList.add_section(name = "test",  size = 0x1000)
+    s_rel   = e.SHList.add_section(name = "rel",   size = 0x5000)
     e_str = e.pack()
     open('out.sect.bin', 'wb').write(e_str)
     print("WROTE out.sect.bin with added sections")
@@ -872,7 +862,7 @@ if __name__ == "__main__":
 
 
     new_dll = [({"name":"kernel32.dll",
-                 "firstthunk":s_test.addr},
+                 "firstthunk":s_test.vaddr},
                 ["CreateFileA",
                  "SetFilePointer",
                  "WriteFile",
@@ -893,11 +883,11 @@ if __name__ == "__main__":
         e.DirExport.create()
         e.DirExport.add_name("coco")
 
-    s_myimp = e.SHList.add_section(name = "myimp", rawsize = len(e.DirImport))
-    s_myexp = e.SHList.add_section(name = "myexp", rawsize = len(e.DirExport))
-    s_mydel = e.SHList.add_section(name = "mydel", rawsize = len(e.DirDelay))
-    s_myrel = e.SHList.add_section(name = "myrel", rawsize = len(e.DirReloc))
-    s_myres = e.SHList.add_section(name = "myres", rawsize = len(e.DirRes))
+    s_myimp = e.SHList.add_section(name = "myimp", size = len(e.DirImport))
+    s_myexp = e.SHList.add_section(name = "myexp", size = len(e.DirExport))
+    s_mydel = e.SHList.add_section(name = "mydel", size = len(e.DirDelay))
+    s_myrel = e.SHList.add_section(name = "myrel", size = len(e.DirReloc))
+    s_myres = e.SHList.add_section(name = "myres", size = len(e.DirRes))
 
     """
     for s in e.SHList.shlist:
