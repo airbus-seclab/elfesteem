@@ -217,7 +217,7 @@ class StrTable(object):
     def __init__(self, c):
         self.res = {}
         self.names = {}
-        self.trail = ""
+        self.trail = pe.data_empty
         self.len = 0
         while c:
             p = c.find(pe.data_null)
@@ -231,13 +231,12 @@ class StrTable(object):
     def __str__(self):
         raise AttributeError("Use pack() instead of str()")
     def pack(self):
-        res = ""
-        k = self.res.keys()
-        k.sort()
+        res = pe.data_empty
+        k = sorted(self.res.keys())
         for s in k:
             if len(res) != s:
                 raise ValueError("StrTable is incoherent : %r != %r"%(len(res),s))
-            res += self.res[s] + "\0"
+            res += self.res[s] + pe.data_null
         return res + self.trail
     def add(self, name):
         if name in self.names:
@@ -259,7 +258,7 @@ class CoffSymbols(object):
         self.parent_head = parent
         self.symbols = []
         if numberofsymbols == 0:
-            raise ValueError("COFF header is not valid")
+            return
         end = of + 18 * numberofsymbols
         while of < end:
             s = pe.CoffSymbol.unpack(strpwk, of, self)
@@ -407,6 +406,9 @@ class PE(object):
         m = (m>>8)*32
         self._wsize = m
 
+        # Even if the NT header has 64-bit pointers, in 64-bit PE files
+        # the Section headers have 32-bit pointers (it is a 32-bit COFF
+        # in a 64-bit PE).
         if self._wsize == 32:
             Opthdr = pe.Opthdr32
         else:
@@ -416,6 +418,7 @@ class PE(object):
         #print(hex(of+len(self.Opthdr)))
         self.NThdr = pe.NThdr.unpack(self.content, of+l, self)
         #print(repr(self.NThdr.optentries))
+        self._wsize = 32
         of += self.Coffhdr.sizeofoptionalheader
         self.SHList = pe.SHList.unpack(self.content, of, self)
         #print(repr(self.SHList))
@@ -487,9 +490,13 @@ class PE(object):
                     log.warning('cannot parse DirRes, skipping')
 
         if self.Coffhdr.pointertosymboltable != 0:
-            self.SymbolStrings = StrTable(self.content[
-                                       self.Coffhdr.pointertosymboltable
-                                       + 18 * self.Coffhdr.numberofsymbols:])
+            of = self.Coffhdr.pointertosymboltable
+            of += 18 * self.Coffhdr.numberofsymbols
+            sz, = struct.unpack('<>'[self._sex]+'I',self.content[of:of+4])
+            if len(self.content) < of+sz:
+                log.warning('File too short for StrTable')
+                sz = len(self.content) - of
+            self.SymbolStrings = StrTable(self.content[of:of+sz])
             self.Symbols = CoffSymbols(self.content,
                                        self.Coffhdr.pointertosymboltable,
                                        self.Coffhdr.numberofsymbols,
@@ -732,28 +739,29 @@ class Coff(PE):
                       parse_delay = True,
                       parse_reloc = True):
         of = 0
-        self._wsize = 32
-        # sizeofoptionalheader should be 28 for executable, 0 for other
-        # it may be 56 for ECOFF, 44 for Apollo m68k COFF, 36 for CLIPPER COFF,
-        # 144 for ALPHA, ...
-        # This can be used to detect endianess
-        sizeofoptionalheader = struct.unpack("BB", self.content[16:18])
-        if   sizeofoptionalheader == (28, 0): self._sex = 0
-        elif sizeofoptionalheader == (0, 28): self._sex = 1
-        elif sizeofoptionalheader == (0, 44): self._sex = 1
-        elif sizeofoptionalheader == (0, 56): self._sex = 1
-        else:                                 self._sex = 0
-        self.Coffhdr, l = pe.Coffhdr.unpack_l(self.content,
-                                              of,
-                                              self)
-        if self.Coffhdr.sizeofoptionalheader not in (0, 28, 36, 44, 56, 144):
-            log.debug("COFF %r", self.Coffhdr)
+        # Detect specific cases of COFF Header format, without knowing
+        # the endianess
+        COFFmachineLE, = struct.unpack("<H", self.content[0:2])
+        COFFmachineBE, = struct.unpack(">H", self.content[0:2])
+        if   pe.IMAGE_FILE_MACHINE_ALPHA_O in (COFFmachineLE, COFFmachineBE):
+            self._wsize = 64
+            COFFhdr = pe.Coffhdr
+            sizeofoptionalheader = self.content[18:20]
+        elif pe.IMAGE_FILE_MACHINE_XCOFF64 in (COFFmachineLE, COFFmachineBE):
+            self._wsize = 64
+            COFFhdr = pe.XCOFFhdr64
+            sizeofoptionalheader = self.content[16:18]
+        else:
+            self._wsize = 32
+            COFFhdr = pe.Coffhdr
+            sizeofoptionalheader = self.content[16:18]
+        # COFF endianess is tricky to determine, we use the fact
+        # that sizeofoptionalheader should be less than 256
+        sizeofoptionalheader = struct.unpack("BB", sizeofoptionalheader)
+        if   sizeofoptionalheader[1] == 0: self._sex = 0
+        else:                              self._sex = 1
+        self.Coffhdr, l = COFFhdr.unpack_l(self.content, of, self)
         of += l
-        log.debug("MACHINE %2d %s",
-            self.Coffhdr.sizeofoptionalheader,
-            pe.constants['IMAGE_FILE_MACHINE'].get(self.Coffhdr.machine,
-                                             '%#x'%self.Coffhdr.machine),
-            )
         if   self.Coffhdr.machine == pe.IMAGE_FILE_MACHINE_TI:
             m = struct.unpack('H', self.content[of:of+2])[0]
             self.CPU = {
@@ -769,19 +777,63 @@ class Coff(PE):
                 0xA1: 'TMS320C5500+',
                 }.get(m, 'unknown')
             of += 2
-            of += self.Coffhdr.sizeofoptionalheader
             pe.Shdr.set_fields_TI()
-        elif self.Coffhdr.machine == pe.IMAGE_FILE_MACHINE_ALPHA_BIS:
-            of += 84
-            pe.Shdr.set_fields_ALPHA()
+        if   self.Coffhdr.sizeofoptionalheader == 28:
+            self.Opthdr, l = pe.Opthdr32.unpack_l(self.content, of, self)
+        elif self.Coffhdr.sizeofoptionalheader == 36:
+            assert self.Coffhdr.machine == pe.IMAGE_FILE_MACHINE_CLIPPER
+            self.Opthdr, l = pe.OpthdrClipper.unpack_l(self.content, of, self)
+        elif self.Coffhdr.sizeofoptionalheader == 44:
+            assert self.Coffhdr.machine == pe.IMAGE_FILE_MACHINE_APOLLOM68K
+            self.Opthdr, l = pe.OpthdrApollo.unpack_l(self.content, of, self)
+        elif self.Coffhdr.sizeofoptionalheader == 80:
+            assert self.Coffhdr.machine == pe.IMAGE_FILE_MACHINE_ALPHA_O
+            self.Opthdr, l = pe.OpthdrOSF1.unpack_l(self.content, of, self)
+        elif self.Coffhdr.sizeofoptionalheader == 72:
+            self.Opthdr, l = pe.OpthdrXCOFF32.unpack_l(self.content, of, self)
+        elif self.Coffhdr.sizeofoptionalheader == 110:
+            self.Opthdr, l = pe.OpthdrXCOFF64.unpack_l(self.content, of, self)
+        elif self.Coffhdr.sizeofoptionalheader == 0:
+            from elfesteem.pe import CStruct
+            class NullHdr(CStruct):
+                _fields = [ ]
+            self.Opthdr, l = NullHdr(), 0
+        elif (self.Coffhdr.sizeofoptionalheader % 4) == 0:
+            # All known OptHdr start with a 2-byte magic and 2-byte vstamp
+            from elfesteem.pe import CStruct
+            class OpthdrUnknown(CStruct):
+                _fields = [ ("magic", "u16"), ("vstamp", "u16") ] \
+                        + [ ("f%d"%_, "u32")
+                    for _ in range(1, self.Coffhdr.sizeofoptionalheader // 4) ]
+            self.Opthdr, l = OpthdrUnknown.unpack_l(self.content, of, self)
+            machine_name = pe.constants['IMAGE_FILE_MACHINE'].get(
+                self.Coffhdr.machine, '%#x'%self.Coffhdr.machine)
+            log.warn("Unknown Option Header format of size %d for machine %s:\n%r",
+                self.Coffhdr.sizeofoptionalheader, machine_name, self.Opthdr)
         else:
-            of += self.Coffhdr.sizeofoptionalheader
+            log.debug("COFF %r", self.Coffhdr)
+            self.Opthdr, l = None, self.Coffhdr.sizeofoptionalheader
+        
+        of += l
         if of + self.Coffhdr.numberofsections * 40 > len(self.content):
             # Probably not a COFF!
-            self.SHList = []
+            self.SHList = pe.SHList.unpack(struct.pack(""), of, self)
         else:
             self.SHList = pe.SHList.unpack(self.content, of, self)
         pe.Shdr.set_fields_reset()
+        
+        if self.Coffhdr.pointertosymboltable != 0:
+            of = self.Coffhdr.pointertosymboltable
+            of += 18 * self.Coffhdr.numberofsymbols
+            sz, = struct.unpack('<>'[self._sex]+'I',self.content[of:of+4])
+            if len(self.content) < of+sz:
+                log.warning('File too short for StrTable')
+                sz = len(self.content) - of
+            self.SymbolStrings = StrTable(self.content[of:of+sz])
+            self.Symbols = CoffSymbols(self.content,
+                                       self.Coffhdr.pointertosymboltable,
+                                       self.Coffhdr.numberofsymbols,
+                                       self)
 
 
 
@@ -790,20 +842,32 @@ if __name__ == "__main__":
     from pprint import pprint as pp
     readline.parse_and_bind("tab: complete")
 
-    e = PE(open(sys.argv[1]).read())
-    print(repr(e.DirImport))
-    print(repr(e.DirExport))
-    print(repr(e.DirDelay))
-    print(repr(e.DirReloc))
-    print(repr(e.DirRes))
+    data = open(sys.argv[1]).read()
+    print("Read file of len %d"%len(data))
+    e = PE(data)
+    e_str = e.pack()
+    print("Packed file of len %d"%len(e_str))
+    open('out.packed.bin', 'wb').write(e_str)
+    if hasattr(e, 'DirImport'): print(repr(e.DirImport))
+    if hasattr(e, 'DirExport'): print(repr(e.DirExport))
+    if hasattr(e, 'DirDelay'):  print(repr(e.DirDelay))
+    if hasattr(e, 'DirReloc'):  print(repr(e.DirReloc))
+    if hasattr(e, 'DirRes'):    print(repr(e.DirRes))
 
-    # XXX patch boundimport /!\
+    # Remove Bound Import directory
+    # Usually, its content is not stored in any section... that's
+    # a future version of elfesteem will need to manage this
+    # specific directory in a specific way.
     e.NThdr.optentries[pe.DIRECTORY_ENTRY_BOUND_IMPORT].rva = 0
     e.NThdr.optentries[pe.DIRECTORY_ENTRY_BOUND_IMPORT].size = 0
 
+    # Create new sections with all zero content
     s_redir = e.SHList.add_section(name = "redir", rawsize = 0x1000)
     s_test = e.SHList.add_section(name = "test", rawsize = 0x1000)
     s_rel = e.SHList.add_section(name = "rel", rawsize = 0x5000)
+    e_str = e.pack()
+    open('out.sect.bin', 'wb').write(e_str)
+    print("WROTE out.sect.bin with added sections")
 
 
 

@@ -336,10 +336,20 @@ class Coffhdr(CStruct):
     _fields = [ ("machine","u16"),
                 ("numberofsections","u16"),
                 ("timedatestamp","u32"),
-                ("pointertosymboltable","u32"),
+                ("pointertosymboltable","ptr"),
                 ("numberofsymbols","u32"),
                 ("sizeofoptionalheader","u16"),
                 ("characteristics","u16") ]
+
+class XCOFFhdr64(CStruct):
+    _fields = [ ("machine","u16"),
+                ("numberofsections","u16"),
+                ("timedatestamp","u32"),
+                ("pointertosymboltable","ptr"),
+                ("sizeofoptionalheader","u16"),
+                ("characteristics","u16"),
+                ("numberofsymbols","u32"),
+                ]
 
 class Optehdr(CStruct):
     _fields = [ ("rva","u32"),
@@ -354,6 +364,7 @@ def get_optehdr_num(o):
         numberofrva = 0x10
     return numberofrva
 
+# COFF Optional headers can have many variants
 class Opthdr32(CStruct):
     _fields = [ ("magic","u16"),
                 ("majorlinkerversion","u08"),
@@ -365,8 +376,15 @@ class Opthdr32(CStruct):
                 ("BaseOfCode","u32"),
                 ("BaseOfData","u32"),
                 ]
+    vstamp = property(lambda _:_.majorlinkerversion<<8+_.minorlinkerversion)
+    tsize = property(lambda _:_.SizeOfCode)
+    dsize = property(lambda _:_.sizeofinitializeddata)
+    bsize = property(lambda _:_.sizeofuninitializeddata)
+    entry = property(lambda _:_.AddressOfEntryPoint)
+    text_start = property(lambda _:_.BaseOfCode)
+    data_start = property(lambda _:_.BaseOfData)
 
-class Opthdr64(CStruct):
+class Opthdr64(Opthdr32):
     _fields = [ ("magic","u16"),
                 ("majorlinkerversion","u08"),
                 ("minorlinkerversion","u08"),
@@ -375,6 +393,125 @@ class Opthdr64(CStruct):
                 ("sizeofuninitializeddata","u32"),
                 ("AddressOfEntryPoint","u32"),
                 ("BaseOfCode","u32"),
+                ]
+
+# Specs of COFF for Apollo found at
+# https://opensource.apple.com/source/gdb/gdb-908/src/include/coff/apollo.h
+class OpthdrApollo(CStruct):
+    _fields = [ ("magic","u16"),      # type of file
+                ("vstamp","u16"),     # version stamp
+                ("tsize","u32"),      # text size in bytes
+                ("dsize","u32"),      # initialized data
+                ("bsize","u32"),      # uninitialized data
+                ("entry","u32"),      # entry point
+                ("text_start","u32"), # base of text used for this file
+                ("data_start","u32"), # base of data used for this file
+                ("o_sri","u32"),      # Apollo specific - .sri data pointer
+                ("o_inlib","u32"),    # Apollo specific - .inlib data pointer
+                ("vid","u64"),        # Apollo specific - 64 bit version ID
+                ]
+
+# No spec for COFF for Intergraph Clipper of CLIX found
+# We make the assumption that is is standard COFF plus additional field
+class OpthdrClipper(CStruct):
+    _fields = [ ("magic","u16"),
+                ("vstamp","u16"),
+                ("tsize","u32"),
+                ("dsize","u32"),
+                ("bsize","u32"),
+                ("entry","u32"),
+                ("text_start","u32"),
+                ("data_start","u32"),
+                ("c0","u32"),    # Clipper specific?
+                ("c1","u32"),    # Clipper specific?
+                ]
+
+# Specs of COFF for Tru64 aka. OSF1 found at
+# http://h41361.www4.hpe.com/docs/base_doc/DOCUMENTATION/V50A_ACRO_SUP/OBJSPEC.PDF
+class OpthdrOSF1(CStruct):
+    _fields = [ ("magic","u16"),
+                ("vstamp","u16"),
+                ("bldrev","u16"),
+                ("padcell","u16"),
+                ("tsize","u64"),
+                ("dsize","u64"),
+                ("bsize","u64"),
+                ("entry","u64"),
+                ("text_start","u64"),
+                ("data_start","u64"),
+                ("bss_start","u64"),
+                ("gprmask","u32"),
+                ("fprmask","u64"),
+                ("gp_value","u32"),
+                ]
+    majorlinkerversion = property(lambda _:_.vstamp>>8)
+    minorlinkerversion = property(lambda _:_.vstamp&0xff)
+
+# Specs of XCOFF found at
+# http://www.ibm.com/support/knowledgecenter/ssw_aix_72/com.ibm.aix.files/XCOFF.htm
+class OpthdrXCOFF32(CStruct):
+    _fields = [ ("magic","u16"),
+                ("vstamp","u16"),
+                ("tsize","u32"),
+                ("dsize","u32"),
+                ("size","u32"),
+                ("entry","u32"),
+                ("text_start","u32"),
+                ("data_start","u32"),
+                ("toc","u32"),
+                ("snentry","u16"),
+                ("sntext","u16"),
+                ("sndata","u16"),
+                ("sntoc","u16"),
+                ("snloader","u16"),
+                ("snbss","u16"),
+                ("algntext","u16"),
+                ("algndata","u16"),
+                ("modtype","u16"),
+                ("cpuflag","u08"),
+                ("cputype","u08"),
+                ("maxstack","u32"),
+                ("maxdata","u32"),
+                ("debugger","u32"),
+                ("textpsize","u08"),
+                ("datapsize","u08"),
+                ("stackpsize","u08"),
+                ("flags","u08"),
+                ("sntdata","u16"),
+                ("sntbss","u16"),
+                ]
+
+class OpthdrXCOFF64(CStruct):
+    _fields = [ ("magic","u16"),
+                ("vstamp","u16"),
+                ("debugger","u32"),
+                ("text_start","u64"),
+                ("data_start","u64"),
+                ("toc","u64"),
+                ("snentry","u16"),
+                ("sntext","u16"),
+                ("sndata","u16"),
+                ("sntoc","u16"),
+                ("snloader","u16"),
+                ("snbss","u16"),
+                ("algntext","u16"),
+                ("algndata","u16"),
+                ("modtype","u16"),
+                ("cpuflag","u08"),
+                ("cputype","u08"),
+                ("textpsize","u08"),
+                ("datapsize","u08"),
+                ("stackpsize","u08"),
+                ("flags","u08"),
+                ("tsize","u64"),
+                ("dsize","u64"),
+                ("size","u64"),
+                ("entry","u64"),
+                ("maxstack","u64"),
+                ("maxdata","u64"),
+                ("sntdata","u16"),
+                ("sntbss","u16"),
+                ("x64flags","u16"),
                 ]
 
 class NThdr(CStruct):
@@ -404,13 +541,14 @@ class NThdr(CStruct):
 
 
 class Shdr(CStruct):
+    # 40-bytes long for 32-bit COFF ; 64-bytes long for 64-bit COFF
     _fields = [ ("name_data","8s"),
-                ("size","u32"),
-                ("addr","u32"),
-                ("rawsize","u32"),
-                ("offset","u32"),
-                ("pointertorelocations","u32"),
-                ("pointertolinenumbers","u32"),
+                ("size","ptr"),
+                ("addr","ptr"),
+                ("rawsize","ptr"),
+                ("offset","ptr"),
+                ("pointertorelocations","ptr"),
+                ("pointertolinenumbers","ptr"),
                 ("numberofrelocations","u16"),
                 ("numberoflinenumbers","u16"),
                 ("flags","u32") ]
@@ -445,27 +583,6 @@ class Shdr(CStruct):
                 ("mem_page","u16"),
               ]
     set_fields_TI = classmethod(set_fields_TI)
-    def set_fields_ALPHA(self):
-        # 64 bytes long, when the standard COFF is 40 bytes long
-        self._fields_orig = self._fields
-        self._fields = [
-                ("name_data","8s"),
-                ("addr","u32"),
-                ("size","u32"),
-                ("allone","u32"),
-                ("flags2","u32"),
-                ("rawsize","u32"),
-                ("dummy0","u32"),
-                ("offset","u32"),
-                ("dummy1","u32"),
-                ("dummy2","u32"),
-                ("dummy3","u32"),
-                ("dummy4","u32"),
-                ("dummy5","u32"),
-                ("dummy6","u32"),
-                ("flags","u32"),
-              ]
-    set_fields_ALPHA = classmethod(set_fields_ALPHA)
 
 
 class SHList(CStruct):
@@ -499,7 +616,8 @@ class SHList(CStruct):
         addr = (addr+(s_align-1))&~(s_align-1)
         offset = (offset+(f_align-1))&~(f_align-1)
 
-        f = {"name":name, "size":size,
+        name += (8-len(name))*data_null
+        f = {"name_data":name, "size":size,
              "addr":addr, "rawsize":rawsize,
              "offset": offset,
              "pointertorelocations":0,
@@ -672,14 +790,14 @@ class DirImport(CStruct):
                                                      self.parent_head.rva2off(d.originalfirstthunk),
                                                      Rva)
             else:
-                d.originalfirstthunks = None
+                d.originalfirstthunks = []
 
             if d.firstthunk and self.parent_head.is_rva_ok(d.firstthunk):
                 d.firstthunks = struct_array(self, s,
                                              self.parent_head.rva2off(d.firstthunk), 
                                              Rva)
             else:
-                d.firstthunks = None
+                d.firstthunks = []
             d.impbynames = []
             if d.originalfirstthunk and self.parent_head.is_rva_ok(d.originalfirstthunk):
                 tmp_thunk = d.originalfirstthunks

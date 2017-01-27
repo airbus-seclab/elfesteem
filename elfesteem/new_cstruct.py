@@ -168,7 +168,6 @@ class CStruct(CStructBase):
 
     def __init__(self, parent_head = None, _sex = None, _wsize = None, **kargs):
         self.parent_head = parent_head
-        self._size = None
         kargs = dict(kargs)
         #if not sex or size: get the one of the parent
         if _sex == None and _wsize == None:
@@ -178,7 +177,7 @@ class CStruct(CStructBase):
             else:
                 # else default sex & size
                 _sex = 0
-                _size = 32
+                _wsize = 32
         self.sex = _sex
         self.wsize = _wsize
         if self._packformat:
