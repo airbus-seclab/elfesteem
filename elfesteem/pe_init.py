@@ -275,7 +275,7 @@ class CoffSymbols(object):
     def __str__(self):
         raise AttributeError("Use pack() instead of str()")
     def pack(self):
-        rep = data_empty
+        rep = pe.data_empty
         for s in self.symbols:
             rep += s.pack()
         return rep
@@ -630,24 +630,39 @@ class PE(object):
             + self.COFFhdr.sizeofoptionalheader
         c[off] = self.SHList.pack()
         off += self.SHList.bytelen
+        end_of_headers = off
+
         # section data
-        for s in self.SHList:
-            if off > s.scnptr and s.rawsize != 0:
+        for s in sorted(self.SHList, key=lambda _:_.scnptr):
+            if s.rawsize == 0:
+                continue
+            if end_of_headers > s.scnptr:
                 log.warn("section %s offset %#x overlap pe hdr %#x",
                     s.name, s.scnptr, off)
-            c[s.scnptr:s.scnptr+s.rawsize] = s.data.data.pack()
+            elif off > s.scnptr:
+                log.warn("section %s offset %#x overlap previous section",
+                    s.name, s.scnptr)
+            off = s.scnptr+s.rawsize
+            c[s.scnptr:off] = s.data.data.pack()
 
+        # directories
         self.DirImport.build_content(c)
         self.DirExport.build_content(c)
         self.DirDelay.build_content(c)
         self.DirReloc.build_content(c)
         self.DirRes.build_content(c)
-        s = c.pack()
-        # TODO: add symbol table
+
+        # symbols and strings
+        if self.COFFhdr.numberofsymbols:
+            self.COFFhdr.pointertosymboltable = off
+            c[self.DOShdr.lfanew+self.NTsig.bytelen] = self.COFFhdr.pack()
+            c[off] = self.Symbols.pack()
+            off += 18 * self.COFFhdr.numberofsymbols
+            c[off] = self.SymbolStrings.pack()
         l = self.DOShdr.lfanew + self.NTsig.bytelen + self.COFFhdr.bytelen
         if l%4:
             log.warn("non aligned coffhdr, bad crc calculation")
-        crcs = self.patch_crc(s, self.NThdr.CheckSum)
+        crcs = self.patch_crc(c.pack(), self.NThdr.CheckSum)
         c[l+64] = struct.pack('I', crcs)
         return c.pack()
 
@@ -819,6 +834,11 @@ if __name__ == "__main__":
     data = open(sys.argv[1]).read()
     print("Read file of len %d"%len(data))
     e = PE(data)
+    # Packed file is not identical :-(
+    # Are missing:
+    # - the data between the end of DOS header and the start of PE header
+    # - the padding after the list of sections, before the first section
+    # - many parts of directories
     e_str = e.pack()
     print("Packed file of len %d"%len(e_str))
     open('out.packed.bin', 'wb').write(e_str)
@@ -867,6 +887,10 @@ if __name__ == "__main__":
         e.DirExport.create()
         e.DirExport.add_name("coco")
 
+    print("f0 %s" % e.DirImport.get_funcvirt('ExitProcess'))
+    print("f1 %s" % e.DirImport.get_funcvirt('LoadStringW'))
+    print("f2 %s" % e.DirExport.get_funcvirt('SetUserGeoID'))
+
     s_myimp = e.SHList.add_section(name = "myimp", size = len(e.DirImport))
     s_myexp = e.SHList.add_section(name = "myexp", size = len(e.DirExport))
     s_mydel = e.SHList.add_section(name = "mydel", size = len(e.DirDelay))
@@ -888,8 +912,6 @@ if __name__ == "__main__":
         e.DirRes.set_rva(s_myres.addr)
 
     e_str = e.pack()
-    print("f1 %s" % e.DirImport.get_funcvirt('LoadStringW'))
-    print("f2 %s" % e.DirExport.get_funcvirt('SetUserGeoID'))
     open('out.bin', 'wb').write(e_str)
     #o = Coff(open('main.obj').read())
     #print(repr(o.COFFhdr))
