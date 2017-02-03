@@ -305,7 +305,9 @@ class PE(object):
             self.NThdr = pe.NThdr(parent=self)
             self.SHList = pe.SHList(parent=self)
 
-            self.DirImport = pe.DirImport(self)
+            self._sex = 0
+            self._wsize = 32
+            self.DirImport = pe.DirImport(parent=self)
             self.DirExport = pe.DirExport(self)
             self.DirDelay = pe.DirDelay(self)
             self.DirReloc = pe.DirReloc(self)
@@ -315,51 +317,39 @@ class PE(object):
             self.DOShdr.lfanew = 0xe0
 
             if wsize == 32:
+                self.COFFhdr.machine = pe.IMAGE_FILE_MACHINE_I386
+                self.COFFhdr.characteristics = 0x10f
+                self.COFFhdr.sizeofoptionalheader = 0xe0
                 self.Opthdr.magic = pe.IMAGE_NT_OPTIONAL_HDR32_MAGIC
             elif wsize == 64:
+                self.COFFhdr.machine = pe.IMAGE_FILE_MACHINE_AMD64
+                self.COFFhdr.characteristics = 0x22
+                self.COFFhdr.sizeofoptionalheader = 0xf0
                 self.Opthdr.magic = pe.IMAGE_NT_OPTIONAL_HDR64_MAGIC
-            else:
-                raise ValueError('unknown pe size %r'%wsize)
-
-            self.Opthdr.majorlinkerversion = 0x7
-            self.Opthdr.minorlinkerversion = 0x0
-            self.NThdr.filealignment = 0x1000
-            self.NThdr.sectionalignment = 0x1000
-            self.NThdr.majoroperatingsystemversion = 0x5
-            self.NThdr.minoroperatingsystemversion = 0x1
-            self.NThdr.MajorImageVersion = 0x5
-            self.NThdr.MinorImageVersion = 0x1
-            self.NThdr.majorsubsystemversion = 0x4
-            self.NThdr.minorsubsystemversion = 0x0
-            self.NThdr.subsystem = 0x3
-            self.NThdr.dllcharacteristics = 0x8000
-
-            #for createthread
-            self.NThdr.sizeofstackreserve = 0x200000
-            self.NThdr.sizeofstackcommit = 0x1000
-            self.NThdr.sizeofheapreserve = 0x100000
-            self.NThdr.sizeofheapcommit = 0x1000
+            #self.Opthdr.majorlinkerversion = 0x7
+            #self.Opthdr.minorlinkerversion = 0x0
 
             self.NThdr.ImageBase = 0x400000
-            self.NThdr.sizeofheaders = 0x1000
+            self.NThdr.sectionalignment = 0x1000
+            self.NThdr.filealignment = 0x200
+            #self.NThdr.majoroperatingsystemversion = 0x5
+            #self.NThdr.minoroperatingsystemversion = 0x1
+            #self.NThdr.MajorImageVersion = 0x5
+            #self.NThdr.MinorImageVersion = 0x1
+            #self.NThdr.majorsubsystemversion = 0x4
+            #self.NThdr.minorsubsystemversion = 0x0
+            #self.NThdr.subsystem = 0x3
+            #self.NThdr.dllcharacteristics = 0x8000
+            #self.NThdr.sizeofstackreserve = 0x200000
+            #self.NThdr.sizeofstackcommit = 0x1000
+            #self.NThdr.sizeofheapreserve = 0x100000
+            #self.NThdr.sizeofheapcommit = 0x1000
+            #self.NThdr.sizeofheaders = 0x1000
             self.NThdr.numberofrvaandsizes = 0x10
             self.NThdr.optentries = pe.OptNThdrs(parent=self)
             self.NThdr.CheckSum = 0
 
             self.NTsig.signature = 0x4550
-
-            if wsize == 32:
-                self.COFFhdr.machine = pe.IMAGE_FILE_MACHINE_I386
-            elif wsize == 64:
-                self.COFFhdr.machine = pe.IMAGE_FILE_MACHINE_AMD64
-            else:
-                raise ValueError('unknown pe size %r'%wsize)
-            if wsize == 32:
-                self.COFFhdr.characteristics = 0x10f
-                self.COFFhdr.sizeofoptionalheader = 0xe0
-            else:
-                self.COFFhdr.characteristics = 0x22
-                self.COFFhdr.sizeofoptionalheader = 0xf0
 
         else:
             self._content = StrPatchwork(pestr)
@@ -387,9 +377,7 @@ class PE(object):
             self.NTsig = None
             return
         self.NTsig = pe.NTsig(parent=self, content=self.content, start=of)
-        self.DirImport = None
         self.DirExport = None
-        self.DirDelay = None
         self.DirReloc = None
         self.DirRes = None
 
@@ -400,31 +388,26 @@ class PE(object):
         of += self.NTsig.bytelen
         self.COFFhdr = pe.COFFhdr(parent=self, content=self.content, start=of)
         of += self.COFFhdr.bytelen
-        PEwsize, = struct.unpack('H', self.content[of:of+2])
-        PEwsize = (PEwsize>>8)*32
-        self.Opthdr = {32: pe.Opthdr32, 64: pe.Opthdr64}[PEwsize](parent=self, content=self.content, start=of)
+        magic, = struct.unpack('H', self.content[of:of+2])
+        self.wsize = (magic>>8)*32
+        self.Opthdr = {32: pe.Opthdr32, 64: pe.Opthdr64}[self.wsize](parent=self, content=self.content, start=of)
         l = self.Opthdr.bytelen
+        self.NThdr = pe.NThdr(parent=self, content=self.content, start=of+l)
+        of += self.COFFhdr.sizeofoptionalheader
         # Even if the NT header has 64-bit pointers, in 64-bit PE files
         # the Section headers have 32-bit pointers (it is a 32-bit COFF
         # in a 64-bit PE).
-        self.NThdr = pe.NThdr(parent=self, content=self.content,
-            start=of+l,
-            wsize=PEwsize)
-        of += self.COFFhdr.sizeofoptionalheader
-        self.SHList = pe.SHList(parent=self, content=self.content,
-            start=of,
+        self.SHList = pe.SHList(parent=self, content=self.content, start=of,
             wsize=32)
+
+        self.DirImport = pe.DirImport(parent=self, content=self.content, start=None)
 
         self._sex = 0
         self._wsize = 32
-        try:
-            self.DirImport = pe.DirImport.unpack(self.content,
-                                                 self.NThdr.optentries[pe.DIRECTORY_ENTRY_IMPORT].rva,
+        if parse_delay:
+            self.DirDelay = pe.DirDelay.unpack(self.content,
+                                                 self.NThdr.optentries[pe.DIRECTORY_ENTRY_DELAY_IMPORT].rva,
                                                  self)
-        except pe.InvalidOffset:
-            log.warning('cannot parse DirImport, skipping')
-            self.DirImport = pe.DirImport(self)
-
         try:
             self.DirExport = pe.DirExport.unpack(self.content,
                                                  self.NThdr.optentries[pe.DIRECTORY_ENTRY_EXPORT].rva,
@@ -513,19 +496,6 @@ class PE(object):
                 return s
         return None
 
-    def is_rva_ok(self, rva):
-        # Some binaries have import rva outside section, but addresses seem
-        # to be rounded.
-        # Instead of testing s.addr <= rva < (s.addr+s.size+0xfff) & 0xFFFFF000
-        # in getsectionbyrva, as implemented by patch 68ac083623ff, it is more
-        # robust to call getsectionbyrva with rva & 0xFFFFF000, when parsing
-        # import tables.
-        # Apparently, when parsing imports, getsectionbyrva is only used by
-        # is_rva_ok, which is the only one needing a patch.
-        # We need to check that the 0xFFFFF000 mask is not specific to 32-bit
-        # PE.
-        return  self.getsectionbyrva(rva & 0xFFFFF000) is not None
-
     def rva2off(self, rva):
         # Special case rva in header
         if rva < self.NThdr.sizeofheaders:
@@ -600,8 +570,18 @@ class PE(object):
         s+=l
         return s
 
-    def build_content(self):
+    def build_headers(self, c):
+        off = self.DOShdr.lfanew
+        c[off] = self.NTsig.pack()
+        off += self.NTsig.bytelen
+        c[off] = self.COFFhdr.pack()
+        off += self.COFFhdr.bytelen
+        c[off] = self.Opthdr.pack()
+        off += self.Opthdr.bytelen
+        c[off] = self.NThdr.pack()
+        off += self.NThdr.bytelen
 
+    def build_content(self):
         c = StrPatchwork()
         c[0] = self.DOShdr.pack()
 
@@ -613,15 +593,7 @@ class PE(object):
             self.NThdr.sizeofimage = size
 
         # headers
-        off = self.DOShdr.lfanew
-        c[off] = self.NTsig.pack()
-        off += self.NTsig.bytelen
-        c[off] = self.COFFhdr.pack()
-        off += self.COFFhdr.bytelen
-        c[off] = self.Opthdr.pack()
-        off += self.Opthdr.bytelen
-        c[off] = self.NThdr.pack()
-        off += self.NThdr.bytelen
+        self.build_headers(c)
 
         # section headers
         off = self.DOShdr.lfanew \
@@ -633,6 +605,9 @@ class PE(object):
         end_of_headers = off
 
         # section data
+        # note that the content of directories should have been already
+        # included section data, which is possible because position and
+        # size of sections are known at this point
         for s in sorted(self.SHList, key=lambda _:_.scnptr):
             if s.rawsize == 0:
                 continue
@@ -645,20 +620,17 @@ class PE(object):
             off = s.scnptr+s.rawsize
             c[s.scnptr:off] = s.data.data.pack()
 
-        # directories
-        self.DirImport.build_content(c)
-        self.DirExport.build_content(c)
-        self.DirDelay.build_content(c)
-        self.DirReloc.build_content(c)
-        self.DirRes.build_content(c)
-
         # symbols and strings
         if self.COFFhdr.numberofsymbols:
             self.COFFhdr.pointertosymboltable = off
-            c[self.DOShdr.lfanew+self.NTsig.bytelen] = self.COFFhdr.pack()
             c[off] = self.Symbols.pack()
             off += 18 * self.COFFhdr.numberofsymbols
             c[off] = self.SymbolStrings.pack()
+
+        # some headers may have been updated when building sections or symbols
+        self.build_headers(c)
+
+        # final verifications
         l = self.DOShdr.lfanew + self.NTsig.bytelen + self.COFFhdr.bytelen
         if l%4:
             log.warn("non aligned coffhdr, bad crc calculation")
@@ -842,11 +814,6 @@ if __name__ == "__main__":
     e_str = e.pack()
     print("Packed file of len %d"%len(e_str))
     open('out.packed.bin', 'wb').write(e_str)
-    if hasattr(e, 'DirImport'): print(repr(e.DirImport))
-    if hasattr(e, 'DirExport'): print(repr(e.DirExport))
-    if hasattr(e, 'DirDelay'):  print(repr(e.DirDelay))
-    if hasattr(e, 'DirReloc'):  print(repr(e.DirReloc))
-    if hasattr(e, 'DirRes'):    print(repr(e.DirRes))
 
     # Remove Bound Import directory
     # Usually, its content is not stored in any section... that's
@@ -863,9 +830,15 @@ if __name__ == "__main__":
     open('out.sect.bin', 'wb').write(e_str)
     print("WROTE out.sect.bin with added sections")
 
-
-
-    new_dll = [({"name":"kernel32.dll",
+    e = PE(data)
+    # Delete the last sections => OK
+    for _ in range(2):
+        del e.SHList._array[-1]
+        e.SHList._size -= 40
+        e.COFFhdr.numberofsections -= 1
+    # Add two Descriptors in the Import Directory
+    e.DirImport.add_dlldesc(
+              [({"name":"kernel32.dll",
                  "firstthunk":s_test.vaddr},
                 ["CreateFileA",
                  "SetFilePointer",
@@ -881,35 +854,18 @@ if __name__ == "__main__":
                  ]
                 )
                ]
-    e.DirImport.add_dlldesc(new_dll)
-
-    if e.DirExport.expdesc is None:
-        e.DirExport.create()
-        e.DirExport.add_name("coco")
+              )
+    e_str = e.pack()
+    open('out.import.bin', 'wb').write(e_str)
+    print("WROTE out.import.bin with new imports")
 
     print("f0 %s" % e.DirImport.get_funcvirt('ExitProcess'))
     print("f1 %s" % e.DirImport.get_funcvirt('LoadStringW'))
     print("f2 %s" % e.DirExport.get_funcvirt('SetUserGeoID'))
 
-    s_myimp = e.SHList.add_section(name = "myimp", size = len(e.DirImport))
-    s_myexp = e.SHList.add_section(name = "myexp", size = len(e.DirExport))
-    s_mydel = e.SHList.add_section(name = "mydel", size = len(e.DirDelay))
-    s_myrel = e.SHList.add_section(name = "myrel", size = len(e.DirReloc))
-    s_myres = e.SHList.add_section(name = "myres", size = len(e.DirRes))
-
-    """
-    for s in e.SHList.shlist:
-        s.offset+=0xC00
-    """
-
-    e.DirImport.set_rva(s_myimp.addr)
-    e.DirExport.set_rva(s_myexp.addr)
-    if e.DirDelay.delaydesc:
-        e.DirDelay.set_rva(s_mydel.addr)
-    if e.DirReloc.reldesc:
-        e.DirReloc.set_rva(s_myrel.addr)
-    if e.DirRes.resdesc:
-        e.DirRes.set_rva(s_myres.addr)
+    if e.DirExport.expdesc is None:
+        e.DirExport.create()
+        e.DirExport.add_name("coco")
 
     e_str = e.pack()
     open('out.bin', 'wb').write(e_str)

@@ -171,6 +171,54 @@ def print_layout(e, filesz):
                     of = e.rva2off(s.rva)
                 layout.append((of, s.size,
                                 'DirEnt '+pe.constants['DIRECTORY_ENTRY'][i]))
+                if i == pe.DIRECTORY_ENTRY_IMPORT:
+                    directory = e.DirImport
+                    name = 'IMPORT'
+                    layout.append((
+                                directory._off,
+                                directory._size,
+                                '%s Descriptors'%name))
+                    for idx, d in enumerate(directory):
+                        # for a .exe created by mingw,
+                        # there is a RVA before each thunk
+                        if hasattr(d, 'ILT'):
+                            layout.append((
+                                e.rva2off(d.originalfirstthunk),
+                                d.ILT._size,
+                                '%s Thunks:original [%d]' % (name, idx)))
+                        if hasattr(d, 'IAT'):
+                            layout.append((
+                                e.rva2off(d.firstthunk),
+                                d.IAT._size,
+                                '%s Thunks:current  [%d]' % (name, idx)))
+                        if hasattr(d, 'name'):
+                            # Sometimes aligned to 2 bytes
+                            size = d.name._size
+                            if      idx+1 == len(directory) or \
+                                    d.name_rva+size<directory[idx+1].name_rva:
+                                if size % 2: size += 1
+                            layout.append((
+                                e.rva2off(d.name_rva),
+                                size,
+                                '%s DLLname [%d]' % (name, idx)))
+                        for jdx, t in enumerate(getattr(d, 'ILT', [])):
+                            if not hasattr(t.obj, '_size'):
+                                continue
+                            # Aligned to 2 bytes
+                            size = t.obj._size
+                            if size % 2: size += 1
+                            layout.append((
+                                e.rva2off(t.rva),
+                                size,
+                                '%s IMPname [%d,%d]' % (name, idx, jdx)))
+                        for jdx, t in enumerate(getattr(d, 'IAT', [])):
+                            if not hasattr(t.obj, '_size'):
+                                continue
+                            if jdx >= len(getattr(d, 'ILT', [])):
+                                continue
+                            if not hasattr(d.ILT[jdx].obj, '_size'):
+                                continue
+                            assert t.rva == d.ILT[jdx].rva
     print("\nFILE CONTENT LAYOUT")
     def section_extract(x):
         s = x[2].split()[0]
@@ -213,7 +261,7 @@ def print_layout(e, filesz):
         print("Not in a section: %s" % (' '.join(l[2:])))
 
 def pe_dir_display(e):
-    print(repr(e.DirImport))
+    if hasattr(e, 'DirImport'): e.DirImport.display()
     print(repr(e.DirExport))
     print(repr(e.DirDelay))
 

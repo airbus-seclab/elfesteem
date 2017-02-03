@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-from elfesteem.cstruct import CBase, CStruct, CArray
+from elfesteem.cstruct import CBase, CString, CStruct, CArray
 from elfesteem.cstruct import data_null, data_empty
 from elfesteem.cstruct import bytes_to_name, name_to_bytes
 from elfesteem.new_cstruct import CStruct as NEW_CStruct
@@ -11,7 +11,7 @@ log = logging.getLogger("pepy")
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
 log.addHandler(console_handler)
-log.setLevel(logging.WARN)
+log.setLevel(logging.INFO)
 
 DIRECTORY_ENTRY_EXPORT           = 0
 DIRECTORY_ENTRY_IMPORT           = 1
@@ -776,6 +776,261 @@ class SHList(CArray):
         return s
 
 
+####################################################################
+# Directories
+
+# Parsing a Directory is not complicated, it is a tree-like structure
+# where RVA are pointers to be converted in offsets in the file.
+# Modifying a Directory makes is more complicated.
+# - It is not always entirely in one section; e.g. for some PE files
+#   everything from the DelayImport direction is in .rdata, with the
+#   exception of the current thunks, in .data
+#   Therefore if we want to add an imported function, we may need to
+#   modify two sections.
+# - References withing a directory are RVA, which change when the
+#   addresses and sizes of sections changes. Therefore if we change
+#   something, we need to recompute all RVA, and therefore to know
+#   where everything will be located.
+# - References to directories from e.g. the executable section are
+#   also RVA, they would need to be modified if the load address of
+#   the directory changes.
+# Therefore, if we change a Directory, we currently only allow to
+# rebuild the file if a dedicated section is created to store the
+# modifications.
+
+# Depending on how the PE file has been generated, the place
+# where the directories are found varies a lot. Here are a
+# few examples:
+#
+# MinGW
+#   DirEnt IMPORT       in .idata (as recommended by the reference doc of PE)
+#   DirEnt EXPORT       in .edata (as recommended by the reference doc of PE)
+#
+# Some old Microsoft files
+#   DirEnt BOUND_IMPORT in headers (after PE header)
+#   DirEnt IMPORT       in .text
+#   DirEnt EXPORT       in .text
+#   DirEnt DELAY_IMPORT in .text
+#   DirEnt LOAD_CONFIG  in .text
+#   DirEnt IAT          in .text (contains IMPORT current Thunks)
+#   DirEnt DEBUG        in .text
+#   DirEnt RESOURCE     in .rsrc
+#   DirEnt BASERELOC    in .reloc
+#   DirEnt SECURITY     in .reloc or in no section
+#   Thunks DELAY_IMPORT original in .text, current in .data
+#
+# Some more recent Microsoft files
+#   DirEnt BOUND_IMPORT in headers (after PE header)
+#   DirEnt DEBUG        in .text
+#   DirEnt IAT          in .rdata (contains IMPORT current Thunks)
+#   DirEnt IMPORT       in .rdata
+#   DirEnt EXPORT       in .rdata
+#   DirEnt LOAD_CONFIG  in .rdata
+#   DirEnt EXCEPTION    in .pdata
+#   DirEnt RESOURCE     in .rsrc
+#   DirEnt BASERELOC    in .reloc
+#   DirEnt SECURITY     in .reloc
+
+class ImportName(CStruct):
+    _fields = [ ("hint", "u16"),
+                ("name", CString) ]
+    def update(self, **kargs):
+        CStruct.update(self, **kargs)
+        if 's' in kargs:
+            # Update the string in the CString
+            self.name.update(s=kargs['s'])
+            self._size = 2+self.name._size
+
+class ImportNamePtr(CStruct):
+    _fields = [ ("rva","ptr") ]
+    def unpack(self, c, o):
+        CStruct.unpack(self, c, o)
+        # The function can be imported by name, or by ordinal
+        mask = {32: 0x80000000, 64: 0x8000000000000000}[self.wsize]
+        if self.rva is 0:
+            self.name = None
+        elif self.rva & mask:
+            self.obj = self.rva & (mask-1)
+            self.name = self.obj
+        else:
+            off = self.parent.parent.rva2off(self.rva)
+            if self.rva < self.parent.parent.parent.parent.NThdr.sizeofheaders:
+                # Negate the hack in rva2off
+                off = None
+            # When parsing 'firstthunk', either "off' is None
+            # or it is identical to 'originalfirstthunk'.
+            # But that's just what is usually the case, a valid PE
+            # file may be different.
+            if off is None:
+                # Should never happen for originalfirstthunk
+                self.obj = None
+                self.name = None
+            else:
+                self.obj = ImportName(parent=self, content=c, start=off)
+                self.name = str(self.obj.name)
+
+class ImportThunks(CArray):
+    _cls = ImportNamePtr
+
+class ImportDescriptor(CStruct):
+    _fields = [ ("originalfirstthunk","u32"), # Import Lookup Table
+                ("timestamp","u32"),
+                ("forwarderchain","u32"),
+                ("name_rva","u32"),           # Imported DLL name
+                ("firstthunk","u32"),         # Import Address Table
+                                              # overwritten by the PE loader
+              ]
+    def rva2off(self, rva):
+        return self.parent.parent.rva2off(rva)
+    def unpack(self, c, o):
+        CStruct.unpack(self, c, o)
+        if self.name_rva:
+            # Follow the RVAs
+            of = self.rva2off(self.name_rva)
+            if of is None:
+                log.error('NAME')
+            else:
+                self.name = CString(parent=self, content=c, start=of)
+            of = self.rva2off(self.firstthunk)
+            if of is None:
+                log.error('IAT')
+            else:
+                self.IAT = ImportThunks(parent=self, content=c, start=of)
+            # NB: http://win32assembly.programminghorizon.com/pe-tut6.html
+            # says "Some linkers generate PE files with 0 in
+            # OriginalFirstThunk. This is considered a bug."
+            # An example is the IDA installer!
+            of = self.rva2off(self.originalfirstthunk)
+            if not of in (0, None):
+                self.ILT = ImportThunks(parent=self, content=c, start=of)
+
+class DirImport(CArray):
+    _cls = ImportDescriptor
+    _idx = DIRECTORY_ENTRY_IMPORT
+    def unpack(self, c, o):
+        if o is None:
+            # Use the entry in the NT headers
+            # .rva contains the RVA of the descriptor array
+            # .size may contain the size of the descriptor array or of
+            #   the whole directory entry, including thunks and names;
+            #   it depends on the PE file.
+            if self._idx >= len(self.parent.NThdr.optentries): return # No entry
+            o = self.parent.NThdr.optentries[self._idx]
+            if o.rva == 0: return # No directory
+            o = self.parent.rva2off(o.rva)
+        CArray.unpack(self, c, o)
+    def display(self):
+        print("<%s>" % self.__class__.__name__)
+        for idx, d in enumerate(self):
+            print("%2d %r"%(idx,d.name))
+            for jdx, t in enumerate(d.IAT):
+                t_virt = self.parent.rva2virt(d.firstthunk+jdx*t._size)
+                t_obj = repr(t.obj)
+                # Only display original thunks that are incoherent with current
+                if hasattr(d, 'ILT'):
+                    u = d.ILT[jdx]
+                    if u.rva != t.rva:
+                        t_obj += ' %r' % u.obj
+                print("        %2d %#10x %s"%(jdx,t_virt,t_obj))
+    def pack(self):
+        raise AttributeError("Cannot pack '%s': the Directory Entry data is not always contiguous"%self.__class__.__name__)
+    def add_imports(self, *args):
+        # We add a new ImportDescriptor for each new DLL
+        # We need to avoid changing RVA of the current IAT, because they
+        # can be used e.g. in the executable section .text
+        # But there might not be enough space after the current list of
+        # descriptors to add new descriptors...
+        # The trick we use is to move the list of descriptors in a new
+        # section, where we will also store the new ILT, IAT and names,
+        # leaving the original section unchanged.
+        e = self.parent
+        s = e.SHList.add_section(
+            name='.idata2',
+            flags=IMAGE_SCN_MEM_WRITE|IMAGE_SCN_MEM_READ|IMAGE_SCN_CNT_INITIALIZED_DATA,
+            rsize=0x1000,     # should be enough
+            )
+        base_rva = e.off2rva(s.scnptr)
+        e.NThdr.optentries[self._idx].rva = base_rva
+        self._size += self._last._size * len(args)
+        of = self._size
+        s.data.data = StrPatchwork()
+        for dll_name, dll_func in args:
+            # First, an empty descriptor
+            d = ImportDescriptor(parent=self)
+            self._array.append(d)
+            # Add the DLL name
+            d.name = CString(parent=d, s=dll_name)
+            d.name_rva = base_rva+of
+            s.data.data[of] = d.name.pack()
+            of += d.name._size
+            if of%2: of += 1
+            # Add the Import names; they will be located after the two thunks
+            thunk_len = (1+len(dll_func))*(self.wsize/8)
+            thunk_len *= 2
+            # Add the IAT & ILT
+            d.ILT = ImportThunks(parent=d)
+            for n in dll_func:
+                t = ImportNamePtr(parent=d.ILT)
+                t.obj = ImportName(parent=t, s=n)
+                t.rva = base_rva+of+thunk_len
+                t.name = n
+                s.data.data[of+thunk_len] = t.obj.pack()
+                thunk_len += t.obj._size
+                if thunk_len%2: thunk_len += 1
+                d.ILT.append(t)
+            d.originalfirstthunk = base_rva+of
+            s.data.data[of] = d.ILT.pack()
+            of += d.ILT._size
+            d.IAT = ImportThunks(parent=d)
+            for n in dll_func:
+                t = ImportNamePtr(parent=d.ILT)
+                t.rva = d.ILT[len(d.IAT)].rva
+                t.obj = d.ILT[len(d.IAT)].obj
+                t.name = n
+                d.IAT.append(t)
+            d.firstthunk = base_rva+of
+            s.data.data[of] = d.IAT.pack()
+            of += thunk_len - d.ILT._size
+        # Write the descriptor list (now that everyting has been computed)
+        s.data.data[0] = CArray.pack(self)
+        # Update the section sizes
+        s.paddr = len(s.data.data)
+        e.NThdr.optentries[self._idx].size = s.paddr # Unused by PE loaders
+        if s.rsize < s.paddr:
+            s.rsize = s.paddr
+        s.data.data[s.paddr] = data_null*(s.rsize-s.paddr)
+    # For API compatibility with previous versions of elfesteem
+    def get_dlldesc(self):
+        return [ ({'name': d.name}, [t.name for t in d.IAT]) for d in self ]
+    def add_dlldesc(self, new_dll):
+        args = []
+        for dll_name, dll_func in new_dll:
+            args.append((dll_name['name'],dll_func))
+        self.add_imports(*args)
+    def impdesc(self):
+        class ImpDesc_e(object):
+            def __init__(self, d):
+                class Name(object):
+                    def __init__(self, s):
+                        self.name = s
+                self.firstthunk = d.firstthunk
+                self.dlldescname = Name(str(d.name))
+                self.impbynames = [Name(str(_.obj.name)) for _ in d.ILT]
+        return [ImpDesc_e(_) for _ in self]
+    impdesc = property(impdesc)
+    def get_funcrva(self, name):
+        # Position of the function in the Import Address Table
+        for d in self:
+            for idx, t in enumerate(d.IAT):
+                if t.name == name:
+                    return d.firstthunk+idx*t._size
+        return None
+    def get_funcvirt(self, name):
+        return self.parent.rva2virt(self.get_funcrva(name))
+
+
+
+
 class Rva(NEW_CStruct):
     _fields = [ ("rva","ptr"),
                 ]
@@ -799,18 +1054,6 @@ class DescName(NEW_CStruct):
     def sets(self, value):
         return value+data_null
 
-class ImportByName(NEW_CStruct):
-    _fields = [ ("hint", "u16"),
-                ("name", "sz")
-                ]
-
-class ImpDesc_e(NEW_CStruct):
-    _fields = [ ("originalfirstthunk","u32"),
-                ("timestamp","u32"),
-                ("forwarderchain","u32"),
-                ("name","u32"),
-                ("firstthunk","u32")
-              ]
 
 
 class struct_array(object):
@@ -858,265 +1101,6 @@ class struct_array(object):
         self.l.append(a)
     def insert(self, index, i):
         self.l.insert(index, i)
-
-class DirImport(NEW_CStruct):
-    _fields = [ ("impdesc", (lambda c, s, of:c.gete(s, of),
-                             lambda c, value:c.sete(value)))]
-    def gete(self, s, of):
-        if not of:
-            return None, of
-        of = self.parent_head.rva2off(of)
-        out = struct_array(self, s, of, ImpDesc_e)
-        if self.parent_head._wsize == 32:
-            mask_ptr = 0x80000000
-        elif self.parent_head._wsize == 64:
-            mask_ptr = 0x8000000000000000
-
-        for i, d in enumerate(out):
-            if d.name == 0:
-                # Special case
-                out = out[:i]
-                break
-            d.dlldescname = DescName.unpack(s, d.name, self.parent_head)
-            if d.originalfirstthunk and self.parent_head.is_rva_ok(d.originalfirstthunk):
-                d.originalfirstthunks = struct_array(self, s,
-                                                     self.parent_head.rva2off(d.originalfirstthunk),
-                                                     Rva)
-            else:
-                d.originalfirstthunks = []
-
-            if d.firstthunk and self.parent_head.is_rva_ok(d.firstthunk):
-                d.firstthunks = struct_array(self, s,
-                                             self.parent_head.rva2off(d.firstthunk), 
-                                             Rva)
-            else:
-                d.firstthunks = []
-            d.impbynames = []
-            if d.originalfirstthunk and self.parent_head.is_rva_ok(d.originalfirstthunk):
-                tmp_thunk = d.originalfirstthunks
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise ValueError("no thunk!!")
-            for i in range(len(tmp_thunk)):
-                if tmp_thunk[i].rva&mask_ptr == 0:
-                    try:
-                        n = ImportByName.unpack(s,
-                                                self.parent_head.rva2off(tmp_thunk[i].rva),
-                                                self.parent_head)
-                    except:
-                        log.warning('cannot import from add %s', tmp_thunk[i].rva)
-                        n = 0
-                    d.impbynames.append(n)
-                else:
-                    d.impbynames.append(tmp_thunk[i].rva&(mask_ptr-1))
-        return out, of
-
-    def sete(self, v):
-        c = data_empty.join([x.pack() for x in v])+data_null*(4*5) #ImdDesc_e
-        return c
-
-
-    def __len__(self):
-        l = (len(self.impdesc)+1)*(5*4) #ImpDesc_e size
-        for i, d in enumerate(self.impdesc):
-            l+=len(d.dlldescname)
-            if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                l+=(len(d.originalfirstthunks)+1)*self.parent_head._wsize/8 #Rva size
-            if d.firstthunk:
-                l+=(len(d.firstthunks)+1)*self.parent_head._wsize/8 #Rva size
-            if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                tmp_thunk = d.originalfirstthunks
-            """
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise "no thunk!!"
-            """
-            for i, imp in enumerate(d.impbynames):
-                if isinstance(imp, ImportByName):
-                    l+=len(imp)
-        return l
-
-
-    def set_rva(self, rva, size = None):
-        self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_IMPORT].rva = rva
-        if not size:
-            self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_IMPORT].size= len(self)
-        else:
-            self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_IMPORT].size= size
-        rva+=(len(self.impdesc)+1)*5*4 # ImpDesc size
-        for i, d in enumerate(self.impdesc):
-            d.name = rva
-            rva+=len(d.dlldescname)
-            if d.originalfirstthunk:# and self.parent_head.rva2off(d.originalfirstthunk):
-                d.originalfirstthunk = rva
-                rva+=(len(d.originalfirstthunks)+1)*self.parent_head._wsize/8 # rva size
-            #XXX rva fthunk not patched => keep original func addr
-            #if d.firstthunk:
-            #    d.firstthunk = rva
-            #    rva+=(len(d.firstthunks)+1)*self.parent_head._wsize/8 # Rva size
-            if d.originalfirstthunk and d.firstthunk:
-                if isinstance(d.originalfirstthunk, struct_array):
-                    tmp_thunk = d.originalfirstthunks
-                elif isinstance(d.firstthunks, struct_array):
-                    tmp_thunk = d.firstthunks
-                else:
-                    raise "no thunk!!"
-            elif d.originalfirstthunk:# and self.parent_head.rva2off(d.originalfirstthunk):
-                tmp_thunk = d.originalfirstthunks
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise "no thunk!!"
-
-            if tmp_thunk == d.originalfirstthunks:
-                d.firstthunks = tmp_thunk
-            else:
-                d.originalfirstthunks = tmp_thunk
-            for i, imp in enumerate(d.impbynames):
-                if isinstance(imp, ImportByName):
-                    tmp_thunk[i].rva = rva
-                    rva+=len(imp)
-
-    def build_content(self, c):
-        dirimp = self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_IMPORT]
-        of1 = dirimp.rva
-        if not of1: # No Import
-            return
-        c[self.parent_head.rva2off(of1)] = self.impdesc.pack()
-        for i, d in enumerate(self.impdesc):
-            c[self.parent_head.rva2off(d.name)] = d.dlldescname.pack()
-            if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                c[self.parent_head.rva2off(d.originalfirstthunk)] = d.originalfirstthunks.pack()
-            if d.firstthunk:
-                c[self.parent_head.rva2off(d.firstthunk)] = d.firstthunks.pack()
-            if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                tmp_thunk = d.originalfirstthunks
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise "no thunk!!"
-            for j, imp in enumerate(d.impbynames):
-                if isinstance(imp, ImportByName):
-                    c[self.parent_head.rva2off(tmp_thunk[j].rva)] = imp.pack()
-
-    def get_dlldesc(self):
-        out = []
-        for impdesc in self.impdesc:
-            dllname = impdesc.dlldescname.name
-            funcs = []
-            for f in impdesc.impbynames:
-                if isinstance(f, ImportByName):
-                    funcs.append(f.name)
-                else:
-                    funcs.append(f)
-            d = ({"name":dllname, "firstthunk":impdesc.firstthunk}, funcs)
-            out.append(d)
-        return out
-
-    def __repr__(self):
-        rep = "<%s>\n" % self.__class__.__name__
-        if self.impdesc is None:
-            return rep
-        for i,s in enumerate(self.impdesc):
-            rep += "%2d %-25r %r\n" % (i, s.dlldescname, s)
-            for ii, f in enumerate(s.impbynames):
-                rep += "    %2d %-16r\n" % (ii, f)
-        return rep
-
-    def add_dlldesc(self, new_dll):
-        if self.parent_head._wsize == 32:
-            mask_ptr = 0x80000000
-        elif self.parent_head._wsize == 64:
-            mask_ptr = 0x8000000000000000
-        new_impdesc = []
-        of1 = None
-        for nd, fcts in new_dll:
-            for x in ["timestamp", "forwarderchain", "originalfirstthunk"]:
-                if not x in nd:
-                    nd[x] = 0
-            d = ImpDesc_e(self.parent_head, **nd)
-            if d.firstthunk!=None:
-                of1 = d.firstthunk
-            elif of1 == None:
-                raise "set fthunk"
-            else:
-                d.firstthunk = of1
-            d.dlldescname = DescName(self.parent_head, name = d.name)
-            d.originalfirstthunk = 0
-            d.originalfirstthunks = struct_array(self, None,
-                                                 None,
-                                                 Rva)
-            d.firstthunks = struct_array(self, None,
-                                         None,
-                                         Rva)
-
-            impbynames = []
-            for nf in fcts:
-                f = Rva(self.parent_head)
-                if type(nf) in [int, long]:
-                    f.rva = mask_ptr+nf
-                    ibn = nf
-                elif type(nf) in [str]:
-                    f.rva = True
-                    ibn = ImportByName(self.parent_head)
-                    ibn.name = nf
-                    ibn.hint = 0
-                else:
-                    raise 'unknown func type %s'%nf
-                impbynames.append(ibn)
-                d.originalfirstthunks.append(f)
-                ff = Rva(self.parent_head)
-                if isinstance(ibn, ImportByName):
-                    ff.rva = 0xDEADBEEF #default func addr
-                else:
-                    #ord ?XXX?
-                    ff.rva = f.rva
-                d.firstthunks.append(ff)
-                of1+=self.parent_head._wsize/8
-            #for null thunk
-            of1+=self.parent_head._wsize/8
-            d.impbynames = impbynames
-            new_impdesc.append(d)
-        if self.impdesc is None:
-            self.impdesc = struct_array(self, None,
-                                        None,
-                                        ImpDesc_e)
-            self.impdesc.l = new_impdesc
-        else:
-            for d in new_impdesc:
-                self.impdesc.append(d)
-
-    def get_funcrva(self, f):
-        if self.parent_head._wsize == 32:
-            mask_ptr = 0x80000000-1
-        elif self.parent_head._wsize == 64:
-            mask_ptr = 0x8000000000000000-1
-        for i, d in enumerate(self.impdesc):
-            if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                tmp_thunk = d.originalfirstthunks
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise "no thunk!!"
-            if type(f) is str:
-                for j, imp in enumerate(d.impbynames):
-                    if isinstance(imp, ImportByName):
-                        if f == imp.name:
-                            return d.firstthunk+j*self.parent_head._wsize/8
-            elif type(f) in (int, long):
-                for j, imp in enumerate(d.impbynames):
-                    if not isinstance(imp, ImportByName):
-                        if tmp_thunk[j].rva&mask_ptr == f:
-                            return d.firstthunk+j*self.parent_head._wsize/8
-            else:
-                raise ValueError('unknown func type %s'%f)
-    def get_funcvirt(self, f):
-        rva = self.get_funcrva(f)
-        if rva==None:
-            return
-        return self.parent_head.rva2virt(rva)
 
 
 class ExpDesc_e(NEW_CStruct):
@@ -1317,6 +1301,11 @@ class DirExport(NEW_CStruct):
             return
         return self.parent_head.rva2virt(rva)
 
+
+class ImportByName(NEW_CStruct):
+    _fields = [ ("hint", "u16"),
+                ("name", "sz")
+                ]
 
 class Delaydesc_e(NEW_CStruct):
     _fields = [ ("attrs","u32"),
