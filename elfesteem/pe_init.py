@@ -308,7 +308,7 @@ class PE(object):
             self._sex = 0
             self._wsize = 32
             self.DirImport = pe.DirImport(parent=self)
-            self.DirExport = pe.DirExport(self)
+            self.DirExport = pe.DirExport(parent=self)
             self.DirDelay = pe.DirDelay(parent=self)
             self.DirReloc = pe.DirReloc(self)
             self.DirRes = pe.DirRes(self)
@@ -377,7 +377,6 @@ class PE(object):
             self.NTsig = None
             return
         self.NTsig = pe.NTsig(parent=self, content=self.content, start=of)
-        self.DirExport = None
         self.DirReloc = None
         self.DirRes = None
 
@@ -403,17 +402,10 @@ class PE(object):
         self.DirImport = pe.DirImport(parent=self, content=self.content, start=None)
         if parse_delay:
             self.DirDelay = pe.DirDelay(parent=self, content=self.content, start=None)
+        self.DirExport = pe.DirExport(parent=self, content=self.content, start=None)
 
         self._sex = 0
         self._wsize = 32
-        try:
-            self.DirExport = pe.DirExport.unpack(self.content,
-                                                 self.NThdr.optentries[pe.DIRECTORY_ENTRY_EXPORT].rva,
-                                                 self)
-        except pe.InvalidOffset:
-            log.warning('cannot parse DirExport, skipping')
-            self.DirExport = pe.DirExport(self)
-
         if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_BASERELOC:
             self.DirReloc = pe.DirReloc(self)
             if parse_reloc:
@@ -853,19 +845,11 @@ if __name__ == "__main__":
     print("f2 %s" % e.DirExport.get_funcvirt('SetUserGeoID'))
 
     if e.DirExport.expdesc is None:
-        e.DirExport.create()
-        e.DirExport.add_name("coco")
+        e.DirExport.create(['coco'])
 
     e_str = e.pack()
-    open('out.bin', 'wb').write(e_str)
-    #o = Coff(open('main.obj').read())
-    #print(repr(o.COFFhdr))
-    #print(repr(o.Opthdr))
-    #print(repr(o.SHList))
-    #print('numsymb %x'%o.COFFhdr.COFFhdr.numberofsymbols)
-    #print('offset %x'%o.COFFhdr.COFFhdr.pointertosymboltable)
-    #
-    #print(repr(o.Symbols))
+    open('out.export.bin', 'wb').write(e_str)
+    print("WROTE out.export.bin with new exports")
 
     f = PE()
     open('uu.bin', 'wb').write(f.pack())

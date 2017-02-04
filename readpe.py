@@ -223,6 +223,44 @@ def print_layout(e, filesz):
                             if not hasattr(d.ILT[jdx].obj, '_size'):
                                 continue
                             assert t.rva == d.ILT[jdx].rva
+                elif i == pe.DIRECTORY_ENTRY_EXPORT:
+                    directory = e.DirExport
+                    layout.append((
+                                directory._off,
+                                directory._size,
+                                'EXPORT Descriptor'))
+                    assert 1 == len(directory)
+                    d = directory[0]
+                    layout.append((
+                            e.rva2off(d.name_rva),
+                            d.name._size,
+                            'EXPORT DLLname'))
+                    if d.addressoffunctions:
+                        layout.append((
+                            e.rva2off(d.addressoffunctions),
+                            d.EAT._size,
+                            'EXPORT Address Table'))
+                    if d.addressofordinals:
+                        layout.append((
+                            e.rva2off(d.addressofordinals),
+                            d.EOT._size,
+                            'EXPORT Ordinal Table'))
+                    if d.addressofnames:
+                        layout.append((
+                            e.rva2off(d.addressofnames),
+                            d.ENPT._size,
+                            'EXPORT Name Pointers Table'))
+                    for jdx, t in enumerate(d.EAT):
+                        if not hasattr(t, 'name'): continue
+                        layout.append((
+                            e.rva2off(t.rva),
+                            t.name._size,
+                            'EXPORT Forwarder [%d]' % jdx))
+                    for jdx, t in enumerate(d.ENPT):
+                        layout.append((
+                            e.rva2off(t.rva),
+                            t.name._size,
+                            'EXPORT FUNCname [%d]' % jdx))
     print("\nFILE CONTENT LAYOUT")
     def section_extract(x):
         s = x[2].split()[0]
@@ -266,7 +304,7 @@ def print_layout(e, filesz):
 
 def pe_dir_display(e):
     if hasattr(e, 'DirImport'): e.DirImport.display()
-    print(repr(e.DirExport))
+    if hasattr(e, 'DirExport'): e.DirExport.display()
     if hasattr(e, 'DirDelay'):  e.DirDelay.display()
 
 if __name__ == '__main__':

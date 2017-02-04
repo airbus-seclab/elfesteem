@@ -831,6 +831,21 @@ class SHList(CArray):
 #   DirEnt BASERELOC    in .reloc
 #   DirEnt SECURITY     in .reloc
 
+class CArrayDirectory(CArray):
+    def unpack(self, c, o):
+        if o is None:
+            # Use the entry in the NT headers
+            # .rva contains the RVA of the descriptor array
+            # .size may contain the size of the descriptor array or of
+            #   the whole directory entry, including thunks and names;
+            #   it depends on the PE file.
+            if self._idx >= len(self.parent.NThdr.optentries): return # No entry
+            o = self.parent.NThdr.optentries[self._idx]
+            if o.rva == 0: return # No directory
+            o = self.parent.rva2off(o.rva)
+            if o is None: return # Directory in no section
+        CArray.unpack(self, c, o)
+
 class ImportName(CStruct):
     _fields = [ ("hint", "u16"),
                 ("name", CString) ]
@@ -904,21 +919,9 @@ class ImportDescriptor(CStruct):
             if not of in (0, None):
                 self.ILT = ImportThunks(parent=self, content=c, start=of)
 
-class DirImport(CArray):
+class DirImport(CArrayDirectory):
     _cls = ImportDescriptor
     _idx = DIRECTORY_ENTRY_IMPORT
-    def unpack(self, c, o):
-        if o is None:
-            # Use the entry in the NT headers
-            # .rva contains the RVA of the descriptor array
-            # .size may contain the size of the descriptor array or of
-            #   the whole directory entry, including thunks and names;
-            #   it depends on the PE file.
-            if self._idx >= len(self.parent.NThdr.optentries): return # No entry
-            o = self.parent.NThdr.optentries[self._idx]
-            if o.rva == 0: return # No directory
-            o = self.parent.rva2off(o.rva)
-        CArray.unpack(self, c, o)
     def display(self):
         print("<%s>" % self.__class__.__name__)
         for idx, d in enumerate(self):
@@ -1058,28 +1061,195 @@ class DirDelay(DirImport):
 
 
 
-class Rva(NEW_CStruct):
-    _fields = [ ("rva","ptr"),
-                ]
 
-class Rva32(NEW_CStruct):
-    _fields = [ ("rva","u32"),
-                ]
+class ExportAddressRVA(CStruct):
+    _fields = [ ("rva","u32") ]
+    def unpack(self, c, o):
+        CStruct.unpack(self, c, o)
+        # Follow the RVA if it is a "Forwarder RVA"
+        # which is the case if the RVA points into the export section.
+        # NB: IDA's export tab does not know about this, and just shows the RVA
+        direxport = self.parent.parent.parent
+        base = direxport.parent.NThdr.optentries[direxport._idx]
+        if base.rva <= self.rva < base.rva+base.size:
+            self.name = CString(parent=self, content=c,
+                start=self.parent.parent.rva2off(self.rva))
 
-class DescName(NEW_CStruct):
-    _fields = [ ("name", (lambda c, s, of:c.gets(s, of),
-                          lambda c, value:c.sets(value)))
-                ]
-    def gets(self, s, of):
-        if of < 0x1000:
-            log.warn("descname in pe hdr, used as offset")
-            ofname = of
-        else:
-            ofname = self.parent_head.rva2off(of)
-        name = self.parent_head[ofname:self.parent_head._content.find(data_null, ofname)]
-        return name, of+len(name)+1
-    def sets(self, value):
-        return value+data_null
+class ExportAddressTable(CArray):
+    _cls = ExportAddressRVA
+    count = lambda _: _.parent.numberoffunctions
+
+class ExportNamePointerRVA(CStruct):
+    _fields = [ ("rva","u32") ]
+    def unpack(self, c, o):
+        CStruct.unpack(self, c, o)
+        # Follow the RVA
+        self.name = CString(parent=self, content=c,
+            start=self.parent.parent.rva2off(self.rva))
+        # For API compatibility with previous versions of elfesteem
+        self.name.name = str(self.name)
+
+class ExportNamePointersTable(CArray):
+    _cls = ExportNamePointerRVA
+    count = lambda _: _.parent.numberofnames
+
+class ExportOrdinal(CStruct):
+    _fields = [ ("ordinal","u16") ]
+
+class ExportOrdinalTable(CArray):
+    _cls = ExportOrdinal
+    count = lambda _: _.parent.numberofnames
+
+class ExportDescriptor(CStruct):
+    _fields = [ ("characteristics","u32"), # Unused and always 0
+                ("timestamp","u32"),
+                ("majorv","u16"), # Unused and always 0
+                ("minorv","u16"), # Unused and always 0
+                ("name_rva","u32"),
+                ("base","u32"),
+                ("numberoffunctions","u32"),
+                ("numberofnames","u32"),
+                ("addressoffunctions","u32"),
+                ("addressofnames","u32"),
+                ("addressofordinals","u32"),
+              ]
+    def rva2off(self, rva):
+        return self.parent.parent.rva2off(rva)
+    def unpack(self, c, o):
+        CStruct.unpack(self, c, o)
+        # Follow the RVAs
+        self.name = CString(parent=self, content=c,
+            start=self.rva2off(self.name_rva))
+        self.EAT = ExportAddressTable(parent=self, content=c,
+            start=self.rva2off(self.addressoffunctions))
+        self.ENPT = ExportNamePointersTable(parent=self, content=c,
+            start=self.rva2off(self.addressofnames))
+        self.EOT = ExportOrdinalTable(parent=self, content=c,
+            start=self.rva2off(self.addressofordinals))
+        # 'exports' contains the same information as displayed by IDA's export
+        # tab; it has issues, especially when the number of functions is not
+        # the number of names
+        self.exports = {}
+        for i in range(self.numberofnames):
+            j = self.EOT[i].ordinal
+            if j >= self.numberoffunctions:
+                print("Invalid ordinal[%d]: %d"%(i,j))
+                continue
+            if self.base+j in self.exports:
+                print("Duplicate ordinal at %d"%(self.base+j))
+                continue
+            addr = self.EAT[j]
+            name = self.ENPT[i].name
+            self.exports[self.base+j] = (addr, name)
+        # When ..numberoffunctions != ..numberofnames
+        for i in range(self.numberoffunctions):
+            if not self.base+i in self.exports:
+                addr = self.EAT[i]
+                self.exports[self.base+i] = (addr, CString(parent=self))
+
+class DirExport(CArrayDirectory):
+    _cls = ExportDescriptor
+    _idx = DIRECTORY_ENTRY_EXPORT
+    count = lambda _: 1
+    def display(self):
+        print("<%s>" % self.__class__.__name__)
+        if len(self) == 0: return
+        d = self[0]
+        print("  %r"%d.name)
+        for i in sorted(d.exports.keys()):
+            addr, name = d.exports[i]
+            if hasattr(addr, 'name'):
+                addr = str(addr.name)
+            else:
+                addr = addr.rva
+                if self.parent.COFFhdr.machine == IMAGE_FILE_MACHINE_ARMNT:
+                    # To have the same display as IDA on PE for ARM
+                    addr -= 1
+                addr = '%08X' % self.parent.rva2virt(addr)
+            print('    %2d %s %r'%(i,addr,name))
+    def create(self, funcs, name = 'default.dll'):
+        # Don't separate 'create()' and 'add_name()' because adding new
+        # exports to an existing export table is very tricky: we need to
+        # resize the EAT, ENPT and EOT.
+        if len(self) != 0: return
+        e = self.parent
+        s = e.SHList.add_section(
+            name='.edata2',
+            flags=IMAGE_SCN_MEM_READ|IMAGE_SCN_CNT_INITIALIZED_DATA,
+            rsize=0x1000,     # should be enough
+            )
+        base_rva = e.off2rva(s.scnptr)
+        e.NThdr.optentries[self._idx].rva = base_rva
+        s.data.data = StrPatchwork()
+        # First, an empty descriptor
+        d = ExportDescriptor(parent=self, base=1)
+        self._size += d._size
+        self._array.append(d)
+        of = self._size
+        # Add the DLL name
+        d.name = CString(parent=d, s=name)
+        d.name_rva = base_rva+of
+        s.data.data[of] = d.name.pack()
+        of += d.name._size
+        # Add the EAT, ENPT & EOT
+        d.numberoffunctions += len(funcs)
+        d.numberofnames     += len(funcs)
+        d.EAT = ExportAddressTable(parent=d)
+        for f in funcs:
+            if isinstance(f, tuple):
+                rva = f[1]
+            else:
+                # TODO: we should look for the RVA of a symbol of name 'f'
+                rva = 0xdeadc0fe
+            t = ExportAddressRVA(parent=d.EAT, rva=rva)
+            d.EAT.append(t)
+        d.addressoffunctions = base_rva+of
+        s.data.data[of] = d.EAT.pack()
+        of += d.EAT._size
+        d.EOT = ExportOrdinalTable(parent=d)
+        for idx in range(len(funcs)):
+            t = ExportOrdinal(parent=d.EOT, ordinal=idx)
+            d.EOT.append(t)
+        d.addressofordinals = base_rva+of
+        s.data.data[of] = d.EOT.pack()
+        of += d.EOT._size
+        pos = len(funcs)*4 # size of ENPT
+        d.ENPT = ExportNamePointersTable(parent=d)
+        for f in funcs:
+            if isinstance(f, tuple): f = f[0] # The name of the function
+            t = ExportNamePointerRVA(parent=d.ENPT)
+            t.name = CString(parent=t, s=f)
+            t.name.name = f # For API compatibility with previous versions
+            t.rva = base_rva+of+pos
+            s.data.data[of+pos] = t.name.pack()
+            pos += t.name._size
+            d.ENPT.append(t)
+        d.addressofnames = base_rva+of
+        s.data.data[of] = d.ENPT.pack()
+        # Write the descriptor list (now that everyting has been computed)
+        s.data.data[0] = CArray.pack(self)
+        # Update the section sizes
+        s.paddr = len(s.data.data)
+        e.NThdr.optentries[self._idx].size = s.paddr # Unused by PE loaders
+        if s.rsize < s.paddr:
+            s.rsize = s.paddr
+        s.data.data[s.paddr] = data_null*(s.rsize-s.paddr)
+    def get_funcrva(self, name):
+        for d in self:
+            for t in d.INPT:
+                if t.name == name: return t.rva
+        return None
+    def get_funcvirt(self, name):
+        return self.parent.rva2virt(self.get_funcrva(name))
+    # For API compatibility with previous versions of elfesteem
+    expdesc        = property(lambda _:_[0] if len(_) else None)
+    f_address      = property(lambda _:getattr(_.expdesc,'EAT',[]))
+    f_nameordinals = property(lambda _:getattr(_.expdesc,'EOT',[]))
+    f_names        = property(lambda _:getattr(_.expdesc,'ENPT',[]))
+    def add_name(self, name, rva = 0xdeadc0fe):
+        DEPRECATED
+
+
 
 
 
@@ -1128,205 +1298,6 @@ class struct_array(object):
         self.l.append(a)
     def insert(self, index, i):
         self.l.insert(index, i)
-
-
-class ExpDesc_e(NEW_CStruct):
-    _fields = [ ("characteristics","u32"),
-                ("timestamp","u32"),
-                ("majorv","u16"),
-                ("minorv","u16"),
-                ("name","u32"),
-                ("base","u32"),
-                ("numberoffunctions","u32"),
-                ("numberofnames","u32"),
-                ("addressoffunctions","u32"),
-                ("addressofnames","u32"),
-                ("addressofordinals","u32"),
-              ]
-
-class DirExport(NEW_CStruct):
-    _fields = [ ("expdesc", (lambda c, s, of:c.gete(s, of),
-                             lambda c, value:c.sete(value)))]
-    def gete(self, s, of):
-        of_o = of
-        if not of:
-            return None, of
-        of = self.parent_head.rva2off(of)
-        of_sav = of
-        expdesc = ExpDesc_e.unpack(s,
-                                   of,
-                                   self.parent_head)
-        if self.parent_head.rva2off(expdesc.addressoffunctions) == None or \
-                self.parent_head.rva2off(expdesc.addressofnames) == None or \
-                self.parent_head.rva2off(expdesc.addressofordinals) == None:
-            log.warn("export dir malformed!")
-            return None, of_o
-        self.dlldescname = DescName.unpack(s, expdesc.name, self.parent_head)
-        self.f_address = struct_array(self, s,
-                                      self.parent_head.rva2off(expdesc.addressoffunctions), 
-                                      Rva32, expdesc.numberoffunctions)
-        self.f_names = struct_array(self, s,
-                                    self.parent_head.rva2off(expdesc.addressofnames), 
-                                    Rva32, expdesc.numberofnames)
-        self.f_nameordinals = struct_array(self, s,
-                                           self.parent_head.rva2off(expdesc.addressofordinals), 
-                                           Ordinal, expdesc.numberofnames)
-        for n in self.f_names:
-            n.name = DescName.unpack(s, n.rva, self.parent_head)
-        return expdesc, of_sav
-
-    def sete(self, v):
-        return self.expdesc.pack()
-
-    def build_content(self, c):
-        direxp = self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_EXPORT]
-        of1 = direxp.rva
-        if self.expdesc is None: # No Export
-            return
-        c[self.parent_head.rva2off(of1)] = self.expdesc.pack()
-        c[self.parent_head.rva2off(self.expdesc.name)] = self.dlldescname.pack()
-        c[self.parent_head.rva2off(self.expdesc.addressoffunctions)] = self.f_address.pack()
-        if self.expdesc.addressofnames!=0:
-            c[self.parent_head.rva2off(self.expdesc.addressofnames)] = self.f_names.pack()
-        if self.expdesc.addressofordinals!=0:
-            c[self.parent_head.rva2off(self.expdesc.addressofordinals)] = self.f_nameordinals.pack()
-        for n in self.f_names:
-            c[self.parent_head.rva2off(n.rva)] = n.name.pack()
-
-        # XXX BUG names must be alphanumeric ordered
-        names = [n.name for n in self.f_names]
-        names_ = names[:]
-        if names != names_:
-            log.warn("unsorted export names, may bug")
-
-    def set_rva(self, rva, size = None):
-        if self.expdesc is None:
-            return
-        self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_EXPORT].rva = rva
-        if not size:
-            self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_EXPORT].size= len(self)
-        else:
-            self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_EXPORT].size= size
-        rva+=len(self.expdesc)
-        self.expdesc.name = rva
-        rva+=len(self.dlldescname)
-        self.expdesc.addressoffunctions = rva
-        rva+=len(self.f_address)*self.parent_head._wsize/8# Rva size
-        self.expdesc.addressofnames = rva
-        rva+=len(self.f_names)*self.parent_head._wsize/8# Rva size
-        self.expdesc.addressofordinals = rva
-        rva+=len(self.f_nameordinals)*2# Ordinal size
-        for n in self.f_names:
-            n.rva = rva
-            rva+=len(n.name)
-
-    def __len__(self):
-        l = 0
-        if self.expdesc is None:
-            return l
-        l+=len(self.expdesc)
-        l+=len(self.dlldescname)
-        l+=len(self.f_address)*self.parent_head._wsize/8# Rva size
-        l+=len(self.f_names)*self.parent_head._wsize/8# Rva size
-        l+=len(self.f_nameordinals)*2# Ordinal size
-        for n in self.f_names:
-            l+=len(n.name)
-        return l
-
-    def __repr__(self):
-        rep = "<%s>\n" % self.__class__.__name__
-        if self.expdesc is None:
-            return rep
-        rep = "<%s %d (%r) %r>\n" % (self.__class__.__name__,
-                                     self.expdesc.numberoffunctions,
-                                     self.dlldescname,
-                                     self.expdesc)
-        tmp_names = [[] for x in range(self.expdesc.numberoffunctions)]
-        for i, n in enumerate(self.f_names):
-            tmp_names[self.f_nameordinals[i].ordinal].append(n.name)
-        for i,s in enumerate(self.f_address):
-            if not s.rva:
-                continue
-            rep += "%2d %.8X %r\n" % (i+self.expdesc.base, s.rva, tmp_names[i])
-        return rep
-
-    def create(self, name = 'default.dll'):
-        self.expdesc = ExpDesc_e(self.parent_head)
-        for x in [ "characteristics",
-                   "timestamp",
-                   "majorv",
-                   "minorv",
-                   "name",
-                   "base",
-                   "numberoffunctions",
-                   "numberofnames",
-                   "addressoffunctions",
-                   "addressofnames",
-                   "addressofordinals",
-                   ]:
-            setattr(self.expdesc, x, 0)
-
-        self.dlldescname = DescName(self.parent_head)
-        self.dlldescname.name = name
-        self.f_address = struct_array(self, None,
-                                      None,
-                                      Rva)
-        self.f_names = struct_array(self, None,
-                                    None,
-                                    Rva)
-        self.f_nameordinals = struct_array(self, None,
-                                           None,
-                                           Ordinal)
-        self.expdesc.base = 1
-
-
-    def add_name(self, name, rva = 0xdeadc0fe):
-        if self.expdesc is None:
-            return
-        l = len(self.f_names)
-        names = [n.name.name for n in self.f_names]
-        names_s = names[:]
-        names_s.sort()
-        if names_s != names:
-            log.warn('tab names was not sorted may bug')
-        names.append(name)
-        names.sort()
-        index = names.index(name)
-        descname = DescName(self.parent_head)
-
-        descname.name = name
-        wname = Rva(self.parent_head)
-
-        wname.name = descname
-        woffset = Rva(self.parent_head)
-        woffset.rva = rva
-        wordinal = Ordinal(self.parent_head)
-        #func is append to list
-        wordinal.ordinal = len(self.f_address)
-        self.f_address.append(woffset)
-        #self.f_names.insert(index, wname)
-        #self.f_nameordinals.insert(index, wordinal)
-        self.f_names.insert(index, wname)
-        self.f_nameordinals.insert(index, wordinal)
-        self.expdesc.numberofnames+=1
-        self.expdesc.numberoffunctions+=1
-
-    def get_funcrva(self, f_str):
-        if self.expdesc is None:
-            return None
-        for i, f in enumerate(self.f_names):
-            if f_str != f.name.name:
-                continue
-            o = self.f_nameordinals[i].ordinal
-            rva = self.f_address[o].rva
-            return rva
-        return None
-
-    def get_funcvirt(self, f):
-        rva = self.get_funcrva(f)
-        if rva==None:
-            return
-        return self.parent_head.rva2virt(rva)
 
 
 
@@ -1685,10 +1656,6 @@ class DirRes(NEW_CStruct):
         for i, c in out:
             rep += ' '*4*i + c + '\n'
         return rep
-
-class Ordinal(NEW_CStruct):
-    _fields = [ ("ordinal","u16"),
-                ]
 
 
 
