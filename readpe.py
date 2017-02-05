@@ -171,9 +171,13 @@ def print_layout(e, filesz):
                     of = e.rva2off(s.rva)
                 layout.append((of, s.size,
                                 'DirEnt '+pe.constants['DIRECTORY_ENTRY'][i]))
-                if i == pe.DIRECTORY_ENTRY_IMPORT:
-                    directory = e.DirImport
-                    name = 'IMPORT'
+                if i in (pe.DIRECTORY_ENTRY_IMPORT,
+                         pe.DIRECTORY_ENTRY_DELAY_IMPORT):
+                    directory, name = {
+                        pe.DIRECTORY_ENTRY_IMPORT:       ('DirImport','IMPORT'),
+                        pe.DIRECTORY_ENTRY_DELAY_IMPORT: ('DirDelay', 'DELAY '),
+                        }[i]
+                    directory = getattr(e, directory)
                     layout.append((
                                 directory._off,
                                 directory._size,
@@ -263,7 +267,7 @@ def print_layout(e, filesz):
 def pe_dir_display(e):
     if hasattr(e, 'DirImport'): e.DirImport.display()
     print(repr(e.DirExport))
-    print(repr(e.DirDelay))
+    if hasattr(e, 'DirDelay'):  e.DirDelay.display()
 
 if __name__ == '__main__':
     import argparse

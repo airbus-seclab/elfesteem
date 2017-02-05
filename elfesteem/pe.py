@@ -1029,6 +1029,33 @@ class DirImport(CArray):
         return self.parent.rva2virt(self.get_funcrva(name))
 
 
+# Delay Import Directory is similar to Import Directory
+# The implementation below is incomplete, but useable because
+# boundiat and unloadiat are optional and usually absent.
+class DelayDescriptor(ImportDescriptor):
+    _fields = [ ("attrs","u32"),
+                ("name_rva","u32"),
+                ("hmod","u32"),               # Module Handle
+                ("firstthunk","u32"),         # Delay Import Address Table
+                ("originalfirstthunk","u32"), # Delay Import Name Table
+                ("boundiat","u32"),           # Bound Delay Import Table
+                ("unloadiat","u32"),          # Unload Delay Import Table
+                ("timestamp","u32"),
+              ]
+    def rva2off(self, rva):
+        # Microsoft's pecoff.docx says that no attributes are defined
+        # and that it is set to 0, but all our example files have 0x1.
+        # Serpi implemented in elfesteem that if the 0x1 bit is not set
+        # then the RVA has been incremented with ImageBase. We don't have
+        # any supporting documentation.
+        if not (self.attrs & 1):
+            rva = self.parent.parent.virt2rva(rva)
+        return self.parent.parent.rva2off(rva)
+
+class DirDelay(DirImport):
+    _cls = DelayDescriptor
+    _idx = DIRECTORY_ENTRY_DELAY_IMPORT
+
 
 
 class Rva(NEW_CStruct):
@@ -1301,269 +1328,6 @@ class DirExport(NEW_CStruct):
             return
         return self.parent_head.rva2virt(rva)
 
-
-class ImportByName(NEW_CStruct):
-    _fields = [ ("hint", "u16"),
-                ("name", "sz")
-                ]
-
-class Delaydesc_e(NEW_CStruct):
-    _fields = [ ("attrs","u32"),
-                ("name","u32"),
-                ("hmod","u32"),
-                ("firstthunk","u32"),
-                ("originalfirstthunk","u32"),
-                ("boundiat","u32"),
-                ("unloadiat","u32"),
-                ("timestamp","u32"),
-              ]
-
-class DirDelay(NEW_CStruct):
-    _fields = [ ("delaydesc", (lambda c, s, of:c.gete(s, of),
-                               lambda c, value:c.sete(value)))]
-
-    def gete(self, s, of):
-        if not of:
-            return None, of
-        of = self.parent_head.rva2off(of)
-        out = struct_array(self, s, of, Delaydesc_e)
-        if self.parent_head._wsize == 32:
-            mask_ptr = 0x80000000
-        elif self.parent_head._wsize == 64:
-            mask_ptr = 0x8000000000000000
-
-        parent = self.parent_head
-        for i, d in enumerate(out):
-            isfromva = (d.attrs & 1) == 0
-            if isfromva:
-                isfromva = lambda x:parent.virt2rva(x)
-            else:
-                isfromva = lambda x:x
-            d.dlldescname = DescName.unpack(s, isfromva(d.name),
-                                            self.parent_head)
-            if d.originalfirstthunk:
-                d.originalfirstthunks = struct_array(self, s,
-                                                     self.parent_head.rva2off(isfromva(d.originalfirstthunk)),
-                                                     Rva)
-            else:
-                d.originalfirstthunks
-
-            if d.firstthunk:
-                d.firstthunks = struct_array(self, s,
-                                             self.parent_head.rva2off(isfromva(d.firstthunk)),
-                                             Rva)
-            else:
-                d.firstthunk = None
-
-            d.impbynames = []
-            if d.originalfirstthunk and self.parent_head.rva2off(isfromva(d.originalfirstthunk)):
-                tmp_thunk = d.originalfirstthunks
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise ValueError("no thunk in delay dir!! ")
-            for i in range(len(tmp_thunk)):
-                if tmp_thunk[i].rva&mask_ptr == 0:
-                    n = ImportByName.unpack(s,
-                                            self.parent_head.rva2off(isfromva(tmp_thunk[i].rva)),
-                                            self.parent_head)
-                    d.impbynames.append(n)
-                else:
-                    d.impbynames.append(isfromva(tmp_thunk[i].rva&(mask_ptr-1)))
-                    #print(repr(d[-1]))
-                    #raise ValueError('XXX to check')
-        return out, of
-
-    def sete(self, v):
-        c = data_empty.join([x.pack() for x in v])+data_null*(4*8) #DelayDesc_e
-        return c
-
-
-    def __len__(self):
-        l = (len(self.delaydesc)+1)*(4*8) #DelayDesc_e
-        for i, d in enumerate(self.delaydesc):
-            l+=len(d.dlldescname)
-            if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                l+=(len(d.originalfirstthunks)+1)*self.parent_head._wsize/8 #Rva size
-            if d.firstthunk:
-                l+=(len(d.firstthunks)+1)*self.parent_head._wsize/8 #Rva size
-            if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                tmp_thunk = d.originalfirstthunks
-            """
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise "no thunk!!"
-            """
-            for i, imp in enumerate(d.impbynames):
-                if isinstance(imp, ImportByName):
-                    l+=len(imp)
-        return l
-
-    def set_rva(self, rva, size = None):
-        self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_DELAY_IMPORT].rva = rva
-        if not size:
-            self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_DELAY_IMPORT].size= len(self)
-        else:
-            self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_DELAY_IMPORT].size= size
-        rva+=(len(self.delaydesc)+1)*(4*8) #DelayDesc_e
-        parent = self.parent_head
-        for i, d in enumerate(self.delaydesc):
-            isfromva = (d.attrs & 1) == 0
-            if isfromva:
-                isfromva = lambda x:self.parent_head.rva2virt(x)
-            else:
-                isfromva = lambda x:x
-
-            d.name = isfromva(rva)
-            rva+=len(d.dlldescname)
-            if d.originalfirstthunk:# and self.parent_head.rva2off(d.originalfirstthunk):
-                d.originalfirstthunk = isfromva(rva)
-                rva+=(len(d.originalfirstthunks)+1)*self.parent_head._wsize/8 # rva size
-            #XXX rva fthunk not patched => fun addr
-            #if d.firstthunk:
-            #    d.firstthunk = rva
-            #    rva+=(len(d.firstthunks)+1)*pe.Rva._size
-            if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                tmp_thunk = d.originalfirstthunks
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise "no thunk!!"
-            for i, imp in enumerate(d.impbynames):
-                if isinstance(imp, ImportByName):
-                    tmp_thunk[i].rva = isfromva(rva)
-                    rva+=len(imp)
-
-    def build_content(self, c):
-        if len(self.parent_head.NThdr.optentries) < DIRECTORY_ENTRY_DELAY_IMPORT:
-            return
-        dirdelay = self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_DELAY_IMPORT]
-        of1 = dirdelay.rva
-        if not of1: # No Delay Import
-            return
-        c[self.parent_head.rva2off(of1)] = self.pack()
-        for i, d in enumerate(self.delaydesc):
-            c[self.parent_head.rva2off(d.name)] = d.dlldescname.pack()
-            if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                c[self.parent_head.rva2off(d.originalfirstthunk)] = d.originalfirstthunks.pack()
-            if d.firstthunk:
-                c[self.parent_head.rva2off(d.firstthunk)] = d.firstthunks.pack()
-            if d.originalfirstthunk and self.parent_head.rva2off(d.originalfirstthunk):
-                tmp_thunk = d.originalfirstthunks
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise "no thunk!!"
-            for j, imp in enumerate(d.impbynames):
-                if isinstance(imp, ImportByName):
-                    c[self.parent_head.rva2off(tmp_thunk[j].rva)] = imp.pack()
-
-    def __repr__(self):
-        rep = "<%s>\n" % self.__class__.__name__
-        if self.delaydesc is None:
-            return rep
-        for i,s in enumerate(self.delaydesc):
-            rep += "%2d %-25r %r\n" % (i, s.dlldescname, s)
-            for ii, f in enumerate(s.impbynames):
-                rep += "    %2d %-16r\n" % (ii, f)
-        return rep
-
-    def add_dlldesc(self, new_dll):
-        if self.parent_head._wsize == 32:
-            mask_ptr = 0x80000000
-        elif self.parent_head._wsize == 64:
-            mask_ptr = 0x8000000000000000
-        new_impdesc = []
-        of1 = None
-        for nd, fcts in new_dll:
-            for x in ["attrs","name","hmod","firstthunk","originalfirstthunk","boundiat","unloadiat","timestamp"]:
-                if not x in nd:
-                    nd[x] = 0
-            d = DelayDesc_e(self.parent_head,**nd)
-            #d.cstr.__dict__.update(nd)
-            if d.firstthunk!=None:
-                of1 = d.firstthunk
-            elif of1 == None:
-                raise "set fthunk"
-            else:
-                d.firstthunk = of1
-            d.dlldescname = DescName(self.parent_head, name = d.name)
-            d.originalfirstthunk = 0
-            d.originalfirstthunks = struct_array(self, None,
-                                                 None,
-                                                 Rva)
-            d.firstthunks = struct_array(self, None,
-                                         None,
-                                         Rva)
-
-            impbynames = []
-            for nf in fcts:
-                f = Rva(self.parent_head)
-                if type(nf) in [int, long]:
-                    f.rva = mask_ptr+nf
-                    ibn = None
-                elif type(nf) in [str]:
-                    f.rva = True
-                    ibn = ImportByName(self.parent_head)
-                    ibn.name = nf
-                    ibn.hint = 0
-                else:
-                    raise ValueError('unknown func type %s'%nf)
-                impbynames.append(ibn)
-                d.originalfirstthunks.append(f)
-
-                ff = Rva(self.parent_head)
-                if ibn != None:
-                    ff.rva = 0xDEADBEEF #default func addr
-                else:
-                    #ord ?XXX?
-                    ff.rva = f.rva
-                d.firstthunks.append(ff)
-                of1+=4
-            #for null thunk
-            of1+=4
-            d.impbynames = impbynames
-            new_delaydesc.append(d)
-        if self.delaydesc is None:
-            self.delaydesc = struct_array(self, None,
-                                          None,
-                                          Delaydesc)
-            self.delaydesc.l = new_delaydesc
-        else:
-            for d in new_delaydesc:
-                self.delaydesc.append(d)
-
-    def get_funcrva(self, f):
-        for i, d in enumerate(self.delaydesc):
-            isfromva = (d.attrs & 1) == 0
-            if isfromva:
-                isfromva = lambda x:self.parent_head.virt2rva(x)
-            else:
-                isfromva = lambda x:x
-            if d.originalfirstthunk and self.parent_head.rva2off(isfromva(d.originalfirstthunk)):
-                tmp_thunk = d.originalfirstthunks
-            elif d.firstthunk:
-                tmp_thunk = d.firstthunks
-            else:
-                raise "no thunk!!"
-            if type(f) is str:
-                for j, imp in enumerate(d.impbynames):
-                    if isinstance(imp, ImportByName):
-                        if f == imp.name:
-                            return isfromva(d.firstthunk)+j*4
-            elif type(f) in (int, long):
-                for j, imp in enumerate(d.impbynames):
-                    if not isinstance(imp, ImportByName):
-                        if isfromva(tmp_thunk[j].rva&0x7FFFFFFF) == f:
-                            return isfromva(d.firstthunk)+j*4
-            else:
-                raise ValueError('unknown func type %s'%f)
-    def get_funcvirt(self, f):
-        rva = self.get_funcrva(f)
-        if rva==None:
-            return
-        return self.parent_head.rva2virt(rva)
 
 
 class Rel(NEW_CStruct):

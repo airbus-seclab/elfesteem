@@ -309,7 +309,7 @@ class PE(object):
             self._wsize = 32
             self.DirImport = pe.DirImport(parent=self)
             self.DirExport = pe.DirExport(self)
-            self.DirDelay = pe.DirDelay(self)
+            self.DirDelay = pe.DirDelay(parent=self)
             self.DirReloc = pe.DirReloc(self)
             self.DirRes = pe.DirRes(self)
 
@@ -401,13 +401,11 @@ class PE(object):
             wsize=32)
 
         self.DirImport = pe.DirImport(parent=self, content=self.content, start=None)
+        if parse_delay:
+            self.DirDelay = pe.DirDelay(parent=self, content=self.content, start=None)
 
         self._sex = 0
         self._wsize = 32
-        if parse_delay:
-            self.DirDelay = pe.DirDelay.unpack(self.content,
-                                                 self.NThdr.optentries[pe.DIRECTORY_ENTRY_DELAY_IMPORT].rva,
-                                                 self)
         try:
             self.DirExport = pe.DirExport.unpack(self.content,
                                                  self.NThdr.optentries[pe.DIRECTORY_ENTRY_EXPORT].rva,
@@ -416,15 +414,6 @@ class PE(object):
             log.warning('cannot parse DirExport, skipping')
             self.DirExport = pe.DirExport(self)
 
-        if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_DELAY_IMPORT:
-            self.DirDelay = pe.DirDelay(self)
-            if parse_delay:
-                try:
-                    self.DirDelay = pe.DirDelay.unpack(self.content,
-                                                       self.NThdr.optentries[pe.DIRECTORY_ENTRY_DELAY_IMPORT].rva,
-                                                       self)
-                except pe.InvalidOffset:
-                    log.warning('cannot parse DirDelay, skipping')
         if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_BASERELOC:
             self.DirReloc = pe.DirReloc(self)
             if parse_reloc:
