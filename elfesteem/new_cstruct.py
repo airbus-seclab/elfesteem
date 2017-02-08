@@ -86,16 +86,16 @@ class Cstruct_Metaclass(type):
         return o
 
     def unpack_l(cls, s, off=0, parent_head=None, _sex=None, _wsize=None):
-        if _sex == None and _wsize == None:
+        if _sex is None and _wsize is None:
             # get sex and size from parent
-            if parent_head:
+            if parent_head is not None:
                 _sex = parent_head._sex
                 _wsize = parent_head._wsize
             else:
                 _sex = 0
                 _wsize = 32
         c = cls(_sex=_sex, _wsize=_wsize)
-        if parent_head == None:
+        if parent_head is None:
             parent_head = c
         c.parent_head = parent_head
 
