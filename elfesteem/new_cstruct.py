@@ -182,8 +182,9 @@ class CStruct(object):
                 # else default sex & size
                 _sex = 0
                 _size = 32
-        self.sex = _sex
-        self.wsize = _wsize
+        # _sex is 0 or 1, sex is '<' or '>'
+        self._sex = _sex
+        self._wsize = _wsize
         if self._packformat:
             self.sex = self._packformat
         else:
@@ -206,7 +207,7 @@ class CStruct(object):
             value = getattr(self, fname + self.__class__.field_suffix)
             if ffmt in type2realtype or (isinstance(ffmt, str) and re.match(r'\d+s', ffmt)):
                 # basic types
-                fmt = real_fmt(ffmt, self.wsize)
+                fmt = real_fmt(ffmt, self._wsize)
                 if cpt == None:
                     if value == None:
                         o = struct.calcsize(fmt) * "\x00"
