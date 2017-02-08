@@ -261,6 +261,37 @@ def print_layout(e, filesz):
                             e.rva2off(t.rva),
                             t.name._size,
                             'EXPORT FUNCname [%d]' % jdx))
+                elif i == pe.DIRECTORY_ENTRY_RESOURCE:
+                    directory = e.DirRes
+                    layout.append((
+                                    directory._off,
+                                    directory._size,
+                                    'RESOURCE Descriptor'))
+                    def resdir_layout(t, branch):
+                        for idx, x in enumerate(t.entries):
+                            b = branch+[idx]
+                            if hasattr(x, 'dir'):
+                                layout.append((
+                                    x.base + (x.offset & 0x7FFFFFFF),
+                                    x.dir._size,
+                                    'RESOURCE Node %s'%b))
+                                resdir_layout(x.dir,b)
+                            if hasattr(x, 'data'):
+                                layout.append((
+                                    x.base + (x.offset & 0x7FFFFFFF),
+                                    x.data._size,
+                                    'RESOURCE DataDesc %s'%b))
+                                layout.append((
+                                    x.rva2off(x.data.rva),
+                                    x.data.size,
+                                    'RESOURCE Data %s'%b))
+                            if hasattr(x, 'name'):
+                                layout.append((
+                                    x.base + (x.id & 0x7FFFFFFF),
+                                    x.name._size,
+                                    'RESOURCE Name %s'%b))
+                    for t in directory:
+                        resdir_layout(t, [])
     print("\nFILE CONTENT LAYOUT")
     def section_extract(x):
         s = x[2].split()[0]
@@ -306,6 +337,7 @@ def pe_dir_display(e):
     if hasattr(e, 'DirImport'): e.DirImport.display()
     if hasattr(e, 'DirExport'): e.DirExport.display()
     if hasattr(e, 'DirDelay'):  e.DirDelay.display()
+    if hasattr(e, 'DirRes'):    e.DirRes.display()
 
 if __name__ == '__main__':
     import argparse

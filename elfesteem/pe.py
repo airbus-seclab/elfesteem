@@ -1460,286 +1460,140 @@ class DirReloc(NEW_CStruct):
                     i+=1
 
 
-class DirRes(NEW_CStruct):
-    _fields = [ ("resdesc", (lambda c, s, of:c.gete(s, of),
-                             lambda c, value:c.sete(value)))]
+class UStringData(CBase):
+    def _initialize(self):
+        self._size = 2*self.parent.length
+    def unpack(self, c, o):
+        self.value = c[o:o+self._size]
 
-    def gete(self, s, of):
-        if not of:
-            return None, of
-        of1 = self.parent_head.rva2off(of)
-        if of1 == None:
-            log.warning('cannot parse resources, %X'%of)
-            return None, of
-
-        resdesc, l = ResDesc_e.unpack_l(s,
-                                        of1,
-                                        self.parent_head)
-
-        nbr = resdesc.numberofnamedentries + resdesc.numberofidentries
-        if 1:#try:
-            resdesc.resentries = struct_array(self, s,
-                                              of1 + l,
-                                              ResEntry,
-                                              nbr)
-        if 0:#except:
-            log.warning('cannot parse resources')
-            resdesc.resentries = struct_array(self, s,
-                                              of1 + l,
-                                              ResEntry,
-                                              0)
-        dir_todo = {of1:resdesc}
-        dir_done = {}
-        xx = 0
-        cpt = 0
-        while dir_todo:
-            of1, my_dir = dir_todo.popitem()
-            dir_done[of1] = my_dir
-            for e in my_dir.resentries:
-                of1 = e.offsettosubdir
-                if not of1:
-                    #data dir
-                    of1 = e.offsettodata
-                    data = ResDataEntry.unpack(s,
-                                               self.parent_head.rva2off(of1),
-                                               self.parent_head)
-                    of1 = data.offsettodata
-                    offile = self.parent_head.rva2off(of1)
-                    data.s = StrPatchwork(s[offile:offile + data.size])
-                    e.data = data
-                    continue
-                #subdir
-                if of1 in dir_done:
-                    log.warn('warning recusif subdir')
-                    fdds
-                    continue
-                subdir, l = ResDesc_e.unpack_l(s,
-                                               self.parent_head.rva2off(of1),
-                                               self.parent_head)
-                nbr = subdir.numberofnamedentries + subdir.numberofidentries
-                subdir.resentries = struct_array(self, s,
-                                                 self.parent_head.rva2off(of1 + l),
-                                                 ResEntry,
-                                                 nbr)
-
-                e.subdir = subdir
-                dir_todo[of1] = e.subdir
-        return resdesc, of
-
-    def build_content(self, c):
-        if self.resdesc is None:
-            return
-        of1 = self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_RESOURCE].rva
-        c[self.parent_head.rva2off(of1)] = self.resdesc.pack()
-        dir_todo = {self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_RESOURCE].rva:self.resdesc}
-        dir_done = {}
-        while dir_todo:
-            of1, my_dir = dir_todo.popitem()
-            dir_done[of1] = my_dir
-            c[self.parent_head.rva2off(of1)] = my_dir.pack()
-            c[self.parent_head.rva2off(of1+len(my_dir))] = my_dir.resentries.pack()
-            for e in my_dir.resentries:
-                if e.name_s:
-                    c[self.parent_head.rva2off(e.name)] = e.name_s.pack()
-                of1 = e.offsettosubdir
-                if not of1:
-                    c[self.parent_head.rva2off(e.offsettodata)] = e.data.pack()
-                    c[self.parent_head.rva2off(e.data.offsettodata)] = e.data.s.pack()
-                    continue
-                dir_todo[of1] = e.subdir
-
-
-    def __len__(self):
-        l = 0
-        if self.resdesc is None:
-            return l
-        dir_todo = [self.resdesc]
-        dir_done = []
-        while dir_todo:
-            my_dir = dir_todo.pop()
-            if not my_dir in dir_done:
-                dir_done.append(my_dir)
-            else:
-                raise 'recursif dir'
-            l+=len(my_dir)
-            l+=len(my_dir.resentries)*8 # ResEntry size
-            for e in my_dir.resentries:
-                if not e.offsettosubdir:
-                    continue
-                if not e.subdir in dir_todo:
-                    dir_todo.append(e.subdir)
-                else:
-                    raise "recursive dir"
-                    fds
-                    continue
-
-        dir_todo = dir_done
-        while dir_todo:
-            my_dir = dir_todo.pop()
-            for e in my_dir.resentries:
-                if e.name_s:
-                    l+=len(e.name_s)
-                of1 = e.offsettosubdir
-                if not of1:
-                    l+=4*4 # WResDataEntry size
-                    #XXX because rva may be even rounded
-                    l+=1
-                    l+=e.data.size
-                    continue
-        return l
-
-    def set_rva(self, rva, size = None):
-        if self.resdesc is None:
-            return
-        self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_RESOURCE].rva = rva
-        if not size:
-            self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_RESOURCE].size = len(self)
-        else:
-            self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_RESOURCE].size = size
-        dir_todo = [self.resdesc]
-        dir_done = {}
-        while dir_todo:
-            my_dir = dir_todo.pop()
-            dir_done[rva] = my_dir
-            rva+=len(my_dir)
-            rva+=len(my_dir.resentries)*8 # ResEntry size
-            for e in my_dir.resentries:
-                if not e.offsettosubdir:
-                    continue
-                if not e.subdir in dir_todo:
-                    dir_todo.append(e.subdir)
-                else:
-                    raise "recursive dir"
-                    fds
-                    continue
-        dir_todo = dir_done
-        dir_inv = dict(map(lambda x:(x[1], x[0]), dir_todo.items()))
-        while dir_todo:
-            rva_tmp, my_dir = dir_todo.popitem()
-            for e in my_dir.resentries:
-                if e.name_s:
-                    e.name = rva
-                    rva+=len(e.name_s)
-                of1 = e.offsettosubdir
-                if not of1:
-                    e.offsettodata = rva
-                    rva+=4*4 # ResDataEntry size
-                    #XXX menu rsrc must be even aligned?
-                    if rva%2:rva+=1
-                    e.data.offsettodata = rva
-                    rva+=e.data.size
-                    continue
-                e.offsettosubdir = dir_inv[e.subdir]
-
-    def __repr__(self):
-        rep = "<%s>\n" % self.__class__.__name__
-        if self.resdesc is None:
-            return rep
-        dir_todo = [self.resdesc]
-        out = []
-        index = -1
-        while dir_todo:
-            a = dir_todo.pop(0)
-            if isinstance(a, int):
-                index+=a
-            elif isinstance(a, ResDesc_e):
-                #out.append((index, repr(a)))
-                dir_todo=[1]+a.resentries.l+[-1]+dir_todo
-            elif isinstance(a, ResEntry):
-                if a.offsettosubdir:
-                    out.append((index, repr(a)))
-                    dir_todo = [a.subdir]+dir_todo
-                else:
-                    out.append((index, repr(a)))
-            else:
-                raise "zarb"
-        for i, c in out:
-            rep += ' '*4*i + c + '\n'
-        return rep
-
-
-
-class ResDesc_e(NEW_CStruct):
-    _fields = [ ("characteristics","u32"),
-                ("timestamp","u32"),
-                ("majorv","u16"),
-                ("minorv","u16"),
-                ("numberofnamedentries","u16"),
-                ("numberofidentries","u16")
-              ]
-
-class SUnicode(NEW_CStruct):
+class UString(CStruct):
     _fields = [ ("length", "u16"),
-                ("value", (lambda c, s, of:c.gets(s, of),
-                           lambda c, value:c.sets(value)))
-                ]
-    def gets(self, s, of):
-        v = s[of:of+self.length*2]
-        return v, of+self.length
-    def sets(self, value):
-        return self.value
+                ("value",UStringData) ]
+    def __str__(self):
+        return self.value.value.decode('utf16')
 
-class ResEntry(NEW_CStruct):
-    _fields = [ ("name",(lambda c, s, of:c.getn(s, of),
-                         lambda c, value:c.setn(value))),
-                ("offsettodata",(lambda c, s, of:c.geto(s, of),
-                                 lambda c, value:c.seto(value)))
-                ]
-
-    def getn(self, s, of):
-        self.data = None
-        #of = self.parent_head.rva2off(of)
-        name = struct.unpack('I', s[of:of+4])[0]
-        self.name_s = None
-        if name & 0x80000000:
-            name = (name & 0x7FFFFFFF) + self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_RESOURCE].rva # XXX res rva??
-            name &= 0x7FFFFFFF
-            self.name_s = SUnicode.unpack(s,
-                                          self.parent_head.rva2off(name),
-                                          self.parent_head)
-        return name, of+4
-
-    def setn(self, v):
-        name = v
-        if self.name_s:
-            name=(self.name-self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_RESOURCE].rva)+0x80000000
-        return struct.pack('I', name)
-
-    def geto(self, s, of):
-        self.offsettosubdir = None
-        offsettodata_o = struct.unpack('I', s[of:of+4])[0]
-        offsettodata = (offsettodata_o & 0x7FFFFFFF) + self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_RESOURCE].rva #XXX res rva??
-        if offsettodata_o & 0x80000000:
-            self.offsettosubdir = offsettodata
-        return offsettodata, of+4
-    def seto(self, v):
-        offsettodata = v - self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_RESOURCE].rva
-        if self.offsettosubdir:
-            offsettodata=(self.offsettosubdir-self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_RESOURCE].rva)+0x80000000
-        return struct.pack('I', offsettodata)
-
-    def __repr__(self):
-        if self.name_s:
-            nameid = "%s"%repr(self.name_s)
-        else:
-            if self.name in RT:# and not self.offsettosubdir:
-                nameid = "ID %s"%RT[self.name]
-            else:
-                nameid = "ID %d"%self.name
-        if self.offsettosubdir:
-            offsettodata = "subdir: %x"%self.offsettosubdir
-        else:
-            offsettodata = "data: %x"%self.offsettodata
-        return "<%s %s>"%(nameid, offsettodata)
-
-
-
-class ResDataEntry(NEW_CStruct):
-    _fields = [ ("offsettodata","u32"),
+class ResourceDataDescription(CStruct):
+    _fields = [ ("rva", "u32"),
                 ("size","u32"),
                 ("codepage","u32"),
-                ("reserved","u32"),
-                ]
+                ("zero","u32") ]
+    def unpack(self, c, o):
+        CStruct.unpack(self, c, o)
+        # Follow the RVA
+        of=self.parent.rva2off(self.rva)
+        self.data = c[of:of+self.size]
+
+class ResourceDirectoryEntry(CStruct):
+    _fields = [ ("id","u32"),
+                ("offset","u32") ]
+    base = property(lambda _:_.parent.base)
+    def rva2off(self, rva):
+        return self.parent.parent.parent.rva2off(rva)
+    def unpack(self, c, o):
+        CStruct.unpack(self, c, o)
+        # Two types of entries: Named & Id
+        # The self.parent.parent.numberofnamedentries first ones are Named
+        # and the MSB of their name is 1
+        pos = len(self.parent._array)
+        assert (pos < self.parent.parent.numberofnamedentries) \
+            == (self.id & 0x80000000 != 0)
+        if self.id & 0x80000000:
+            self.name = UString(parent=self, content=c,
+                start=self.base + (self.id & 0x7FFFFFFF))
+        if self.depth >= 10: # In Windows PE, should never be more than 2
+            log.warning('Resource tree too deep')
+        elif self.offset & 0x80000000:
+            self.dir = ResourceDescriptor(parent=self, content=c,
+                start=self.base + (self.offset & 0x7FFFFFFF))
+        else:
+            self.data = ResourceDataDescription(parent=self, content=c,
+                start=self.base + (self.offset & 0x7FFFFFFF))
+    def depth(self):
+        p = self.parent.parent.parent
+        if isinstance(p, DirRes): return 0
+        else:                     return p.depth+1
+    depth = property(depth)
+    def show_tree(self):
+        s = (
+            self.parent._array.index(self),
+            str(self.name) if self.id & 0x80000000 else self.id,
+            None if self.offset & 0x80000000 else self.data
+            )
+        tree = [ (0, s) ]
+        if self.offset & 0x80000000:
+            tree += [ (d+1,s) for d, s in self.dir.show_tree() ]
+        return tree
+
+class ResourceDirectoryEntries(CArray):
+    _cls = ResourceDirectoryEntry
+    def count(self):
+        return self.parent.numberofnamedentries + self.parent.numberofidentries
+    base = property(lambda _:_.parent.base)
+
+class ResourceDescriptor(CStruct):
+    _fields = [ ("characteristics","u32"), # Unused and always 0
+                ("timestamp","u32"),
+                ("majorv","u16"), # Unused and always 0
+                ("minorv","u16"), # Unused and always 0
+                ("numberofnamedentries","u16"),
+                ("numberofidentries","u16"),
+                ("entries",ResourceDirectoryEntries) ]
+    base = property(lambda _:_.parent.base)
+    def show_tree(self):
+        tree = []
+        for e in self.entries:
+            tree.extend(e.show_tree())
+        return tree
+
+class DirRes(CArrayDirectory):
+    _cls = ResourceDescriptor
+    _idx = DIRECTORY_ENTRY_RESOURCE
+    count = lambda _: 1
+    base = property(lambda _:
+        _.parent.rva2off(_.parent.NThdr.optentries[_._idx].rva))
+    def rva2off(self, rva):
+        return self.parent.rva2off(rva)
+    def is_depth_3_tree(self):
+        if len(self) == 0: return False
+        for d, (x, y, z) in self[0].show_tree():
+            if d < 2 and z is not None: return False
+            if d == 2 and z is None: return False
+            if d > 2: return False
+        return True
+    def display(self):
+        print("<%s>" % self.__class__.__name__)
+        if len(self) == 0: return
+        if self.is_depth_3_tree():
+            # Windows-specific display, tree with all branches of depth 3
+            assert self[0].characteristics == 0
+            # MajorV is 0 for NTDLL-MIPS.DLL NTDLL-ALPHA.DLL notepad.exe
+            #                 regedit-2.exe
+            #           4 for A3DUtils.dll AdobeXMP.dll regedit-1.exe
+            # https://msdn.microsoft.com/en-us/library/ms809762.aspx
+            # says it is always 0
+            assert self[0].majorv in (0, 4)
+            assert self[0].minorv == 0
+            print('     Index     Type     Name Lang')
+            pos = [None, None, None]
+            val = [None, None, None]
+            for d, (x, y, z) in self[0].show_tree():
+                pos[d] = x
+                val[d] = y
+                if d < 2:
+                    assert z is None
+                    continue
+                assert d == 2
+                print('  %2d %2d %2d %8s %8s %4s %r'%tuple(pos+val+[z]))
+        else:
+            # Generic display
+            for d, s in self[0].show_tree():
+                print((1+d)*'  ' + str(s))
+
+
+
+
+
+
 
 
 class Symb(NEW_CStruct):

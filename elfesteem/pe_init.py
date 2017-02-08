@@ -311,7 +311,7 @@ class PE(object):
             self.DirExport = pe.DirExport(parent=self)
             self.DirDelay = pe.DirDelay(parent=self)
             self.DirReloc = pe.DirReloc(self)
-            self.DirRes = pe.DirRes(self)
+            self.DirRes = pe.DirRes(parent=self)
 
             self.DOShdr.magic = 0x5a4d
             self.DOShdr.lfanew = 0xe0
@@ -378,7 +378,6 @@ class PE(object):
             return
         self.NTsig = pe.NTsig(parent=self, content=self.content, start=of)
         self.DirReloc = None
-        self.DirRes = None
 
 
         if self.NTsig.signature != 0x4550:
@@ -403,6 +402,8 @@ class PE(object):
         if parse_delay:
             self.DirDelay = pe.DirDelay(parent=self, content=self.content, start=None)
         self.DirExport = pe.DirExport(parent=self, content=self.content, start=None)
+        if parse_resources:
+            self.DirRes = pe.DirRes(parent=self, content=self.content, start=None)
 
         self._sex = 0
         self._wsize = 32
@@ -415,15 +416,6 @@ class PE(object):
                                                        self)
                 except pe.InvalidOffset:
                     log.warning('cannot parse DirReloc, skipping')
-        if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_RESOURCE:
-            self.DirRes = pe.DirRes(self)
-            if parse_resources:
-                try:
-                    self.DirRes = pe.DirRes.unpack(self.content,
-                                                   self.NThdr.optentries[pe.DIRECTORY_ENTRY_RESOURCE].rva,
-                                                   self)
-                except pe.InvalidOffset:
-                    log.warning('cannot parse DirRes, skipping')
 
         if self.COFFhdr.pointertosymboltable != 0:
             of = self.COFFhdr.pointertosymboltable
