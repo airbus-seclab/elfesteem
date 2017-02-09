@@ -338,6 +338,7 @@ def pe_dir_display(e):
     if hasattr(e, 'DirExport'): e.DirExport.display()
     if hasattr(e, 'DirDelay'):  e.DirDelay.display()
     if hasattr(e, 'DirRes'):    e.DirRes.display()
+    if hasattr(e, 'DirReloc'):  e.DirReloc.display()
 
 if __name__ == '__main__':
     import argparse

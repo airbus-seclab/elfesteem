@@ -1252,212 +1252,46 @@ class DirExport(CArrayDirectory):
 
 
 
+class Relocation(CStruct):
+    _fields = [ ("word","u16") ]
+    type   = property(lambda _:_.word>>12)
+    offset = property(lambda _:_.word&0xfff)
+    rel    = property(lambda _:(_.type,_.offset))
+    def __repr__(self):
+        return "<%s=%s/%s>" % (self.__class__.__name__,
+            self.type, self.offset)
 
-class struct_array(object):
-    def __init__(self, c, s, of, cstr, num = None):
-        self.l = []
-        self.cls = c
-        self.end = None
-        i = 0
-        if not s:
-            return
+class RelocationTable(CArray):
+    _cls = Relocation
+    count = lambda _: (_.parent.size-8)//2
 
-        while (num == None) or (num and i <num):
-            e, l = cstr.unpack_l(s, of,
-                                 c.parent_head,
-                                 c.parent_head._sex,
-                                 c.parent_head._wsize)
-            # Special case: off between header and first section
-            if c.parent_head.NThdr.sizeofheaders <= of < c.parent_head.SHList[0].scnptr:
-                self.end = data_null*l
-                break
-            if num == None:
-                if s[of:of+l] == data_null*l:
-                    self.end = data_null*l
-                    break
-            self.l.append(e)
-            of += l
-            i += 1
-
-    def __str__(self): 
-        raise AttributeError("Use pack() instead of str()")
-
-    def pack(self): 
-        out = data_empty.join([x.pack() for x in self.l])
-        if self.end != None:
-            out += self.end
-        return out
-
-    def __getitem__(self, item):
-        return self.l.__getitem__(item)
-
-    def __len__(self):
-        return len(self.l)
-
-    def append(self, a):
-        self.l.append(a)
-    def insert(self, index, i):
-        self.l.insert(index, i)
-
-
-
-class Rel(NEW_CStruct):
+class RelocationBlock(CStruct):
     _fields = [ ("rva","u32"),
-                ("size","u32")
-                ]
+                ("size","u32"), # Should be at least 8
+                ("rels", RelocationTable) ]
+    # TODO: don't parse 'rels' if it goes beyond the end of the directory
 
-class Reloc(NEW_CStruct):
-    _fields = [ ("rel",(lambda c, s, of:c.gete(s, of),
-                        lambda c, value:c.sete(value))) ]
-    def gete(self, s, of):
-        rel = struct.unpack('H', s[of:of+2])[0]
-        return (rel>>12, rel&0xfff), of+2
-    def sete(self, value):
-        return struct.pack('H', (value[0]<<12) | value[1])
-    def __repr__(self):
-        return '<%d %d>'%(self.rel[0], self.rel[1])
-
-class DirReloc(NEW_CStruct):
-    _fields = [ ("reldesc", (lambda c, s, of:c.gete(s, of),
-                             lambda c, value:c.sete(value)))]
-
-    def gete(self, s, of):
-        if not of:
-            return None, of
-
-        of1 = self.parent_head.rva2off(of)
-        ofend = of1+self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_BASERELOC].size
-        out = []
-        while of1 < ofend:
-            reldesc, l = Rel.unpack_l(s,
-                                      of1,
-                                      self.parent_head)
-            if reldesc.size == 0:
-                log.warn('warning null reldesc')
-                reldesc.size = l
-                break
-            of2 = of1 + l
-            reldesc.rels = struct_array(self, s,
-                                        of2,
-                                        Reloc,
-                                        (reldesc.size-l)/2) # / Reloc size
-            reldesc.patchrel = False
-            out.append(reldesc)
-            of1+=reldesc.size
-        return out, of
-
-    def sete(self, v):
-        rep = []
-        for n in v:
-            rep.append(n.pack())
-            rep.append(n.rels.pack())
-        return data_empty.join(rep)
-
-    def set_rva(self, rva, size = None):
-        if self.reldesc is None:
-            return
-        self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_BASERELOC].rva = rva
-        if not size:
-            self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_BASERELOC].size= len(self)
-        else:
-            self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_BASERELOC].size= size
-
-    def build_content(self, c):
-        dirrel = self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_BASERELOC]
-        dirrel.size  = len(self)
-        of1 = dirrel.rva
-        if self.reldesc is None: # No Reloc
-            return
-        c[self.parent_head.rva2off(of1)] = self.pack()
-
-    def __len__(self):
-        if self.reldesc is None:
-            return 0
-        l = 0
-        for n in self.reldesc:
-            l+=n.size
-        return l
-
-    def __str__(self):
-        raise AttributeError("Use pack() instead of str()")
-
-    def pack(self):
-        rep = []
-        for n in self.reldesc:
-            rep.append(n.pack())
-            rep.append(n.rels.pack())
-        return data_empty.join(rep)
-
-
-    def __repr__(self):
-        rep = "<%s>\n" % self.__class__.__name__
-        if self.reldesc is None:
-            return rep
-        for i, n in enumerate(self.reldesc):
-            rep += "%2d %r\n" % (i, n)
-            """
-            #displays too many lines...
-            for ii, m in enumerate(n.rels):
-                rep += "\t%2d %r\n" % (ii, m)
-            """
-            rep += "\t%2d rels...\n" % (len(n.rels))
-        return rep
-
+class DirReloc(CArrayDirectory):
+    _cls = RelocationBlock
+    _idx = DIRECTORY_ENTRY_BASERELOC
+    def count(self):
+        # We don't know how many relocation block will be parsed, we stop
+        # when reaching the end of the directory
+        if self._size < self.parent.NThdr.optentries[self._idx].size:
+            return len(self)+1
+        return -1
+    def display(self):
+        print("<%s>" % self.__class__.__name__)
+        for b in self:
+             print("   %r"%b)
+             # Don't display the relocation table... too long
     def add_reloc(self, rels, rtype = 3, patchrel = True):
-        dirrel = self.parent_head.NThdr.optentries[DIRECTORY_ENTRY_BASERELOC]
-        if not rels:
-            return
-        rels.sort()
-        all_base_ad = set([x & 0xFFFFF000 for x in rels])
-        all_base_ad = list(all_base_ad)
-        all_base_ad.sort()
-        rels_by_base = {}
-        while rels:
-            r = rels.pop()
-            base = all_base_ad[-1]
-            if not base in rels_by_base: rels_by_base[base] = []
-            if r >= base:
-                rels_by_base[base].append(r)
-            else:
-                all_base_ad.pop()
-                rels_by_base[base].append(r)
-        rels_by_base = [x for x in rels_by_base.items()]
-        rels_by_base.sort()
-        for o_init, rels in rels_by_base:
-            #o_init = rels[0]&0xFFFFF000
-            offsets = struct_array(self, None, None, Reloc, 0)
-            for o in rels:
-                if (o&0xFFFFF000) !=o_init:
-                    raise "relocs must be in same range"
-                r = Reloc(self.parent_head)
-                r.rel = (rtype, o-o_init)
-                offsets.append(r)
-            while len(offsets) &3:
-                r = Reloc(self.parent_head)
-                r.rel = (0, 0)
-                offsets.append(r)
-            reldesc = Rel(self.parent_head)#Reloc(self.parent_head)
-            reldesc.rva = o_init
-            reldesc.size = (len(offsets)*2+8)
-            reldesc.rels = offsets
-            reldesc.patchrel = patchrel
-            self.reldesc.append(reldesc)
-            dirrel.size+=reldesc.size
-
+        TODO
     def del_reloc(self, taboffset):
-        if self.reldesc is None:
-            return
-        for rel in self.reldesc:
-            of1 = rel.rva
-            i = 0
-            while i < len(rel.rels):
-                r = rel.rels[i]
-                if r.rel[0] != 0 and r.rel[1]+of1 in taboffset:
-                    print('del reloc %x' % r.rel[1]+of1)
-                    del rel.rels[i]
-                    rel.size-=Reloc._size
-                else:
-                    i+=1
+        TODO
+    # For API compatibility with previous versions of elfesteem
+    reldesc        = property(lambda _:_)
+
 
 
 class UStringData(CBase):

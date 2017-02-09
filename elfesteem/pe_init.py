@@ -310,7 +310,7 @@ class PE(object):
             self.DirImport = pe.DirImport(parent=self)
             self.DirExport = pe.DirExport(parent=self)
             self.DirDelay = pe.DirDelay(parent=self)
-            self.DirReloc = pe.DirReloc(self)
+            self.DirReloc = pe.DirReloc(parent=self)
             self.DirRes = pe.DirRes(parent=self)
 
             self.DOShdr.magic = 0x5a4d
@@ -377,7 +377,6 @@ class PE(object):
             self.NTsig = None
             return
         self.NTsig = pe.NTsig(parent=self, content=self.content, start=of)
-        self.DirReloc = None
 
 
         if self.NTsig.signature != 0x4550:
@@ -398,25 +397,18 @@ class PE(object):
         self.SHList = pe.SHList(parent=self, content=self.content, start=of,
             wsize=32)
 
-        self.DirImport = pe.DirImport(parent=self, content=self.content, start=None)
-        if parse_delay:
-            self.DirDelay = pe.DirDelay(parent=self, content=self.content, start=None)
-        self.DirExport = pe.DirExport(parent=self, content=self.content, start=None)
-        if parse_resources:
-            self.DirRes = pe.DirRes(parent=self, content=self.content, start=None)
+        # Directory parsing.
+        # 'start' is None, because the offset is computed from the RVA
+        # in the NT header
+        kargs = { 'parent':self, 'content':self.content, 'start':None }
+        self.DirImport = pe.DirImport(**kargs)
+        self.DirExport = pe.DirExport(**kargs)
+        if parse_delay:     self.DirDelay = pe.DirDelay(**kargs)
+        if parse_reloc:     self.DirReloc = pe.DirReloc(**kargs)
+        if parse_resources: self.DirRes   = pe.DirRes  (**kargs)
 
         self._sex = 0
         self._wsize = 32
-        if len(self.NThdr.optentries) > pe.DIRECTORY_ENTRY_BASERELOC:
-            self.DirReloc = pe.DirReloc(self)
-            if parse_reloc:
-                try:
-                    self.DirReloc = pe.DirReloc.unpack(self.content,
-                                                       self.NThdr.optentries[pe.DIRECTORY_ENTRY_BASERELOC].rva,
-                                                       self)
-                except pe.InvalidOffset:
-                    log.warning('cannot parse DirReloc, skipping')
-
         if self.COFFhdr.pointertosymboltable != 0:
             of = self.COFFhdr.pointertosymboltable
             of += 18 * self.COFFhdr.numberofsymbols
