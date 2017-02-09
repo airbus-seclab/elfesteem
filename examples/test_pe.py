@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
-import pe
-from pe_init import PE
+import elfesteem.pe as pe
+from elfesteem.pe_init import PE
 import rlcompleter
 import readline
 import pdb
