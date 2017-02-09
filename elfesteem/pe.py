@@ -3,7 +3,6 @@
 from elfesteem.cstruct import CBase, CString, CStruct, CArray
 from elfesteem.cstruct import data_null, data_empty
 from elfesteem.cstruct import bytes_to_name, name_to_bytes
-from elfesteem.new_cstruct import CStruct as NEW_CStruct
 from elfesteem.strpatchwork import StrPatchwork
 import struct
 import logging
@@ -1427,63 +1426,81 @@ class DirRes(CArrayDirectory):
 
 
 
+class AuxSymbolFunc(CStruct):
+    _fields = [ ("tagIndex","u32"),
+                ("totalSize","u32"),
+                ("pointerToLineNum","u32"),
+                ("pointerToNextFunc","u32"),
+                ("padding","u16")]
 
+class AuxSymbolSect(CStruct):
+    _fields = [ ("length","u32"),
+                ("numberOfRelocations","u16"),
+                ("numberOfLinenumbers","u16"),
+                ("checksum","u32"),
+                ("number","u16"),
+                ("selection","u08"),
+                ("padding1","u08"),
+                ("padding2","u08"),
+                ("padding3","u08")]
 
+class AuxSymbolFile(CStruct):
+    _fields = [ ("name_data","18s") ]
+    def name(self):
+        # Offset in the string table, if more than 18 bytes long
+        n = self.name_data
+        if n[:4] == data_null*4 and n != data_null*18:
+            n, = struct.unpack("I", n[4:8])
+            n = self.parent.parent.parent.parent.SymbolStrings.getby_offset(n)
+        else:
+            n = n.rstrip(data_null)
+        return bytes_to_name(n)
+    name = property(name)
+    def __repr__(self):
+        return "<%s=%r>" % (self.__class__.__name__, self.name)
 
-class Symb(NEW_CStruct):
-    _fields = [ ("name","8s"),
-                ("res1","u32"),
-                ("res2","u32"),
-                ("res3","u16")]
+class AuxSymbolDummy(CStruct):
+    _fields = [ ("data","18s") ]
 
-class CoffSymbol(NEW_CStruct):
-    _fields = [ ("name", (lambda c, s, of:c.getname(s, of),
-                          lambda c, value:c.setname(value))),
+class AuxSymbols(CArray):
+    def _cls(self):
+        if   self.parent.storageclass == IMAGE_SYM_CLASS_EXTERNAL:
+            return AuxSymbolFunc
+        elif self.parent.storageclass == IMAGE_SYM_CLASS_STATIC:
+            return AuxSymbolSect
+        elif self.parent.storageclass == IMAGE_SYM_CLASS_FILE:
+            return AuxSymbolFile
+        else:
+            return AuxSymbolDummy
+    _cls = property(_cls)
+    count = lambda _: _.parent.numberofauxsymbols
+    def __repr__(self):
+        return str([_ for _ in self])
+
+class CoffSymbol(CStruct):
+    _fields = [ ("name_data","8s"),
                 ("value","u32"),
                 ("sectionnumber","u16"),
                 ("type","u16"),
                 ("storageclass","u08"),
                 ("numberofauxsymbols","u08"),
-                ("aux", (lambda c, s, of:c.getaux(s, of),
-                         lambda c, value:c.setaux(value))) ]
-    def getname(self, s, of):
-        name = s[of:of+8]
-        if name[0:4] == data_null*4:
-            name = self.parent_head.parent_head.SymbolStrings.getby_offset(struct.unpack('<I', name[4:8])[0])
+                ("aux",AuxSymbols) ]
+    def name(self):
+        # Offset in the string table, if more than 8 bytes long
+        n = self.name_data
+        if n[:4] == data_null*4 and n != data_null*8:
+            n, = struct.unpack("I", n[4:])
+            n = self.parent.parent.SymbolStrings.getby_offset(n)
         else:
-            name = name.strip(data_null)
-        if type(name) != str: name = str(name, encoding='latin1')
-        return name, of+8
-    def setname(self, value):
-        if len(value) > 8:
-            of = self.parent_head.parent_head.SymbolStrings.add(value)
-            return struct.pack("<II", 0, of)
-        else:
-            value += data_null*8
-            return value[0:8]
-    def getaux(self, s, of):
-        aux = []
-        for i in range(self.numberofauxsymbols):
-            if   self.storageclass == IMAGE_SYM_CLASS_EXTERNAL:
-                aux.append(SymbolAuxFunc.unpack(s, of, self.parent_head))
-            elif self.storageclass == IMAGE_SYM_CLASS_STATIC:
-                aux.append(SymbolAuxSect.unpack(s, of, self.parent_head))
-            elif self.storageclass == IMAGE_SYM_CLASS_FILE:
-                aux.append(SymbolAuxFile.unpack(s, of, self.parent_head))
-            else:
-                aux.append(struct.unpack('<18s', s[of:of+18])[0])
-            of += 18
-        return aux, of
-    def setaux(self, value):
-        res = data_empty
-        for aux in value:
-            res += aux.pack()
-        return res
+            n = n.rstrip(data_null)
+        return bytes_to_name(n)
+    name = property(name)
     def __repr__(self):
+        SHList = self.parent.parent.SHList
         s  = repr(self.name)
         s += " value=0x%x" % self.value
-        if 0 < self.sectionnumber < 1+len(self.parent_head.parent_head.SHList):
-            s += " section=%s" % self.parent_head.parent_head.SHList[self.sectionnumber-1].name
+        if 0 < self.sectionnumber < 1+len(SHList):
+            s += " section=%s" % SHList[self.sectionnumber-1].name
         else:
             s += " section=0x%x" % self.sectionnumber
         base_type = self.type & 0xf
@@ -1501,39 +1518,18 @@ class CoffSymbol(NEW_CStruct):
         s += " aux=%r" % self.aux
         return "<CoffSymbol " + s + ">"
 
-class SymbolAuxFile(NEW_CStruct):
-    _fields = [ ("name", (lambda c, s, of:c.getname(s, of),
-                          lambda c, value:c.setname(value)))]
-    def getname(self, s, of):
-        name = s[of:of+18]
-        if name[0:4] == data_null*4:
-            name = self.parent_head.parent_head.SymbolStrings.getby_offset(struct.unpack('<I', name[4:8])[0])
-        else:
-            name = name.strip(data_null)
-        if type(name) != str: name = str(name, encoding='latin1')
-        return name, of+18
-    def setname(self, value):
-        if len(value) > 18:
-            of = self.parent_head.parent_head.SymbolStrings.add(value)
-            return struct.pack("<IIIIH", 0, of, 0, 0, 0)
-        else:
-            value += data_null*18
-            return value[0:18]
-
-class SymbolAuxFunc(NEW_CStruct):
-    _fields = [ ("tagIndex","u32"),
-                ("totalSize","u32"),
-                ("pointerToLineNum","u32"),
-                ("pointerToNextFunc","u32"),
-                ("padding","u16")]
-
-class SymbolAuxSect(NEW_CStruct):
-    _fields = [ ("length","u32"),
-                ("numberOfRelocations","u16"),
-                ("numberOfLinenumbers","u16"),
-                ("checksum","u32"),
-                ("number","u16"),
-                ("selection","u08"),
-                ("padding1","u08"),
-                ("padding2","u08"),
-                ("padding3","u08")]
+class CoffSymbols(CArray):
+    _cls = CoffSymbol
+    def count(self):
+        # Note that numberofsymbols also count AuxSymbols, while the
+        # length of this array does not. We need to keep track of the
+        # number of AuxSymbols up to now
+        if not hasattr(self, 'numberofaux'): self.numberofaux = 0
+        if len(self._array): self.numberofaux += len(self[-1].aux)
+        return self.parent.COFFhdr.numberofsymbols - self.numberofaux
+    def unpack(self, c, o):
+        if o is None:
+            o = self.parent.COFFhdr.pointertosymboltable
+        CArray.unpack(self, c, o)
+    # For API compatibility with previous versions of elfesteem
+    symbols = property(lambda _: _._array)

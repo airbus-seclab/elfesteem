@@ -259,27 +259,6 @@ class StrTable(object):
     def getby_offset(self, of):
         return self.res.get(of, "")
 
-class CoffSymbols(object):
-    def __init__(self, strpwk, of, numberofsymbols, parent):
-        self._sex = 0
-        self._wsize = 32
-        self.parent_head = parent
-        self.symbols = []
-        if numberofsymbols == 0:
-            return
-        end = of + 18 * numberofsymbols
-        while of < end:
-            s = pe.CoffSymbol.unpack(strpwk, of, self)
-            self.symbols.append(s)
-            of += 18 * (1 + s.numberofauxsymbols)
-    def __str__(self):
-        raise AttributeError("Use pack() instead of str()")
-    def pack(self):
-        rep = pe.data_empty
-        for s in self.symbols:
-            rep += s.pack()
-        return rep
-
 # PE object
 
 class PE(object):
@@ -305,8 +284,6 @@ class PE(object):
             self.NThdr = pe.NThdr(parent=self)
             self.SHList = pe.SHList(parent=self)
 
-            self._sex = 0
-            self._wsize = 32
             self.DirImport = pe.DirImport(parent=self)
             self.DirExport = pe.DirExport(parent=self)
             self.DirDelay = pe.DirDelay(parent=self)
@@ -357,6 +334,9 @@ class PE(object):
             self.parse_content(parse_resources = parse_resources,
                                parse_delay = parse_delay,
                                parse_reloc = parse_reloc)
+        # For API compatibility with previous versions of elfesteem
+        self._sex = '<>'.index(self.sex)
+        self._wsize = self.wsize
 
     def isPE(self):
         if not hasattr(self, 'NTsig') or self.NTsig is None:
@@ -407,21 +387,19 @@ class PE(object):
         if parse_reloc:     self.DirReloc = pe.DirReloc(**kargs)
         if parse_resources: self.DirRes   = pe.DirRes  (**kargs)
 
-        self._sex = 0
-        self._wsize = 32
         if self.COFFhdr.pointertosymboltable != 0:
-            of = self.COFFhdr.pointertosymboltable
-            of += 18 * self.COFFhdr.numberofsymbols
-            sz, = struct.unpack('<>'[self._sex]+'I',self.content[of:of+4])
+            if self.COFFhdr.pointertosymboltable + 18 * self.COFFhdr.numberofsymbols > len(self.content):
+                log.warning('Too many symbols: %d', self.COFFhdr.numberofsymbols)
+            else:
+                self.Symbols = pe.CoffSymbols(**kargs)
+        if hasattr(self, 'Symbols'):
+            of = self.COFFhdr.pointertosymboltable + self.Symbols._size
+            sz, = struct.unpack(self.sex+'I',self.content[of:of+4])
             if len(self.content) < of+sz:
                 log.warning('File too short for StrTable %#x != %#x' % (
                     len(self.content)-of, sz))
                 sz = len(self.content) - of
             self.SymbolStrings = StrTable(self.content[of:of+sz])
-            self.Symbols = CoffSymbols(self.content,
-                                       self.COFFhdr.pointertosymboltable,
-                                       self.COFFhdr.numberofsymbols,
-                                       self)
 
     def resize(self, old, new):
         pass
@@ -589,7 +567,8 @@ class PE(object):
         if self.COFFhdr.numberofsymbols:
             self.COFFhdr.pointertosymboltable = off
             c[off] = self.Symbols.pack()
-            off += 18 * self.COFFhdr.numberofsymbols
+            assert self.Symbols._size == 18 * self.COFFhdr.numberofsymbols
+            off += self.Symbols._size
             c[off] = self.SymbolStrings.pack()
 
         # some headers may have been updated when building sections or symbols
@@ -728,8 +707,6 @@ class Coff(PE):
             raise ValueError("COFF SZOPT %d"%self.COFFhdr.sizeofoptionalheader)
         
         of += self.COFFhdr.sizeofoptionalheader
-        self._sex = 0 if self.sex == '<' else 1
-        self._wsize = self.wsize
         filesz = len(self.content)
         if self.COFFhdr.numberofsections == 0:
             raise ValueError("COFF cannot have no sections")
@@ -741,19 +718,25 @@ class Coff(PE):
             raise ValueError("COFF invalid ptr to symbol table")
         self.SHList = pe.SHList(parent=self, content=self.content, start=of)
         
-        if self.COFFhdr.pointertosymboltable != 0:
-            of = self.COFFhdr.pointertosymboltable
-            of += 18 * self.COFFhdr.numberofsymbols
-            sz, = struct.unpack('<>'[self._sex]+'I',self.content[of:of+4])
+        of = self.COFFhdr.pointertosymboltable
+        if self.COFFhdr.machine == pe.IMAGE_FILE_MACHINE_ALPHA_O \
+                and of != 0 \
+                and struct.unpack('<H',self.content[of:of+2])[0] == 0x1992:
+            log.warning('OSF1 COFF Symbol Table: TODO')
+        elif of != 0 and self.COFFhdr.numberofsymbols != 0:
+            self.Symbols = pe.CoffSymbols(
+                                       parent=self,
+                                       content=self.content,
+                                       start=None,
+                                       )
+        if hasattr(self, 'Symbols'):
+            of = self.COFFhdr.pointertosymboltable + self.Symbols._size
+            sz, = struct.unpack(self.sex+'I',self.content[of:of+4])
             if len(self.content) < of+sz:
                 log.warning('File too short for StrTable %#x != %#x' % (
                     len(self.content)-of, sz))
                 sz = len(self.content) - of
             self.SymbolStrings = StrTable(self.content[of:of+sz])
-            self.Symbols = CoffSymbols(self.content,
-                                       self.COFFhdr.pointertosymboltable,
-                                       self.COFFhdr.numberofsymbols,
-                                       self)
         
         if self.Opthdr.__class__.__name__ == 'OpthdrUnknown':
             log.warn("Unknown Option Header format of size %d for machine %s:",

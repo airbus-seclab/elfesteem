@@ -152,12 +152,14 @@ def print_layout(e, filesz):
             layout.append((s.lnnoptr, nlnno*6,
                             'LineNo  '+s.name.strip('\0')))
 
-    if COFFhdr.pointertosymboltable != 0 and COFFhdr.numberofsymbols != 0:
+    if hasattr(e, 'Symbols'):
         layout.append((COFFhdr.pointertosymboltable,
-                       18 * COFFhdr.numberofsymbols,
+                       e.Symbols._size,
                        'COFF Symbols'))
+        assert 18 * COFFhdr.numberofsymbols == e.Symbols._size
+    if hasattr(e, 'SymbolStrings'):
         layout.append((COFFhdr.pointertosymboltable +
-                       18 * COFFhdr.numberofsymbols,
+                       e.Symbols._size,
                        len(e.SymbolStrings.pack()),
                        'COFF SymbolStrings'))
 
