@@ -1533,3 +1533,49 @@ class CoffSymbols(CArray):
         CArray.unpack(self, c, o)
     # For API compatibility with previous versions of elfesteem
     symbols = property(lambda _: _._array)
+
+class CoffOSF1Symbols(CStruct):
+    _fields = [ ("magic", "u16"),  # 0x1992
+                ("vstamp", "u16"), # 0x030b for version 3.13
+                ("ilineMax", "u32"),
+                ("idnMax", "u32"),
+                ("ipdMax", "u32"),
+                ("isymMax", "u32"),
+                ("ioptMax", "u32"),
+                ("iauxMax", "u32"),
+                ("issMax", "u32"),
+                ("issExtMax", "u32"),
+                ("ifdMax", "u32"),
+                ("crfd", "u32"),
+                ("iextMax", "u32"),
+                ("cbLine", "u64"),
+                ("cbLineOffset", "u64"),
+                ("cbDnOffset", "u64"),
+                ("cbPdOffset", "u64"),
+                ("cbSymOffset", "u64"),
+                ("cbOptOffset", "u64"),
+                ("cbAuxOffset", "u64"),
+                ("cbSsOffset", "u64"),
+                ("cbSsExtOffset", "u64"),
+                ("cbFdOffset", "u64"),
+                ("cbRfdOffset", "u64"),
+                ("cbExtOffset", "u64"),
+                ]
+    # TODO: parse the various Symbol Tables
+    def __repr__(self):
+        s = '<%s\n' % self.__class__.__name__
+        s += '  magic=%#x' % self.magic
+        s += '  version %d.%d\n' % (self.vstamp>>8, self.vstamp&0xff)
+        s += '  line  %#010x %d lines %d bytes\n'  % (self.cbLineOffset, self.ilineMax, self.cbLine)
+        s += '  dn    %#010x %d (obsolete)\n'% (self.cbDnOffset, self.idnMax)
+        s += '  pd    %#010x %d entries\n'   % (self.cbPdOffset, self.ipdMax)
+        s += '  sym   %#010x %d entries\n'   % (self.cbSymOffset, self.isymMax)
+        s += '  opt   %#010x %d bytes\n'     % (self.cbOptOffset, self.ioptMax)
+        s += '  aux   %#010x %d entries\n'   % (self.cbAuxOffset, self.iauxMax)
+        s += '  ss    %#010x %d bytes\n'     % (self.cbSsOffset, self.issMax)
+        s += '  ssExt %#010x %d bytes\n'     % (self.cbSsExtOffset, self.issExtMax)
+        s += '  fd    %#010x %d entries\n'   % (self.cbFdOffset, self.ifdMax)
+        s += '  rfd   %#010x %d entries\n'   % (self.cbRfdOffset, self.crfd)
+        s += '  ext   %#010x %d entries\n'   % (self.cbExtOffset, self.iextMax)
+        s += '>'
+        return s

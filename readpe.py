@@ -152,11 +152,38 @@ def print_layout(e, filesz):
             layout.append((s.lnnoptr, nlnno*6,
                             'LineNo  '+s.name.strip('\0')))
 
+    if hasattr(e, 'OSF1Symbols'):
+        layout.append((COFFhdr.pointertosymboltable,
+                       e.OSF1Symbols._size,
+                       'COFF/OSF1 Symbols Header'))
+        stab_end = COFFhdr.pointertosymboltable + e.OSF1Symbols._size
+        for start, count, size, name in (
+            ('cbLineOffset', 'cbLine', 1, 'Packed Line Number Entries'),
+            ('cbDnOffset', 'idnMax', 0, 'Obsolete'),
+            ('cbPdOffset', 'ipdMax', 64, 'Procedure Descriptors'),
+            ('cbSymOffset', 'isymMax', 16, 'Local Symbols'),
+            ('cbOptOffset', 'ioptMax', 1, 'Optimization Entries'),
+            ('cbAuxOffset', 'iauxMax', 4, 'Auxiliary Symbols'),
+            ('cbSsOffset', 'issMax', 1, 'Local Strings'),
+            ('cbSsExtOffset', 'issExtMax', 1, 'External Strings'),
+            ('cbFdOffset', 'ifdMax', 96, 'File Descriptors'),
+            ('cbRfdOffset', 'crfd', 4, 'Relative File Descriptors'),
+            ('cbExtOffset', 'iextMax', 24, 'External Symbols'),
+            ):
+            if getattr(e.OSF1Symbols, start) != 0:
+                layout.append((getattr(e.OSF1Symbols, start),
+                               getattr(e.OSF1Symbols, count) * size,
+                               'COFF/OSF1 %s'%name))
+                stab_end_s =   getattr(e.OSF1Symbols, start) + \
+                               getattr(e.OSF1Symbols, count) * size
+                if stab_end < stab_end_s: stab_end = stab_end_s
+        layout.append((COFFhdr.pointertosymboltable,
+                       stab_end - COFFhdr.pointertosymboltable,
+                       'COFF/OSF1 Symbols'))
     if hasattr(e, 'Symbols'):
         layout.append((COFFhdr.pointertosymboltable,
                        e.Symbols._size,
                        'COFF Symbols'))
-        assert 18 * COFFhdr.numberofsymbols == e.Symbols._size
     if hasattr(e, 'SymbolStrings'):
         layout.append((COFFhdr.pointertosymboltable +
                        e.Symbols._size,
@@ -382,6 +409,8 @@ if __name__ == '__main__':
             if hasattr(e, 'Symbols'):
                 for s in e.Symbols.symbols:
                     print("%r"%s)
+            if hasattr(e, 'OSF1Symbols'):
+                print("%r"%e.OSF1Symbols)
         if 'layout' in args.options:
             print_layout(e,len(raw))
         if 'directories' in args.options:

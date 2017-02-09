@@ -722,7 +722,11 @@ class Coff(PE):
         if self.COFFhdr.machine == pe.IMAGE_FILE_MACHINE_ALPHA_O \
                 and of != 0 \
                 and struct.unpack('<H',self.content[of:of+2])[0] == 0x1992:
-            log.warning('OSF1 COFF Symbol Table: TODO')
+            self.OSF1Symbols = pe.CoffOSF1Symbols(
+                                       parent=self,
+                                       content=self.content,
+                                       start=self.COFFhdr.pointertosymboltable,
+                                       )
         elif of != 0 and self.COFFhdr.numberofsymbols != 0:
             self.Symbols = pe.CoffSymbols(
                                        parent=self,
