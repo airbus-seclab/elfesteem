@@ -32,6 +32,9 @@ def print_petype(e):
         COFFhdr.characteristics,
         COFFhdr.sizeofoptionalheader,
         ))
+    for flag in pe.constants['IMAGE_FILE_FLAG']:
+        if COFFhdr.characteristics & flag:
+            print("  %s"%pe.constants['IMAGE_FILE_FLAG'][flag])
     if COFFhdr.sizeofoptionalheader:
         if hasattr(e.Opthdr, 'majorlinkerversion'):
             vstamp = '%d.%d' % ( e.Opthdr.majorlinkerversion,
