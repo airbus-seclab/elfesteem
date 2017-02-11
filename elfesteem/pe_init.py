@@ -41,11 +41,11 @@ class drva(object):
                 data_out += self.parent.__getitem__(n_item)
         return data_out
 
-    def get_rvaitem(self, start, stop = None, step = None):
+    def get_rvaitem(self, start, stop = None, section = None):
         if self.parent.SHList is None:
             return [(None, start)]
         if stop == None:
-            s = self.parent.getsectionbyrva(start)
+            s = self.parent.getsectionbyrva(start, section)
             if s is None:
                 return [(None, start)]
             start = start-s.vaddr
@@ -63,7 +63,7 @@ class drva(object):
                 s_max = s_min
                 s = None
             else:
-                s = self.parent.getsectionbyrva(start)
+                s = self.parent.getsectionbyrva(start, section)
                 if s is None:
                     log.warn('unknown rva address! %x'%start)
                     return []
@@ -79,7 +79,7 @@ class drva(object):
             s_len = s_stop - s_start
             total_len -= s_len
             start += s_len
-            n_item = slice(s_start, s_stop, step)
+            n_item = slice(s_start, s_stop)
             rva_items.append((s, n_item))
             if s_len <= 0:
                 break
@@ -206,12 +206,12 @@ class virt(object):
     def is_addr_in(self, ad):
         return self.parent.is_in_virt_address(ad)
 
-    def __call__(self, ad_start, ad_stop = None, ad_step = None, section = None):
+    def __call__(self, ad_start, ad_stop = None, section = None):
         ad_start = self.parent.virt2rva(ad_start)
         if ad_stop != None:
             ad_stop = self.parent.virt2rva(ad_stop)
 
-        rva_items = self.parent.drva.get_rvaitem(ad_start, ad_stop, ad_step)
+        rva_items = self.parent.drva.get_rvaitem(ad_start, ad_stop, section)
         data_out = pe.data_empty
         for s, n_item in rva_items:
             if s is None:
@@ -343,6 +343,12 @@ class PE(object):
             return False
         return self.NTsig.signature == 0x4550
 
+    def has_relocatable_sections(self):
+        # Typically .obj COFF object files for Windows.
+        # All sections start at vaddr==0 because they are relocated by
+        # the linker.
+        return self.COFFhdr.characteristics & pe.IMAGE_FILE_FLAG_EXECUTABLE_IMAGE == 0
+
     def parse_content(self,
                       parse_resources = True,
                       parse_delay = True,
@@ -408,20 +414,18 @@ class PE(object):
     def __setitem__(self, item, data):
         self.content.__setitem__(item, data)
 
-    def getsectionbyrva(self, rva):
+    def getsectionbyrva(self, rva, section = None):
         if self.SHList is None:
             return None
+        if section:
+            return self.getsectionbyname(section)
         for s in self.SHList.shlist:
-            if hasattr(self, 'NThdr'): # PE file
-                vsize = s.paddr
-            else: # COFF file
-                vsize = s.rsize
-            if s.vaddr <= rva < s.vaddr+vsize:
+            if s.vaddr <= rva < s.vaddr+s.size:
                 return s
         return None
 
-    def getsectionbyvad(self, vad):
-        return self.getsectionbyrva(self.virt2rva(vad))
+    def getsectionbyvad(self, vad, section = None):
+        return self.getsectionbyrva(self.virt2rva(vad), section)
 
     def getsectionbyoff(self, off):
         if self.SHList is None:
@@ -439,11 +443,14 @@ class PE(object):
                 return s
         return None
 
-    def rva2off(self, rva):
+    def rva2off(self, rva, section = None):
+        if section is None and self.has_relocatable_sections():
+            # TODO: .obj cannot convert rva2off without knowing the section
+            return None
         # Special case rva in header
         if rva < self.NThdr.sizeofheaders:
             return rva
-        s = self.getsectionbyrva(rva)
+        s = self.getsectionbyrva(rva, section)
         if s is None:
             return None
         soff = (s.scnptr//self.NThdr.filealignment)*self.NThdr.filealignment

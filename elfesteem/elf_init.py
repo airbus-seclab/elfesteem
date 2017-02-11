@@ -862,6 +862,8 @@ class ELF(object):
             return sh[0]
         return None
 
+    def has_relocatable_sections(self):
+        return self.Ehdr.type == elf.ET_REL
 
     def is_in_virt_address(self, ad):
         for s in self.sh:

@@ -1361,6 +1361,9 @@ class MACHO(object):
                 f.append(ad-s.addr+s.offset)
         return f
     
+    def has_relocatable_sections(self):
+        return self.Mhdr.filetype == macho.MH_OBJECT
+    
     def add(self, *args, **kargs):
         if args:
             s= args[0]
