@@ -379,7 +379,7 @@ if __name__ == '__main__':
     parser.add_argument('-S', dest='options', action='append_const', const='sections', help='Sections')
     parser.add_argument('-D', dest='options', action='append_const', const='directories',   help='Directories')
     #parser.add_argument('-d', dest='options', action='append_const', const='dynsym',   help='Dynamic symbols')
-    #parser.add_argument('-r', dest='options', action='append_const', const='reltab',   help='Relocation sections')
+    parser.add_argument('-r', dest='options', action='append_const', const='reltab',   help='Relocation sections')
     parser.add_argument('-s', dest='options', action='append_const', const='symtab',   help='Symbol table')
     #parser.add_argument('-d', dest='options', action='append_const', const='dynsym',   help='Dynamic symbols')
     parser.add_argument('-l', dest='options', action='append_const', const='layout',   help='File content layout')
@@ -414,6 +414,12 @@ if __name__ == '__main__':
                     print("%r"%s)
             if hasattr(e, 'OSF1Symbols'):
                 print("%r"%e.OSF1Symbols)
+        if 'reltab' in args.options:
+            for s in e.SHList:
+                if s.nreloc:
+                    print('Relocs  '+s.name.strip('\0'))
+                    for r in s.data.relocs:
+                        print('   %r'%r)
         if 'layout' in args.options:
             print_layout(e,len(raw))
         if 'directories' in args.options:
