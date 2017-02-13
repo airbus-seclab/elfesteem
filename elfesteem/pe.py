@@ -740,9 +740,6 @@ class SectionData(CBase):
         if hasattr(pefile, 'NThdr'):
             filealignment = pefile.NThdr.filealignment
         else:
-            if self.parent.pack()[1::2] == data_null*(self.parent.bytelen//2):
-                # May happen if a file is wrongly parsed as COFF
-                raise ValueError("Not COFF section")
             filealignment = 0
         if pefile.loadfrommem:
             raw_off = self.parent.vaddr
