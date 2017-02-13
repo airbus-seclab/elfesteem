@@ -88,7 +88,10 @@ def print_sections(e):
         print("\nNT HEADERS")
         print("No          Name         addr      memsz")
         for i, s in enumerate(e.NThdr.optentries):
-            n = e.getsectionbyrva(s.rva)
+            if i == pe.DIRECTORY_ENTRY_SECURITY:
+                n = e.getsectionbyoff(s.rva)
+            else:
+                n = e.getsectionbyrva(s.rva)
             if n is None:
                 class NoSection(object):
                     name = '<no section>'

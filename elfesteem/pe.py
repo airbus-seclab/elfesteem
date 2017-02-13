@@ -970,9 +970,9 @@ class SHList(CArray):
 
 # Parsing a Directory is not complicated, it is a tree-like structure
 # where RVA are pointers to be converted in offsets in the file.
-# Modifying a Directory makes is more complicated.
+# Modifying a Directory is more complicated.
 # - It is not always entirely in one section; e.g. for some PE files
-#   everything from the DelayImport direction is in .rdata, with the
+#   everything from the DelayImport directory is in .rdata, with the
 #   exception of the current thunks, in .data
 #   Therefore if we want to add an imported function, we may need to
 #   modify two sections.
@@ -988,8 +988,9 @@ class SHList(CArray):
 # modifications.
 
 # Depending on how the PE file has been generated, the place
-# where the directories are found varies a lot. Here are a
-# few examples:
+# where the directories are found varies a lot. Option '-Sl'
+# of readpe.py can show in whihc section are the directories and
+# the layout of the file. Here are a few examples:
 #
 # MinGW
 #   DirEnt IMPORT       in .idata (as recommended by the reference doc of PE)
@@ -998,14 +999,14 @@ class SHList(CArray):
 # Some old Microsoft files
 #   DirEnt BOUND_IMPORT in headers (after PE header)
 #   DirEnt IMPORT       in .text
-#   DirEnt EXPORT       in .text
 #   DirEnt DELAY_IMPORT in .text
+#   DirEnt EXPORT       in .text
 #   DirEnt LOAD_CONFIG  in .text
 #   DirEnt IAT          in .text (contains IMPORT current Thunks)
 #   DirEnt DEBUG        in .text
 #   DirEnt RESOURCE     in .rsrc
 #   DirEnt BASERELOC    in .reloc
-#   DirEnt SECURITY     in .reloc or in no section
+#   DirEnt SECURITY     in no section
 #   Thunks DELAY_IMPORT original in .text, current in .data
 #
 # Some more recent Microsoft files
@@ -1013,12 +1014,26 @@ class SHList(CArray):
 #   DirEnt DEBUG        in .text
 #   DirEnt IAT          in .rdata (contains IMPORT current Thunks)
 #   DirEnt IMPORT       in .rdata
+#   DirEnt DELAY_IMPORT in .rdata
 #   DirEnt EXPORT       in .rdata
 #   DirEnt LOAD_CONFIG  in .rdata
 #   DirEnt EXCEPTION    in .pdata
 #   DirEnt RESOURCE     in .rsrc
 #   DirEnt BASERELOC    in .reloc
-#   DirEnt SECURITY     in .reloc
+#   DirEnt SECURITY     in no section
+#
+# Some other executables
+#   DirEnt DEBUG        in .text
+#   DirEnt IAT          in .idata (contains IMPORT current Thunks)
+#   DirEnt IMPORT       in .idata
+#   DirEnt DELAY_IMPORT in .text
+#   DirEnt EXPORT       in .text
+#   DirEnt LOAD_CONFIG  in .text
+#   DirEnt EXCEPTION    in .pdata
+#   DirEnt RESOURCE     in .rsrc
+#   DirEnt BASERELOC    in .reloc
+#   DirEnt SECURITY     in no section
+#   DirEnt TLS          in .rdata
 
 class CArrayDirectory(CArray):
     def unpack(self, c, o):
