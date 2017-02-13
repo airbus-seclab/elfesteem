@@ -8,3 +8,4 @@
 * intervals: automatic detection if the whole file has not been parsed (Mach-O only)
 * PE: parse the symbol table
 * ELF: can generate a valid ELF relocatable with default values
+* PE & COFF: use the same CStruct implementation as ELF, which IMHO makes it more understandable; the original API for manipulating PE files should still be useable; please tell me what worked and has been broken!
