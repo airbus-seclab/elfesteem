@@ -343,19 +343,23 @@ def print_layout(e, filesz):
     layout.sort(key=itemgetter(1), reverse=True)
     layout.sort(key=itemgetter(0))
     format = "%#10x-%#010x %s%s"
+    def unknown(b, f, dots):
+        if e.content[b:f] == pe.data_null*(f-b):
+            msg = 'zeroes'
+        else:
+            msg = '(unknown, %d bytes)' % (f-b)
+        print(format % (b, f, ". " * dots, msg))
     context = [(0, filesz)]
     for l in [l for l in layout if l[0] != None]:
         if context[-1][0] <= l[0] and l[0]+l[1] <= context[-1][1]:
             if context[-1][0] < l[0]:
                 b, f = context[-1][0], l[0]
-                print(format % (b, f, ". " * (len(context)-1),
-                        '(unknown, %d bytes)' % (f-b)))
+                unknown(b, f, len(context)-1)
         else:
             while l[0] >= context[-1][1]:
                 b, f = context[-1][1], min(l[0], context[-2][1])
                 if f > b:
-                    print(format % (b, f, ". " * (len(context)-2),
-                        '(unknown; %d bytes)' % (f-b)))
+                    unknown(b, f, len(context)-2)
                 context.pop()
         context.append((l[0],l[0]+l[1]))
         print(format % (l[0], l[0]+l[1], ". " * (len(context)-2),
@@ -366,8 +370,7 @@ def print_layout(e, filesz):
             while len(context) > 1 and l[0] >= context[-1][1]:
                 b, f = context[-1][1], min(l[0], context[-2][1])
                 if f > b:
-                    print(format % (b, f, ". " * (len(context)-2),
-                        '(unknown; %d bytes)' % (f-b)))
+                    unknown(b, f, len(context)-2)
                 context.pop()
             if context[-1][1] > filesz:
                 print(format % (context[-1][1], filesz, "", "(went after EOF!)"))
