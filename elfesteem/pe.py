@@ -579,7 +579,11 @@ class Shdr(CStruct):
     rawsize = property(lambda self: self.rsize)
     offset  = property(lambda self: self.scnptr)
     addr    = property(lambda self: self.vaddr)
-    size    = property(lambda self: self.paddr)
+    def size(self):
+        # Return the virtual size (for PE) or the RAW size (for COFF)
+        if self.parent.parent_head.isPE(): return self.paddr
+        else:                              return self.rawsize
+    size    = property(size)
     # Redefine _fields for some non-standard cases
     # This way of doing is a dirty hack, until we know more about what
     # COFF section entries should really be like

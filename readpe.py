@@ -51,6 +51,7 @@ def print_petype(e):
             COFFhdr.numberofsymbols,
             len(e.content) - strtab_off,
             ))
+    print("MaxAddr %#x" % e.virt.max_addr())
     if hasattr(e, 'NThdr'):
         print("NThdr: Sig %#x OSver %d.%d IMGver %d.%d subsystem %s v%d.%d" % (
             e.NTsig.signature,

@@ -51,15 +51,16 @@ class drva(object):
             start = start-s.vaddr
             return [(s, start)]
         total_len = stop - start
+        s_min = self.parent.SHList[0].vaddr
+        if hasattr(self.parent, 'NThdr'):
+            s_min = min(s_min, self.parent.NThdr.sizeofheaders)
         rva_items = []
         while total_len:
             # special case if look at pe hdr address
-            if 0 <= start < min(self.parent.SHList[0].vaddr,
-                                self.parent.NThdr.sizeofheaders):
+            if 0 <= start < s_min:
                 s_start = start
                 s_stop = stop
-                s_max = min(self.parent.SHList[0].vaddr,
-                            self.parent.NThdr.sizeofheaders)
+                s_max = s_min
                 s = None
             else:
                 s = self.parent.getsectionbyrva(start)
@@ -136,9 +137,12 @@ class virt(object):
         log.warn("__len__ deprecated")
         return self.max_addr()
     def max_addr(self):
-         s = self.parent.SHList[-1]
-         l = s.vaddr+s.size+self.parent.NThdr.ImageBase
-         return int(l)
+        l = 0
+        for s in self.parent.SHList:
+            l = max(l, s.vaddr+s.size)
+        if hasattr(self.parent, 'NThdr'):
+            l += self.parent.NThdr.ImageBase
+        return int(l)
 
     def find(self, pattern, start = 0, end = None):
         if start != 0:
@@ -370,7 +374,7 @@ class PE(object):
                                parse_reloc = parse_reloc)
 
     def isPE(self):
-        if self.NTsig is None:
+        if not hasattr(self, 'NTsig') or self.NTsig is None:
             return False
         return self.NTsig.signature == 0x4550
 
@@ -580,13 +584,13 @@ class PE(object):
         return off-s.scnptr+s.vaddr
 
     def virt2rva(self, virt):
-        if virt == None:
-            return
+        if virt is None or not hasattr(self, 'NThdr'):
+            return virt
         return virt - self.NThdr.ImageBase
 
     def rva2virt(self, rva):
-        if rva == None:
-            return
+        if rva is None or not hasattr(self, 'NThdr'):
+            return rva
         return rva + self.NThdr.ImageBase
 
     def virt2off(self, virt):
@@ -596,7 +600,7 @@ class PE(object):
         return self.rva2virt(self.off2rva(off))
 
     def is_in_virt_address(self, ad):
-        if ad < self.NThdr.ImageBase:
+        if hasattr(self, 'NThdr') and ad < self.NThdr.ImageBase:
             return False
         ad = self.virt2rva(ad)
         for s in self.SHList.shlist:
