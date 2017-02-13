@@ -1041,12 +1041,6 @@ class CArrayDirectory(CArray):
 class ImportName(CStruct):
     _fields = [ ("hint", "u16"),
                 ("name", CString) ]
-    def update(self, **kargs):
-        CStruct.update(self, **kargs)
-        if 's' in kargs:
-            # Update the string in the CString
-            self.name.update(s=kargs['s'])
-            self._size = 2+self.name.bytelen
 
 class ImportNamePtr(CStruct):
     _fields = [ ("rva","ptr") ]

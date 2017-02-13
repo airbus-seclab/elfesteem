@@ -216,7 +216,11 @@ class CStruct(CStruct_base):
     def update(self, **kargs):
         for f in [f for f in kargs if f in self._names]:
             self.setf(f,kargs[f])
-        # TODO: how to update self._opt
+        for fname, fclass in self._opt:
+            v = self.getf(fname)
+            self._size -= self._size_align(v)
+            v.update(**kargs)
+            self._size += self._size_align(v)
 
     def pack(self):
         fields = [getattr(self, x) for x in self._names]
