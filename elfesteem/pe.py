@@ -740,7 +740,7 @@ class SectionData(CBase):
         if hasattr(pefile, 'NThdr'):
             filealignment = pefile.NThdr.filealignment
         else:
-            if self.parent.pack()[1::2] == data_null*(self.parent._size//2):
+            if self.parent.pack()[1::2] == data_null*(self.parent.bytelen//2):
                 # May happen if a file is wrongly parsed as COFF
                 raise ValueError("Not COFF section")
             filealignment = 0
@@ -899,10 +899,10 @@ class SHList(CArray):
             # Should be equal to self.parent.NThdr.sizeofheaders
             if first_section_offset < (
                     self.parent.DOShdr.lfanew +
-                    self.parent.NTsig._size +
-                    self.parent.COFFhdr._size +
+                    self.parent.NTsig.bytelen +
+                    self.parent.COFFhdr.bytelen +
                     self.parent.COFFhdr.sizeofoptionalheader +
-                    (1+len(self))*Shdr(parent=self)._size):
+                    (1+len(self))*Shdr(parent=self).bytelen):
                 log.error("Cannot add section %s: not enough space for section list", name)
                 # Could be solved by changing the section offsets, but some
                 # sections may contain data that depends on the offset.
@@ -925,11 +925,11 @@ class SHList(CArray):
             # First section
             vaddr = 0x1000
             scnptr = self.parent.DOShdr.lfanew
-            scnptr += self.parent.NTsig._size
-            scnptr += self.parent.COFFhdr._size
+            scnptr += self.parent.NTsig.bytelen
+            scnptr += self.parent.COFFhdr.bytelen
             scnptr += self.parent.COFFhdr.sizeofoptionalheader
             # space for 10 sections
-            scnptr += Shdr(parent=self)._size * 10
+            scnptr += Shdr(parent=self).bytelen * 10
         # alignment
         s_align = self.parent.NThdr.sectionalignment
         s_align = max(0x1000, s_align)
@@ -1046,7 +1046,7 @@ class ImportName(CStruct):
         if 's' in kargs:
             # Update the string in the CString
             self.name.update(s=kargs['s'])
-            self._size = 2+self.name._size
+            self._size = 2+self.name.bytelen
 
 class ImportNamePtr(CStruct):
     _fields = [ ("rva","ptr") ]
@@ -1119,7 +1119,7 @@ class DirImport(CArrayDirectory):
         for idx, d in enumerate(self):
             print("%2d %r"%(idx,d.name))
             for jdx, t in enumerate(d.IAT):
-                t_virt = self.parent.rva2virt(d.firstthunk+jdx*t._size)
+                t_virt = self.parent.rva2virt(d.firstthunk+jdx*t.bytelen)
                 t_obj = repr(t.obj)
                 # Only display original thunks that are incoherent with current
                 if hasattr(d, 'ILT'):
@@ -1146,8 +1146,8 @@ class DirImport(CArrayDirectory):
             )
         base_rva = e.off2rva(s.scnptr)
         e.NThdr.optentries[self._idx].rva = base_rva
-        self._size += self._last._size * len(args)
-        of = self._size
+        self._size += self._last.bytelen * len(args)
+        of = self.bytelen
         s.data.data = StrPatchwork()
         for dll_name, dll_func in args:
             # First, an empty descriptor
@@ -1157,7 +1157,7 @@ class DirImport(CArrayDirectory):
             d.name = CString(parent=d, s=dll_name)
             d.name_rva = base_rva+of
             s.data.data[of] = d.name.pack()
-            of += d.name._size
+            of += d.name.bytelen
             if of%2: of += 1
             # Add the Import names; they will be located after the two thunks
             thunk_len = (1+len(dll_func))*(self.wsize/8)
@@ -1170,12 +1170,12 @@ class DirImport(CArrayDirectory):
                 t.rva = base_rva+of+thunk_len
                 t.name = n
                 s.data.data[of+thunk_len] = t.obj.pack()
-                thunk_len += t.obj._size
+                thunk_len += t.obj.bytelen
                 if thunk_len%2: thunk_len += 1
                 d.ILT.append(t)
             d.originalfirstthunk = base_rva+of
             s.data.data[of] = d.ILT.pack()
-            of += d.ILT._size
+            of += d.ILT.bytelen
             d.IAT = ImportThunks(parent=d)
             for n in dll_func:
                 t = ImportNamePtr(parent=d.ILT)
@@ -1185,7 +1185,7 @@ class DirImport(CArrayDirectory):
                 d.IAT.append(t)
             d.firstthunk = base_rva+of
             s.data.data[of] = d.IAT.pack()
-            of += thunk_len - d.ILT._size
+            of += thunk_len - d.ILT.bytelen
         # Write the descriptor list (now that everyting has been computed)
         s.data.data[0] = CArray.pack(self)
         # Update the section sizes
@@ -1218,7 +1218,7 @@ class DirImport(CArrayDirectory):
         for d in self:
             for idx, t in enumerate(d.IAT):
                 if t.name == name:
-                    return d.firstthunk+idx*t._size
+                    return d.firstthunk+idx*t.bytelen
         return None
     def get_funcvirt(self, name):
         return self.parent.rva2virt(self.get_funcrva(name))
@@ -1375,14 +1375,13 @@ class DirExport(CArrayDirectory):
         s.data.data = StrPatchwork()
         # First, an empty descriptor
         d = ExportDescriptor(parent=self, base=1)
-        self._size += d._size
-        self._array.append(d)
-        of = self._size
+        self.append(d)
+        of = self.bytelen
         # Add the DLL name
         d.name = CString(parent=d, s=name)
         d.name_rva = base_rva+of
         s.data.data[of] = d.name.pack()
-        of += d.name._size
+        of += d.name.bytelen
         # Add the EAT, ENPT & EOT
         d.numberoffunctions += len(funcs)
         d.numberofnames     += len(funcs)
@@ -1397,14 +1396,14 @@ class DirExport(CArrayDirectory):
             d.EAT.append(t)
         d.addressoffunctions = base_rva+of
         s.data.data[of] = d.EAT.pack()
-        of += d.EAT._size
+        of += d.EAT.bytelen
         d.EOT = ExportOrdinalTable(parent=d)
         for idx in range(len(funcs)):
             t = ExportOrdinal(parent=d.EOT, ordinal=idx)
             d.EOT.append(t)
         d.addressofordinals = base_rva+of
         s.data.data[of] = d.EOT.pack()
-        of += d.EOT._size
+        of += d.EOT.bytelen
         pos = len(funcs)*4 # size of ENPT
         d.ENPT = ExportNamePointersTable(parent=d)
         for f in funcs:
@@ -1414,7 +1413,7 @@ class DirExport(CArrayDirectory):
             t.name.name = f # For API compatibility with previous versions
             t.rva = base_rva+of+pos
             s.data.data[of+pos] = t.name.pack()
-            pos += t.name._size
+            pos += t.name.bytelen
             d.ENPT.append(t)
         d.addressofnames = base_rva+of
         s.data.data[of] = d.ENPT.pack()
@@ -1469,7 +1468,7 @@ class DirReloc(CArrayDirectory):
     def count(self):
         # We don't know how many relocation block will be parsed, we stop
         # when reaching the end of the directory
-        if self._size < self.parent.NThdr.optentries[self._idx].size:
+        if self.bytelen < self.parent.NThdr.optentries[self._idx].size:
             return len(self)+1
         return -1
     def display(self):
@@ -1490,7 +1489,7 @@ class UStringData(CBase):
     def _initialize(self):
         self._size = 2*self.parent.length
     def unpack(self, c, o):
-        self.value = c[o:o+self._size]
+        self.value = c[o:o+self.bytelen]
 
 class UString(CStruct):
     _fields = [ ("length", "u16"),

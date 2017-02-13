@@ -399,7 +399,7 @@ class PE(object):
             else:
                 self.Symbols = pe.CoffSymbols(**kargs)
         if hasattr(self, 'Symbols'):
-            of = self.COFFhdr.pointertosymboltable + self.Symbols._size
+            of = self.COFFhdr.pointertosymboltable + self.Symbols.bytelen
             sz, = struct.unpack(self.sex+'I',self.content[of:of+4])
             if len(self.content) < of+sz:
                 log.warning('File too short for StrTable %#x != %#x' % (
@@ -574,8 +574,8 @@ class PE(object):
         if self.COFFhdr.numberofsymbols:
             self.COFFhdr.pointertosymboltable = off
             c[off] = self.Symbols.pack()
-            assert self.Symbols._size == 18 * self.COFFhdr.numberofsymbols
-            off += self.Symbols._size
+            assert self.Symbols.bytelen == 18 * self.COFFhdr.numberofsymbols
+            off += self.Symbols.bytelen
             c[off] = self.SymbolStrings.pack()
 
         # some headers may have been updated when building sections or symbols
@@ -741,7 +741,7 @@ class Coff(PE):
                                        start=None,
                                        )
         if hasattr(self, 'Symbols'):
-            of = self.COFFhdr.pointertosymboltable + self.Symbols._size
+            of = self.COFFhdr.pointertosymboltable + self.Symbols.bytelen
             sz, = struct.unpack(self.sex+'I',self.content[of:of+4])
             if len(self.content) < of+sz:
                 log.warning('File too short for StrTable %#x != %#x' % (

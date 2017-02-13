@@ -157,9 +157,9 @@ def print_layout(e, filesz):
 
     if hasattr(e, 'OSF1Symbols'):
         layout.append((COFFhdr.pointertosymboltable,
-                       e.OSF1Symbols._size,
+                       e.OSF1Symbols.bytelen,
                        'COFF/OSF1 Symbols Header'))
-        stab_end = COFFhdr.pointertosymboltable + e.OSF1Symbols._size
+        stab_end = COFFhdr.pointertosymboltable + e.OSF1Symbols.bytelen
         for start, count, size, name in (
             ('cbLineOffset', 'cbLine', 1, 'Packed Line Number Entries'),
             ('cbDnOffset', 'idnMax', 0, 'Obsolete'),
@@ -185,11 +185,11 @@ def print_layout(e, filesz):
                        'COFF/OSF1 Symbols'))
     if hasattr(e, 'Symbols'):
         layout.append((COFFhdr.pointertosymboltable,
-                       e.Symbols._size,
+                       e.Symbols.bytelen,
                        'COFF Symbols'))
     if hasattr(e, 'SymbolStrings'):
         layout.append((COFFhdr.pointertosymboltable +
-                       e.Symbols._size,
+                       e.Symbols.bytelen,
                        len(e.SymbolStrings.pack()),
                        'COFF SymbolStrings'))
 
@@ -220,16 +220,16 @@ def print_layout(e, filesz):
                         if hasattr(d, 'ILT'):
                             layout.append((
                                 e.rva2off(d.originalfirstthunk),
-                                d.ILT._size,
+                                d.ILT.bytelen,
                                 '%s Thunks:original [%d]' % (name, idx)))
                         if hasattr(d, 'IAT'):
                             layout.append((
                                 e.rva2off(d.firstthunk),
-                                d.IAT._size,
+                                d.IAT.bytelen,
                                 '%s Thunks:current  [%d]' % (name, idx)))
                         if hasattr(d, 'name'):
                             # Sometimes aligned to 2 bytes
-                            size = d.name._size
+                            size = d.name.bytelen
                             if      idx+1 == len(directory) or \
                                     d.name_rva+size<directory[idx+1].name_rva:
                                 if size % 2: size += 1
@@ -241,7 +241,7 @@ def print_layout(e, filesz):
                             if not hasattr(t.obj, '_size'):
                                 continue
                             # Aligned to 2 bytes
-                            size = t.obj._size
+                            size = t.obj.bytelen
                             if size % 2: size += 1
                             layout.append((
                                 e.rva2off(t.rva),
@@ -265,33 +265,33 @@ def print_layout(e, filesz):
                     d = directory[0]
                     layout.append((
                             e.rva2off(d.name_rva),
-                            d.name._size,
+                            d.name.bytelen,
                             'EXPORT DLLname'))
                     if d.addressoffunctions:
                         layout.append((
                             e.rva2off(d.addressoffunctions),
-                            d.EAT._size,
+                            d.EAT.bytelen,
                             'EXPORT Address Table'))
                     if d.addressofordinals:
                         layout.append((
                             e.rva2off(d.addressofordinals),
-                            d.EOT._size,
+                            d.EOT.bytelen,
                             'EXPORT Ordinal Table'))
                     if d.addressofnames:
                         layout.append((
                             e.rva2off(d.addressofnames),
-                            d.ENPT._size,
+                            d.ENPT.bytelen,
                             'EXPORT Name Pointers Table'))
                     for jdx, t in enumerate(d.EAT):
                         if not hasattr(t, 'name'): continue
                         layout.append((
                             e.rva2off(t.rva),
-                            t.name._size,
+                            t.name.bytelen,
                             'EXPORT Forwarder [%d]' % jdx))
                     for jdx, t in enumerate(d.ENPT):
                         layout.append((
                             e.rva2off(t.rva),
-                            t.name._size,
+                            t.name.bytelen,
                             'EXPORT FUNCname [%d]' % jdx))
                 elif i == pe.DIRECTORY_ENTRY_RESOURCE:
                     directory = e.DirRes
@@ -305,13 +305,13 @@ def print_layout(e, filesz):
                             if hasattr(x, 'dir'):
                                 layout.append((
                                     x.base + (x.offset & 0x7FFFFFFF),
-                                    x.dir._size,
+                                    x.dir.bytelen,
                                     'RESOURCE Node %s'%b))
                                 resdir_layout(x.dir,b)
                             if hasattr(x, 'data'):
                                 layout.append((
                                     x.base + (x.offset & 0x7FFFFFFF),
-                                    x.data._size,
+                                    x.data.bytelen,
                                     'RESOURCE DataDesc %s'%b))
                                 layout.append((
                                     x.rva2off(x.data.rva),
@@ -320,7 +320,7 @@ def print_layout(e, filesz):
                             if hasattr(x, 'name'):
                                 layout.append((
                                     x.base + (x.id & 0x7FFFFFFF),
-                                    x.name._size,
+                                    x.name.bytelen,
                                     'RESOURCE Name %s'%b))
                     for t in directory:
                         resdir_layout(t, [])
