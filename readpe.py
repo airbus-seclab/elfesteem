@@ -324,6 +324,15 @@ def print_layout(e, filesz):
                                     'RESOURCE Name %s'%b))
                     for t in directory:
                         resdir_layout(t, [])
+                elif i == pe.DIRECTORY_ENTRY_BASERELOC:
+                    directory = e.DirReloc
+                    of = directory._off
+                    for idx, t in enumerate(directory):
+                        layout.append((
+                                    of,
+                                    t.bytelen,
+                                    'BASERELOC Block %d'%idx))
+                        of += t.bytelen
     print("\nFILE CONTENT LAYOUT")
     def section_extract(x):
         s = x[2].split()[0]
