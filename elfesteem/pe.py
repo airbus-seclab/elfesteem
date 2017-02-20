@@ -1216,7 +1216,7 @@ class DirImport(CArrayDirectory):
                         self.name = s
                 self.firstthunk = d.firstthunk
                 self.dlldescname = Name(str(d.name))
-                self.impbynames = [Name(str(_.obj.name)) for _ in d.ILT]
+                self.impbynames = [Name(str(_.name)) for _ in d.ILT]
         return [ImpDesc_e(_) for _ in self]
     impdesc = property(impdesc)
     def get_funcrva(self, name):
