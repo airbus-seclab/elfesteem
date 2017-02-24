@@ -1035,6 +1035,8 @@ class SHList(CArray):
 #   DirEnt SECURITY     in no section
 #   DirEnt TLS          in .rdata
 
+from visual_studio_mangling import symbol_demangle
+
 class CArrayDirectory(CArray):
     def unpack(self, c, o):
         if o is None:
@@ -1122,16 +1124,21 @@ class DirImport(CArrayDirectory):
     _idx = DIRECTORY_ENTRY_IMPORT
     def display(self):
         print("<%s>" % self.__class__.__name__)
+        def repr_obj(obj):
+            if hasattr(obj, 'name'):
+                name, _ = symbol_demangle(str(obj.name))
+                return '%04X %r' % (obj.hint, name)
+            else: return repr(obj)
         for idx, d in enumerate(self):
             print("%2d %r"%(idx,d.name))
             for jdx, t in enumerate(d.IAT):
                 t_virt = self.parent.rva2virt(d.firstthunk+jdx*t.bytelen)
-                t_obj = repr(t.obj)
+                t_obj = repr_obj(t.obj)
                 # Only display original thunks that are incoherent with current
                 if hasattr(d, 'ILT'):
                     u = d.ILT[jdx]
                     if u.rva != t.rva:
-                        t_obj += ' %r' % u.obj
+                        t_obj += ' ' + repr_obj(u.obj)
                 print("        %2d %#10x %s"%(jdx,t_virt,t_obj))
     def pack(self):
         raise AttributeError("Cannot pack '%s': the Directory Entry data is not always contiguous"%self.__class__.__name__)
@@ -1364,6 +1371,7 @@ class DirExport(CArrayDirectory):
                     # To have the same display as IDA on PE for ARM
                     addr -= 1
                 addr = '%08X' % self.parent.rva2virt(addr)
+            name, _ = symbol_demangle(str(name))
             print('    %2d %s %r'%(i,addr,name))
     def create(self, funcs, name = 'default.dll'):
         # Don't separate 'create()' and 'add_name()' because adding new
