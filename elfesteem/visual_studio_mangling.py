@@ -100,11 +100,11 @@ def symbol_demangle_variable(name, data):
         # NB: ret is of type DataType, because it may be a function pointer
         ret = data_type(data)
         data.log('TYPE=%s', ret)
-	cv = ' '.join(cv_class_modifiers(data))
+        cv = ' '.join(cv_class_modifiers(data))
         if cv: cv += ' '
         ret += ' ' + cv
     elif thunk == 'OPT':
-	ret = ' '.join(cv_class_modifiers(data))
+        ret = ' '.join(cv_class_modifiers(data))
         if ret: ret += ' '
         if data[0] != '@':
             add_name = name_extract_list(data)
@@ -396,12 +396,12 @@ def data_type(data, depth = 0):
         # Array
         dimension = 1
         data.advance(2)
-	cv = ' '.join(cv_class_modifiers(data))
-	if cv: cv = ' ' + cv
+        cv = ' '.join(cv_class_modifiers(data))
+        if cv: cv = ' ' + cv
         while data[:2] == '_O':
             dimension += 1
             data.advance(2)
-	    cv_class_modifiers(data)
+            cv_class_modifiers(data)
         category, result = parse_value(data, data_types)
         assert category == 'SIMPLE'
         result += cv + ' ' + '[]' * dimension
