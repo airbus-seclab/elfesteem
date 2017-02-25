@@ -102,6 +102,17 @@ def print_sections(e):
                    '' if s.size == 0 else n.name.strip('\0')
                    ))
 
+def print_symtab(e):
+    if hasattr(e, 'Symbols'):
+        print("\nCOFF SYMBOLS")
+        for s in e.Symbols.symbols:
+            print('    name=%r' % s.name)
+            print('        type=%-8s storage=%-9s value=%#010x section=%s' % (
+                s.type_str, s.storage, s.value, s.section))
+    if hasattr(e, 'OSF1Symbols'):
+        print("\nOSF1/Tru64 SYMBOLS")
+        print("%r"%e.OSF1Symbols)
+
 from operator import itemgetter
 def print_layout(e, filesz):
     if filesz == 0:
@@ -424,11 +435,7 @@ if __name__ == '__main__':
         if 'sections' in args.options:
             print_sections(e)
         if 'symtab' in args.options:
-            if hasattr(e, 'Symbols'):
-                for s in e.Symbols.symbols:
-                    print("%r"%s)
-            if hasattr(e, 'OSF1Symbols'):
-                print("%r"%e.OSF1Symbols)
+            print_symtab(e)
         if 'reltab' in args.options:
             for s in e.SHList:
                 if s.nreloc:

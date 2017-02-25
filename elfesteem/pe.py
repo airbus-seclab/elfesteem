@@ -1701,28 +1701,31 @@ class CoffSymbol(CStruct):
             n = n.rstrip(data_null)
         return bytes_to_name(n)
     name = property(name)
-    def __repr__(self):
+    def section(self):
         SHList = self.parent.parent.SHList
-        s  = repr(self.name)
-        s += " value=0x%x" % self.value
         if 0 < self.sectionnumber < 1+len(SHList):
-            s += " section=%s" % SHList[self.sectionnumber-1].name
+            return SHList[self.sectionnumber-1].name
         else:
-            s += " section=0x%x" % self.sectionnumber
+            return '%#x' % self.sectionnumber
+    section = property(section)
+    def type_str(self):
         base_type = self.type & 0xf
         cplx_type = self.type >> 4
         if base_type != 0:
-            s += " type=%s" % constants['IMAGE_SYM_TYPE'][base_type]
+            return constants['IMAGE_SYM_TYPE'][base_type]
         elif cplx_type in constants['IMAGE_SYM_DTYPE']:
-            s += " type=%s" % constants['IMAGE_SYM_DTYPE'][cplx_type]
+            return constants['IMAGE_SYM_DTYPE'][cplx_type]
         else:
-            s += " type=0x%x" % cplx_type
+            return '%#x' % cplx_type
+    type_str = property(type_str)
+    def storage(self):
         if self.storageclass in constants['IMAGE_SYM_CLASS']:
-            s += " storage=%s" % constants['IMAGE_SYM_CLASS'][self.storageclass]
+            return constants['IMAGE_SYM_CLASS'][self.storageclass]
         else:
-            s += " storage=0x%x" % self.storageclass
-        s += " aux=%r" % self.aux
-        return "<CoffSymbol " + s + ">"
+            return '%#x' % self.storageclass
+    storage = property(storage)
+    def __repr__(self):
+        return "<CoffSymbol %r value=%#x section=%s type=%s storage=%s aux=%r>" % (self.name, self.value, self.section, self.type_str, self.storage, self.aux)
 
 class CoffSymbols(CArray):
     _cls = CoffSymbol
