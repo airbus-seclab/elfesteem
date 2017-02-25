@@ -73,6 +73,12 @@ def symbol_demangle_reentrant(data):
         name = extract_template(data)
         assert len(data) == 0
         return name
+    elif data[0] == '@':
+        # Found by reversing vcruntime140.dll
+        # Don't know when such names are generated
+        data.advance(1)
+        data.log('CV: prefix')
+        return 'CV: ' + symbol_demangle_reentrant(data)
     elif data[:3] == '?_C':
         # Neither a variable nor a function: just `string'
         # The rest is ignored
