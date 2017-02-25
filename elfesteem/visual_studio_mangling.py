@@ -718,6 +718,10 @@ calling_convention = {
     'K': '',
     'L': '__dll_export ',
     'M': '__clrcall ',
+    'N': '__clrcall __dll_export ',
+    'O': '__eabi ',
+    'P': '__eabi __dll_export ',
+    'Q': '__vectorcall ',
     }
 
 
