@@ -232,7 +232,13 @@ def extract_name_fragment(data):
         data.advance(2)
         fragment = extract_template(data)
         data.add_fragment(fragment)
+    elif data[:2] == '?A':
+        # anonymous namespace
+        idx = data.index('@')
+        data.advance(idx+1)
+        fragment = quote_b + 'anonymous namespace' + quote_e
     elif data[0] == '?':
+        # numbered namespace
         data.advance(1)
         i = decode_number(data)
         fragment = quote_b + str(i) + quote_e
