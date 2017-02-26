@@ -341,11 +341,23 @@ class DataType(object):
     def __iadd__(self, other):
         if isinstance(self.value, tuple):
             r, c, a = self.value
-            if isinstance(other, tuple): c += other[0]; a += other[1]
-            else:                        c += other
-            self.value = (r, c, a)
+            self.value = (r, c + other, a)
         else:
             self.value += other
+        return self
+    def append(self, other):
+        if isinstance(self.value, tuple):
+            r, c, a = self.value
+            self.value = (r, c, a + other)
+        else:
+            self.value += other
+        return self
+    def prepend(self, other):
+        if isinstance(self.value, tuple):
+            r, c, a = self.value
+            self.value = (other + r, c, a)
+        else:
+            self.value = other + self.value
         return self
     def __nonzero__(self):
         return len(self.value)
@@ -376,7 +388,8 @@ def data_type(data, depth = 0):
         data.advance(1)
         cv = ' '.join(cv_class_modifiers(data))
         result = DataType(symbol_demangle_function_prototype(data))
-        result += (fragment+'::*', cv)
+        result += fragment+'::*'
+        result.append(cv)
     elif data[0] == '?' and data.is_in_template():
         # Template parameters
         data.advance(1)
@@ -404,6 +417,10 @@ def data_type(data, depth = 0):
         val = [ '[%d]'%decode_number(data) for _ in range(dim) ]
         result = str(data_type(data))
         result = DataType((result, '', ''.join(val)))
+    elif data[:2] == '_$':
+        # __w64 type
+        data.advance(2)
+        result = data_type(data, depth=depth+1).prepend('__w64 ')
     elif data[:2] == '_O':
         # Array
         dimension = 1
@@ -414,9 +431,8 @@ def data_type(data, depth = 0):
             dimension += 1
             data.advance(2)
             cv_class_modifiers(data)
-        category, result = parse_value(data, data_types)
-        assert category == 'SIMPLE'
-        result += cv + ' ' + '[]' * dimension
+        result = data_type(data, depth=depth+1)
+        result.append(cv + ' ' + '[]' * dimension)
     else:
         category, result = parse_value(data, data_types)
         if category == 'COMPLEX':
@@ -640,9 +656,12 @@ data_types = {
     '_M':  ('SIMPLE',   'unsigned __int128',),
     '_N':  ('SIMPLE',   'bool',),
     #_O   =SPECIAL CASE= Array
+    '_S':  ('SIMPLE',   'char16_t',),
+    '_U':  ('SIMPLE',   'char32_t',),
     '_W':  ('SIMPLE',   'wchar_t',),
     '_X':  ('COMPLEX',  'coclass'),
     '_Y':  ('COMPLEX',  'cointerface'),
+    #_$'  =SPECIAL CASE= __w64 type
     #$$B  =SPECIAL CASE= Apparently no effect
     '$$C': ('MODIFIER', ['',   ]),
     '$$Q': ('MODIFIER', ['&&', ]),
