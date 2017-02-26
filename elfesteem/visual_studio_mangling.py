@@ -467,21 +467,47 @@ def data_type(data, depth = 0):
         data.advance(1)
         i = decode_number(data)
         result = DataType(quote_b + 'template-parameter-%d'%i + quote_e)
+    elif data[0] == '$' and data[:2] != '$$' and data.is_in_template():
+        # Various types of template parameters
+        template_type = data[1]
+        data.advance(2)
+        if template_type == '0':
+            # Template instanciated with a numeric value. Example:
+            #   template<int N> struct S1 { int a[N]; };
+            #   S1<10> s1;
+            i = decode_number(data)
+            result = DataType(str(i))
+        elif template_type == '1':
+            # Template instanciated with a static object. Example:
+            #   template<const int&> struct S2 {};
+            #   int N = 1;
+            #   S2<N> s2;
+            result = DataType('&%s'% symbol_demangle_reentrant(data))
+        elif template_type in '2FG':
+            # Decoding obtained by trial and error with undname.exe,
+            # but the result seems meaningless.
+            h = str(ord(data[0])-ord('/'))
+            data.advance(1)
+            i = decode_number(data)
+            if   template_type == '2':
+                result = DataType('%s.%se%d'%(h[0],h[1:],i))
+            elif template_type == 'F':
+                result = DataType('{%s,%d}'%(h,i))
+            elif template_type == 'G':
+                j = decode_number(data)
+                result = DataType('{%s,%d,%d}'%(h,i,j))
+        elif template_type == 'D':
+            # This is compatible with wine's undname, but is not known to
+            # the undname.exe of Visual Studio 14.0.
+            i = decode_number(data)
+            result = DataType(quote_b + 'template-parameter%d'%i + quote_e)
+        else:
+            raise KeyError('TemplateParameter<%s>'%template_type)
     elif data[:3] == '$$B':
         # $$B seems useless because it calls data_type with no changes,
         # but it is needed by undname.exe in some cases.
         data.advance(3)
         result = data_type(data)
-    elif data[:2] == '$D':
-        assert data.is_in_template()
-        data.advance(2)
-        i = decode_number(data)
-        result = DataType(quote_b + 'template-parameter%d'%i + quote_e)
-    elif data[:2] == '$0':
-        assert data.is_in_template()
-        data.advance(2)
-        i = decode_number(data)
-        result = DataType(str(i))
     elif data[0] == 'Y' and (depth > 0 or data.is_in_template()):
         # Pointer to multidimensional array
         data.advance(1)
