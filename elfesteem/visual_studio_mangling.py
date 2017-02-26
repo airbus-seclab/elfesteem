@@ -8,9 +8,6 @@ def symbol_demangle(symbol, verbose=False):
     #   http://sourceforge.net/projects/php-ms-demangle/
     # A web interface to a demangler is available at https://demangler.com/
     # I also have made some tests with undname.exe of Visual Studio 14.0.
-    if not symbol.startswith('?'):
-        if verbose: print('    BASIC %r'%symbol)
-        return symbol, ''
     data = DemangleData(symbol, verbose=verbose)
     # 'data' will contain the rest, not parsed
     try:
@@ -65,6 +62,17 @@ class DemangleData(object):
 
 def symbol_demangle_reentrant(data):
     # Reentrant: can be called for nested symbols.
+    if data[:6] == '__mep@':
+        # undname.exe does not expand symbols beginning with __mep@,
+        # but they are generated when using C++/CLI and correspond
+        # to prefixed mangled symbols.
+        data.advance(6)
+        return '[MEP] ' + symbol_demangle_reentrant(data)
+    elif data[:1] != '?':
+        data.log('Not Mangled')
+        name = str(data.value)
+        data.advance(len(data))
+        return name
     data.advance(1)
     if data[0] == '$':
         # Neither a variable nor a function: just a name with a template
@@ -128,9 +136,32 @@ def symbol_demangle_variable(name, data):
         ret = parse_value(data, calling_convention, logmsg='CALL=%r')
     name = '::'.join(reversed(name))
     ret += name
+    if access: access += ' '
     return access + str(ret) + add_name
 
 def symbol_demangle_function(name, data):
+    if data[:3] in ('$$F', '$$H'):
+        # C++/CLI
+        # https://en.wikiversity.org/wiki/Visual_C%2B%2B_name_mangling
+        # identifies $$F as a 'function modifier' for C++/CLI meaning
+        # the the function is managed. This web page mentions $$F in the
+        # data_types section, but it does not appear with data types,
+        # it appears before the thunk_access letters.
+        # The symbol with $$F is the 'managed entry point', the other
+        # being the 'native entry point'.
+        #
+        # Visual Studio also generates $$H for 'main', with unknown
+        # meaning...
+        #
+        # Apparently this could be ignored, because undname.exe outputs
+        # the same decoding when $$F or $$H is present. We add a prefix,
+        # it seems more informative.
+        prefix = {
+            '$$F': '[managed] ',
+            '$$H': '[MANAGED] ',
+            }[data[:3]]
+        data.advance(3)
+        return prefix + symbol_demangle_function(name, data)
     thunk, access = parse_value(data, thunk_access, logmsg='TYPE=%s ACCESS=%s')
     if thunk == 'vtordisp':
         vtor = [str(decode_number(data)) for _ in range(2)]
@@ -140,7 +171,15 @@ def symbol_demangle_function(name, data):
         vtor = [str(decode_number(data)) for _ in range(4)]
     cv = ''
     if access and not 'static' in access:
-        cv = ' '.join(cv_class_modifiers(data))
+        cli_retval = {
+            '$A': '',
+            '$C': '%',
+            }
+        cli = parse_value(data, cli_retval)
+        if cli:
+            data.log('C++/CLI Return Value')
+            cv = cli
+        cv = ' '.join(cv_class_modifiers(data)) + cv
     ret, func_call, args = symbol_demangle_function_prototype(data)
     name, ret = name_finalize(name, ret)
     name = '::'.join(reversed(name))
@@ -224,10 +263,7 @@ def extract_name_fragment(data):
     if data[0] in '0123456789':
         # fragment backreference
         data.log('BACKREF_FRG=%s', data[0])
-        try:
-            fragment = data.fragments[int(data[0])]
-        except IndexError:
-            fragment = 'IDX'
+        fragment = data.fragments[int(data[0])]
         data.advance(1)
     elif data[:2] == '??':
         # nested name
@@ -266,22 +302,6 @@ def extract_template(data):
 
 def cv_class_modifiers(data):
     mod = []
-    if data[0] == '$':
-        # Managed C++ properties
-        # We choose not to have the same output as undname.exe, until
-        # we can generate such symbols with our compiler.
-        # Note that the __gc syntax from 2003 has become ref in recent
-        # versions of Visual Studio.
-        # Note that ^ is the syntax for ref notation, cf. for example
-        # https://en.wikipedia.org/wiki/C%2B%2B/CX
-        mod.append({         # undname.exe behaviour
-            '$A': '__gc(A)', # * becomes ^ ; & becomes %
-            '$B': '__pin',   # prefix type type with  cli::pin_ptr<
-            '$C': '__gc(C)', # * becomes % ; & becomes ^
-            '$D': '__array', # prefix type type with  cli::array<
-                             # and follow with an int, and then ^ or %
-        }[data[:2]])
-        data.advance(2)
     while data[0] in 'EFI':
         mod.append({
             'E': '__ptr64',
@@ -390,6 +410,58 @@ def data_type(data, depth = 0):
         result = DataType(symbol_demangle_function_prototype(data))
         result += fragment+'::*'
         result.append(cv)
+    elif data[:3] == '__Z':
+        # HACK. do nothing
+        data.advance(3)
+        result = data_type(data)
+    elif data[:2] in ('A$', 'P$'):
+        cli0 = data[0]
+        data.advance(2)
+        # Managed C++ properties
+        #   https://en.wikipedia.org/wiki/Managed_Extensions_for_C%2B%2B
+        #   Now deprecated, was designed for .Net and CLR.
+        #   There were __gc, __value, __interface, __abstract, __sealed
+        #   and _pin modifiers.
+        # C++/CLI
+        #   Replaces Managed C++, included in Visual Studio 2005
+        #   The both Managed C++ and C++/CLI are well described at
+        #   https://msdn.microsoft.com/en-us/library/ms379603(VS.80).aspx
+        data.log('C++/CLI Arguments')
+        cli1 = data[0]
+        if cli1 in 'ABC':
+            data.advance(1)
+            cli_arguments = {
+                'PA': (' ^', ''),
+                'AA': (' %', ''),
+                # Not sure whether these next two are generated by the compiler
+                'PC': (' %', ''),
+                'AC': (' %', ''),
+                # pin_ptr decoding seems invalid, the < is not closed,
+                # but that's what undname.exe outputs.
+                'PB': (' *', 'cli::pin_ptr<'),
+                'AB': (' &', 'cli::pin_ptr<'),
+                }
+            postfix, prefix = cli_arguments[cli0+cli1]
+            c = cv_class_modifiers(data)
+            result = data_type(data, depth=depth+1)
+            if c[0] != '': result += ' ' + c[0]
+            result += postfix
+            result.prepend(prefix)
+            if len(c) > 1: result += ' ' + ' '.join(c[1:])
+        elif cli1 in '01':
+            dim = int(data[:2], 16)
+            data.advance(2)
+            data.advance(1) # ignored, apparently
+            result = data_type(data, depth=depth+1)
+            result.prepend('cli::array<')
+            if dim == 1: result += ' >^'
+            else:        result += ' ,%d>^' % dim
+        else:
+            # VS 14.0's undname.exe does some additional decoding,
+            # e.g. ?a@@$$FYMHP$DFCH@Z
+            # becomes 'int __clrcall a(cli::array<int ,342>^)'
+            # but this is clearly a bug of undname.exe
+            assert False
     elif data[0] == '?' and data.is_in_template():
         # Template parameters
         data.advance(1)
@@ -476,7 +548,7 @@ def arg_list(data, stop=None):
         a = data_type(data)
         if a is None: break
         args.append(str(a))
-        if not primitive_type: data.arguments.append(a)
+        if not primitive_type: data.add_argument(a)
     data.log('ARGS=%r', args)
     if not len(data):
         # Neither a variable nor a function: just a type with template
@@ -662,11 +734,14 @@ data_types = {
     '_X':  ('COMPLEX',  'coclass'),
     '_Y':  ('COMPLEX',  'cointerface'),
     #_$'  =SPECIAL CASE= __w64 type
+    #$$A  =TODO= (found by reversing vcruntime140.dll, more reverse is needed)
     #$$B  =SPECIAL CASE= Apparently no effect
     '$$C': ('MODIFIER', ['',   ]),
     '$$Q': ('MODIFIER', ['&&', ]),
     '$$R': ('MODIFIER', ['&&', 'volatile']),
+    #$$S  =TODO= (found by reversing vcruntime140.dll, more reverse is needed)
     '$$T': ('SIMPLE',   'std::nullptr_t'),
+    #$$Y  =TODO= (found by reversing vcruntime140.dll, more reverse is needed)
     }
 
 enum_types = {
@@ -748,7 +823,6 @@ calling_convention = {
     'P': '__eabi __dll_export ',
     'Q': '__vectorcall ',
     }
-
 
 if __name__ == "__main__":
     import sys

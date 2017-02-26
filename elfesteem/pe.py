@@ -1699,7 +1699,9 @@ class CoffSymbol(CStruct):
             n = self.parent.parent.SymbolStrings.getby_offset(n)
         else:
             n = n.rstrip(data_null)
-        return bytes_to_name(n)
+        n = bytes_to_name(n)
+        n, _ = symbol_demangle(n)
+        return n
     name = property(name)
     def section(self):
         SHList = self.parent.parent.SHList
