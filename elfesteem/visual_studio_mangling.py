@@ -111,6 +111,7 @@ def symbol_demangle_reentrant(data):
         return symbol_demangle_variable(name, data)
     if 'A' <= data[:1] <= 'Z' or data[:1] == '$':
         return symbol_demangle_function(name, data)
+    assert False
 
 def symbol_demangle_variable(name, data):
     # Access level and storage class
@@ -316,13 +317,22 @@ def cv_class_modifiers(data):
             'I': '__restrict',
         }[data[0]])
         data.advance(1)
-    cv = {
-            'A': '',
-            'B': 'const',
-            'C': 'volatile',
-            'D': 'const volatile',
-        }[data[:1]]
-    data.advance(1)
+    cv_table = {
+        'A': '',
+        'B': 'const',
+        'C': 'volatile',
+        'D': 'const volatile',
+        'M2': '__based(%s)',
+        }
+    cv = parse_value(data, cv_table)
+    if cv == '__based(%s)':
+        # Note that undname.exe forgets some const qualifiers. Example:
+        # int __based(b) * const __cdecl a(short)
+        # becomes ?a@@YAQM2b@@HF@Z but undname.exe decodes it as
+        # int __based(b) * __cdecl a(short)
+        name = name_extract_list(data)
+        name = '::'.join(reversed(name))
+        cv = cv % name
     data.log('CVC_MOD=%r %r', cv, mod)
     return [cv] + mod
 
@@ -344,6 +354,7 @@ def decode_number(data):
             data.advance(1)
         data.advance(1)
         return sign*i
+    assert False
 
 class DataType(object):
     # Usually a data type is a string, but if it is a function type,
