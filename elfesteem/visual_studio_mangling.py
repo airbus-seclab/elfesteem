@@ -169,6 +169,16 @@ def symbol_demangle_function(name, data):
             }[data[:3]]
         data.advance(3)
         return prefix + symbol_demangle_function(name, data)
+    if data[:3] == '$$J':
+        data.advance(3)
+        assert len(data)
+        if data[0] in '0123456789':
+            # To be analyzed later... does not change the output of undname.exe
+            # Visual Studio generates various values ('0', '18', ...)
+            data.advance(1+ord(data[0])-ord('0'))
+        prefix = 'extern "C" '
+    else:
+        prefix = ''
     thunk, access = parse_value(data, thunk_access, logmsg='TYPE=%s ACCESS=%s')
     if thunk == 'vtordisp':
         vtor = [str(decode_number(data)) for _ in range(2)]
@@ -194,7 +204,7 @@ def symbol_demangle_function(name, data):
         name += quote_b + thunk + '{' + ','.join(vtor) + '}' + quote_e + ' '
     if ret and access: access += ' '
     ret += ' ' + func_call + name + args + cv
-    return access + str(ret)
+    return prefix + access + str(ret)
 
 def symbol_demangle_function_prototype(data):
     # Used when demangling a function, but also for function pointers
@@ -203,8 +213,15 @@ def symbol_demangle_function_prototype(data):
     ret = data_type(data)
     data.log('RET=%s', ret)
     args = arg_list(data, stop='XZ@')
-    assert data[:1] == 'Z'; data.advance(1) # Function argument list ends with Z
     args = '(' + ','.join(args) + ')'
+    if data[:1] == 'Z':
+        # No throw
+        data.advance(1)
+    else:
+        # Same output as undname.exe, but Visual Studio 14.0 seems to
+        # ignore throw() in function prototypes.
+        throw_args = arg_list(data, stop='@')
+        args += ' throw(' + ','.join(throw_args) + ')'
     return ret, func_call, args
 
 def name_extract_special(data):
