@@ -35,6 +35,12 @@ class DemangleData(object):
         self.history = []
         self.verbose = verbose
     def advance(self, count):
+        # This is linear in the size of self.value, therefore the complexity
+        # of symbol_demangle_reentrant is quadratic, which makes it vulnerable
+        # to DoS attacks. That's why DemangleData's interface can support an
+        # implementation such that self.value is constant and the current
+        # position in self.value is stored in e.g. self.pos; I chose to
+        # modify self.value, it seems more understandable.
         self.value = self.value[count:]
     def __getitem__(self, pos):
         return self.value.__getitem__(pos)
@@ -74,14 +80,14 @@ def symbol_demangle_reentrant(data):
         data.advance(len(data))
         return name
     data.advance(1)
-    if data[0] == '$':
+    if data[:1] == '$':
         # Neither a variable nor a function: just a name with a template
         # Example: '?$a@PAUb@@' which means 'a<struct b *>'
         data.advance(1)
         name = extract_template(data)
         assert len(data) == 0
         return name
-    elif data[0] == '@':
+    elif data[:1] == '@':
         # Found by reversing vcruntime140.dll
         # Don't know when such names are generated
         data.advance(1)
@@ -95,15 +101,15 @@ def symbol_demangle_reentrant(data):
         return name
     # Variable or function: starts with a list of name fragments,
     # continues with type information.
-    if data[0] == '?':
+    if data[:1] == '?':
         data.advance(1)
         name = name_extract_special(data)
     else:
         name = []
     name += name_extract_list(data)
-    if '0' <= data[0] <= '9' or data[:2] == '$B':
+    if '0' <= data[:1] <= '9' or data[:2] == '$B':
         return symbol_demangle_variable(name, data)
-    if 'A' <= data[0] <= 'Z' or data[0] == '$':
+    if 'A' <= data[:1] <= 'Z' or data[:1] == '$':
         return symbol_demangle_function(name, data)
 
 def symbol_demangle_variable(name, data):
@@ -120,18 +126,18 @@ def symbol_demangle_variable(name, data):
     elif thunk == 'OPT':
         ret = ' '.join(cv_class_modifiers(data))
         if ret: ret += ' '
-        if data[0] != '@':
+        if data[:1] != '@':
             add_name = name_extract_list(data)
             add_name = '::'.join(reversed(add_name))
             add_name = "{for %s%s%s}" % (quote_b, add_name, quote_e)
         data.log('OPT_NAME=%r', add_name)
-        assert data[0] == '@'
+        assert data[:1] == '@'
         data.advance(1)
     elif thunk == 'vcall':
         n1 = decode_number(data)
         data.log('VCALL{%d}', n1)
         add_name = '{%d,{flat}}'%n1 + quote_e + ' }' + quote_e
-        assert data[0] == 'A'
+        assert data[:1] == 'A'
         data.advance(1)
         ret = parse_value(data, calling_convention, logmsg='CALL=%r')
     name = '::'.join(reversed(name))
@@ -166,7 +172,7 @@ def symbol_demangle_function(name, data):
     if thunk == 'vtordisp':
         vtor = [str(decode_number(data)) for _ in range(2)]
     elif thunk == 'vtordispex':
-        assert data[0] == '4'
+        assert data[:1] == '4'
         data.advance(1)
         vtor = [str(decode_number(data)) for _ in range(4)]
     cv = ''
@@ -196,7 +202,7 @@ def symbol_demangle_function_prototype(data):
     ret = data_type(data)
     data.log('RET=%s', ret)
     args = arg_list(data, stop='XZ@')
-    assert data[0] == 'Z'; data.advance(1) # Function argument list ends with Z
+    assert data[:1] == 'Z'; data.advance(1) # Function argument list ends with Z
     args = '(' + ','.join(args) + ')'
     return ret, func_call, args
 
@@ -228,7 +234,7 @@ def name_extract_special(data):
         fragment = parse_value(data, special_fragment)
         fragment += '<%s>' % data_type(data)
         name.append(fragment)
-        assert data[0] == '@'
+        assert data[:1] == '@'
         data.advance(1)
     elif data[:1] == '$':
         # normal template
@@ -242,15 +248,16 @@ def name_extract_list(data):
     # If they begin with '?$' they are normal templates, with '??' they are
     # nested names, and other fragments beginning with '?' are quoted numeric.
     name = []
-    while data[0] != '@':
+    while data[:1] != '@':
         fragment = extract_name_fragment(data)
         name.append(fragment)
-    assert data[0] == '@'
+    assert data[:1] == '@'
     data.advance(1)
     data.log('NAME=%r', name)
     return name
 
 def extract_name_string(data):
+    assert len(data)
     assert data[0] != '?'
     idx = data.index('@')
     fragment = data[:idx]
@@ -260,7 +267,7 @@ def extract_name_string(data):
     return fragment
 
 def extract_name_fragment(data):
-    if data[0] in '0123456789':
+    if len(data) and data[0] in '0123456789':
         # fragment backreference
         data.log('BACKREF_FRG=%s', data[0])
         fragment = data.fragments[int(data[0])]
@@ -279,7 +286,7 @@ def extract_name_fragment(data):
         idx = data.index('@')
         data.advance(idx+1)
         fragment = quote_b + 'anonymous namespace' + quote_e
-    elif data[0] == '?':
+    elif data[:1] == '?':
         # numbered namespace
         data.advance(1)
         i = decode_number(data)
@@ -302,7 +309,7 @@ def extract_template(data):
 
 def cv_class_modifiers(data):
     mod = []
-    while data[0] in 'EFI':
+    while len(data) and data[0] in 'EFI':
         mod.append({
             'E': '__ptr64',
             'F': '__unaligned',
@@ -314,30 +321,29 @@ def cv_class_modifiers(data):
             'B': 'const',
             'C': 'volatile',
             'D': 'const volatile',
-        }[data[0]]
+        }[data[:1]]
     data.advance(1)
     data.log('CVC_MOD=%r %r', cv, mod)
     return [cv] + mod
 
 def decode_number(data):
-    if data[0] == '?': sign = -1; data.advance(1)
-    else:              sign = 1
-    if data[0] == '@':
+    if data[:1] == '?': sign = -1; data.advance(1)
+    else:               sign = 1
+    if data[:1] == '@':
         data.advance(1)
         return 0
-    elif data[0] in '0123456789':
+    elif data[:1] in '0123456789':
         val = 1+int(data[0])
         data.advance(1)
         return sign*val
-    elif data[0] in 'ABCDEFGHIJKLMNOP':
+    elif len(data) and data[0] in 'ABCDEFGHIJKLMNOP':
         i = 0
-        while data[0] != '@':
+        while len(data) and data[0] != '@':
             i *= 16
             i += ord(data[0])-ord('A')
             data.advance(1)
         data.advance(1)
         return sign*i
-    NEVER
 
 class DataType(object):
     # Usually a data type is a string, but if it is a function type,
@@ -380,11 +386,15 @@ class DataType(object):
             self.value = other + self.value
         return self
     def __nonzero__(self):
-        return len(self.value)
+        # For python2
+        return self.__bool__()
+    def __bool__(self):
+        # For python3
+        return bool(len(self.value))
 
 def data_type(data, depth = 0):
     data.log('TYPE depth %d', depth)
-    if   data[0] in '0123456789':
+    if   len(data) and data[0] in '0123456789':
         # argument backreference
         pos = int(data[0])
         data.log('BACKREF_ARG=%d', pos)
@@ -402,9 +412,10 @@ def data_type(data, depth = 0):
     elif data[:2] == 'P8':
         # Member function pointer
         data.advance(2)
+        assert len(data)
         fragment = data.fragments[int(data[0])]
         data.advance(1)
-        assert data[0] == '@'
+        assert data[:1] == '@'
         data.advance(1)
         cv = ' '.join(cv_class_modifiers(data))
         result = DataType(symbol_demangle_function_prototype(data))
@@ -417,6 +428,7 @@ def data_type(data, depth = 0):
     elif data[:2] in ('A$', 'P$'):
         cli0 = data[0]
         data.advance(2)
+        assert len(data)
         # Managed C++ properties
         #   https://en.wikipedia.org/wiki/Managed_Extensions_for_C%2B%2B
         #   Now deprecated, was designed for .Net and CLR.
@@ -462,12 +474,12 @@ def data_type(data, depth = 0):
             # becomes 'int __clrcall a(cli::array<int ,342>^)'
             # but this is clearly a bug of undname.exe
             assert False
-    elif data[0] == '?' and data.is_in_template():
+    elif data[:1] == '?' and data.is_in_template():
         # Template parameters
         data.advance(1)
         i = decode_number(data)
         result = DataType(quote_b + 'template-parameter-%d'%i + quote_e)
-    elif data[0] == '$' and data[:2] != '$$' and data.is_in_template():
+    elif data[:1] == '$' and data[:2] != '$$' and data.is_in_template():
         # Various types of template parameters
         template_type = data[1]
         data.advance(2)
@@ -508,7 +520,7 @@ def data_type(data, depth = 0):
         # but it is needed by undname.exe in some cases.
         data.advance(3)
         result = data_type(data)
-    elif data[0] == 'Y' and (depth > 0 or data.is_in_template()):
+    elif data[:1] == 'Y' and (depth > 0 or data.is_in_template()):
         # Pointer to multidimensional array
         data.advance(1)
         dim = decode_number(data)
@@ -579,14 +591,14 @@ def arg_list(data, stop=None):
     if not len(data):
         # Neither a variable nor a function: just a type with template
         return args
-    if data[0] == 'X':
+    if data[:1] == 'X':
         # void as the only argument
         args.append('void')
     elif data[:2] == 'ZZ':
         # ellipsis only when at the end of the argument list
         args.append('...')
     else:
-        assert data[0] == '@'
+        assert data[:1] == '@'
     data.advance(1)
     return args
 
