@@ -107,11 +107,24 @@ def symbol_demangle_reentrant(data):
     else:
         name = []
     name += name_extract_list(data)
+    data.log('PARAM')
+    if name[0] == quote_b + 'local static guard' + quote_e:
+        return symbol_demangle_local_static_guard(name, data)
     if '0' <= data[:1] <= '9' or data[:2] == '$B':
         return symbol_demangle_variable(name, data)
     if 'A' <= data[:1] <= 'Z' or data[:1] == '$':
         return symbol_demangle_function(name, data)
     assert False
+
+def symbol_demangle_local_static_guard(name, data):
+    # We don't know if other value than 5 can appear, and what they mean.
+    assert data[:1] == '5'
+    data.advance(1)
+    assert '0' <= data[:1] <= '9'
+    param = 1+ord(data[0])-ord('0')
+    data.advance(1)
+    name = '::'.join(reversed(name))
+    return name + "{%d}'" % param
 
 def symbol_demangle_variable(name, data):
     # Access level and storage class
@@ -427,27 +440,28 @@ def data_type(data, depth = 0):
         pos = int(data[0])
         data.log('BACKREF_ARG=%d', pos)
         data.advance(1)
+        assert pos < len(data.arguments)
         result = data.arguments[pos]
-    elif data[:2] == 'P6':
+    elif data[:2] in ('P6', 'Q6'):
         # Function pointer
         # The result of 'data_type' is not a string, because if it is
         # an argument of a function it needs to be converted to
         # '%s(%s)%s'%result but if it is a return type it needs
         # to be converted to '%s(%s f(args))%s'
-        data.advance(2)
+        # 'Q6' is probably 'const', but undname.exe does not show it.
+        _, p_mod = parse_value(data, data_types)
+        data.advance(1)
         result = DataType(symbol_demangle_function_prototype(data))
-        result += '*'
+        result += ' '.join(p_mod)
     elif data[:2] == 'P8':
         # Member function pointer
         data.advance(2)
         assert len(data)
-        fragment = data.fragments[int(data[0])]
-        data.advance(1)
-        assert data[:1] == '@'
-        data.advance(1)
+        name = name_extract_list(data)
+        name = '::'.join(reversed(name))
         cv = ' '.join(cv_class_modifiers(data))
         result = DataType(symbol_demangle_function_prototype(data))
-        result += fragment+'::*'
+        result += name+'::*'
         result.append(cv)
     elif data[:3] == '__Z':
         # HACK. do nothing
