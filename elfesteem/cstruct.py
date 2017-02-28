@@ -301,7 +301,9 @@ class CArray(CArray_base):
         self._size  = 0
         if not hasattr(self, 'count'):
             # Array end is decided by a terminating element
-            # which is the default value of an object of class _cls
+            # which is detected by 'stop', of by default by
+            # comparing with the default value of an object
+            # of class _cls
             self._last  = self._cls(parent=self)
             self._size  += self._size_align(self._last)
 
@@ -313,13 +315,19 @@ class CArray(CArray_base):
                 % (self._size,len(s), self.__class__.__name__))
         return s
 
+    def stop(self, elt):
+        return elt.pack() == self._last.pack()
+
     def unpack(self, c, o):
+        if o is None: return
         self._off = o
         if hasattr(self, 'count'):
             # self.count() is recomputed each time
             # This enables complicated conditions for array termination
             idx = 0
             while idx < self.count():
+                if o+self._size >= len(c):
+                    break
                 elt = self._cls(parent=self, content=c, start=o+self._size)
                 self._array.append(elt)
                 self._size += self._size_align(elt)
@@ -327,8 +335,10 @@ class CArray(CArray_base):
         else:
             pos = 0
             while True:
+                if o+pos >= len(c):
+                    break
                 elt = self._cls(parent=self, content=c, start=o+pos)
-                if elt.pack() == self._last.pack():
+                if self.stop(elt):
                     break
                 self._array.append(elt)
                 pos += self._size_align(elt)

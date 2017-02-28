@@ -684,16 +684,7 @@ class OptNThdr(CStruct):
 
 class OptNThdrs(CArray):
     _cls = OptNThdr
-    def count(self):
-        numberofrva = self.parent.numberofrvaandsizes
-        pefile = self.parent.parent
-        sizeofrva = pefile.COFFhdr.sizeofoptionalheader - pefile.Opthdr.bytelen
-        size_e = 8
-        if sizeofrva < numberofrva * size_e:
-            numberofrva = sizeofrva // size_e
-            log.warn('Bad number of rva %#x: using default 0x10', numberofrva)
-            numberofrva = 0x10
-        return numberofrva
+    count = lambda _: _.parent.numberofrvaandsizes
 
 class NThdr(CStruct):
     _fields = [ ("ImageBase","ptr"),
@@ -720,6 +711,14 @@ class NThdr(CStruct):
                 ("optentries",OptNThdrs) ]
     def get_optentries(self):
         return self.getf('optentries')._array
+    def unpack(self, c, o):
+        CStruct.unpack(self, c, o)
+        sizeofrva = self.parent.COFFhdr.sizeofoptionalheader
+        sizeofrva -= self.parent.Opthdr.bytelen
+        size_e = 8
+        if sizeofrva != self.numberofrvaandsizes * size_e:
+            log.warn('Number of rva %d does not match sizeofoptionalheader %d',
+                self.numberofrvaandsizes, sizeofrva // size_e)
 
 ####################################################################
 # Sections
@@ -741,23 +740,19 @@ class SectionData(CBase):
             filealignment = pefile.NThdr.filealignment
         else:
             filealignment = 0
-        if pefile.loadfrommem:
-            raw_off = self.parent.vaddr
-        elif filealignment == 0:
-            raw_off = self.parent.scnptr
-        else:
-            raw_off = filealignment*(self.parent.scnptr//filealignment)
-        if raw_off != self.parent.scnptr:
-            log.warn('unaligned raw section!')
         self.data = StrPatchwork()
-        rs = self.parent.rsize
-        if rs != 0 and filealignment != 0:
-            if rs % filealignment:
-                rs = (rs//filealignment+1)*filealignment
-            rs = max(rs, 0x200)
-        if raw_off+rs > len(c):
-            rs = len(c) - raw_off
-        self.data[0] = c[raw_off:raw_off+rs]
+        if filealignment != 0:
+            if self.parent.scnptr % filealignment:
+                log.warn('Section %d offset %#x not aligned to %#x',
+                    len(self.parent.parent), self.parent.scnptr, filealignment)
+            if self.parent.rsize % filealignment:
+                log.warn('Section %d size %#x not aligned to %#x',
+                    len(self.parent.parent), self.parent.rsize, filealignment)
+        raw_sz = self.parent.rsize
+        raw_sz += self.parent.scnptr - self.parent.scn_baseoff
+        if self.parent.scn_baseoff+raw_sz > len(c):
+            raw_sz = len(c) - self.parent.scn_baseoff
+        self.data[0] = c[self.parent.scn_baseoff:self.parent.scn_baseoff+raw_sz]
         self.relocs = COFFRelocations(parent=self.parent,
                                       content=c,
                                       start=self.parent.relptr)
@@ -827,6 +822,22 @@ class Shdr(CStruct):
             n = n.rstrip(data_null)
         return bytes_to_name(n)
     name = property(name)
+    def scn_baseoff(self):
+        # The conversion from RVA to file offset is dependent on
+        # the file alignment. Instead of 'scnptr', PE.rva2off
+        # will use this 'scn_baseoff' value.
+        filealignment = self.parent.parent.NThdr.filealignment
+        if not filealignment:
+            return self.scnptr
+        # The following hack is what is needed to parse Ange
+        # Albertini's weirdsord.exe, which defines FILEALIGN
+        # to 0x4000 and then DELTA with an offset of 0x200, while
+        # the section starts at 0x201. It suggests that Windows
+        # always use an alignment of 0x200 independently of what
+        # is in the NT header...
+        filealignment = 0x200
+        return (self.scnptr//filealignment)*filealignment
+    scn_baseoff = property(scn_baseoff)
     # For API compatibility with previous versions of elfesteem
     rawsize = property(lambda self: self.rsize)
     offset  = property(lambda self: self.scnptr)
@@ -1099,25 +1110,30 @@ class ImportDescriptor(CStruct):
         return self.parent.parent.rva2off(rva)
     def unpack(self, c, o):
         CStruct.unpack(self, c, o)
-        if self.name_rva:
-            # Follow the RVAs
-            of = self.rva2off(self.name_rva)
-            if of is None:
-                log.error('NAME')
-            else:
-                self.name = CString(parent=self, content=c, start=of)
-            of = self.rva2off(self.firstthunk)
-            if of is None:
-                log.error('IAT')
-            else:
-                self.IAT = ImportThunks(parent=self, content=c, start=of)
-            # NB: http://win32assembly.programminghorizon.com/pe-tut6.html
-            # says "Some linkers generate PE files with 0 in
-            # OriginalFirstThunk. This is considered a bug."
-            # An example is the IDA installer!
-            of = self.rva2off(self.originalfirstthunk)
-            if not of in (0, None):
-                self.ILT = ImportThunks(parent=self, content=c, start=of)
+        if self.parent.stop(self):
+            # Don't continue to parse the terminator
+            return
+        # Follow the RVAs
+        of = self.rva2off(self.name_rva)
+        if of is None:
+            self.name = '<invalid_dll_name>'
+            # e.g. Ange Albertini's imports_relocW7.exe where relocation
+            # is modifying the import table.
+            # TODO: apply relocations before the decoding.
+        else:
+            self.name = CString(parent=self, content=c, start=of)
+        of = self.rva2off(self.firstthunk)
+        if of is None:
+            log.error('IAT')
+        else:
+            self.IAT = ImportThunks(parent=self, content=c, start=of)
+        # NB: http://win32assembly.programminghorizon.com/pe-tut6.html
+        # says "Some linkers generate PE files with 0 in
+        # OriginalFirstThunk. This is considered a bug."
+        # An example is the IDA installer!
+        of = self.rva2off(self.originalfirstthunk)
+        if not of in (0, None):
+            self.ILT = ImportThunks(parent=self, content=c, start=of)
 
 class DirImport(CArrayDirectory):
     _cls = ImportDescriptor
@@ -1135,13 +1151,18 @@ class DirImport(CArrayDirectory):
                 t_virt = self.parent.rva2virt(d.firstthunk+jdx*t.bytelen)
                 t_obj = repr_obj(t.obj)
                 # Only display original thunks that are incoherent with current
-                if hasattr(d, 'ILT'):
+                if hasattr(d, 'ILT') and jdx < len(d.ILT):
                     u = d.ILT[jdx]
                     if u.rva != t.rva:
                         t_obj += ' ' + repr_obj(u.obj)
                 print("        %2d %#10x %s"%(jdx,t_virt,t_obj))
     def pack(self):
         raise AttributeError("Cannot pack '%s': the Directory Entry data is not always contiguous"%self.__class__.__name__)
+    def stop(self, elt):
+        # Ange Albertini's imports_badterm.exe and imports_tinyXP.exe shows
+        # that the ImportDescriptor does not need to be all zeroes to be a
+        # terminator.
+        return elt.name_rva == 0 or elt.firstthunk == 0
     def add_imports(self, *args):
         # We add a new ImportDescriptor for each new DLL
         # We need to avoid changing RVA of the current IAT, because they
@@ -1159,7 +1180,7 @@ class DirImport(CArrayDirectory):
             )
         base_rva = e.off2rva(s.scnptr)
         e.NThdr.optentries[self._idx].rva = base_rva
-        self._size += self._last.bytelen * len(args)
+        self._size += self._cls(parent=self).bytelen * len(args)
         of = self.bytelen
         s.data.data = StrPatchwork()
         for dll_name, dll_func in args:
@@ -1335,7 +1356,9 @@ class ExportDescriptor(CStruct):
         # tab; it has issues, especially when the number of functions is not
         # the number of names
         self.exports = {}
-        for i in range(self.numberofnames):
+        for i in range(len(self.ENPT)):
+            # len(self.ENPT) is self.numberofnames, unless it is invalid.
+            # If self.numberofnames is invalid we prefer the smaller value!
             j = self.EOT[i].ordinal
             if j >= self.numberoffunctions:
                 print("Invalid ordinal[%d]: %d"%(i,j))
@@ -1347,7 +1370,8 @@ class ExportDescriptor(CStruct):
             name = self.ENPT[i].name
             self.exports[self.base+j] = (addr, name)
         # When ..numberoffunctions != ..numberofnames
-        for i in range(self.numberoffunctions):
+        for i in range(len(self.EAT)):
+            # len(self.EAT) is self.numberoffunctions, unless it is invalid.
             if not self.base+i in self.exports:
                 addr = self.EAT[i]
                 self.exports[self.base+i] = (addr, CString(parent=self))
@@ -1539,7 +1563,10 @@ class ResourceDirectoryEntry(CStruct):
         if self.id & 0x80000000:
             self.name = UString(parent=self, content=c,
                 start=self.base + (self.id & 0x7FFFFFFF))
-        if self.depth >= 10: # In Windows PE, should never be more than 2
+        if self.depth >= 10:
+            # In Windows PE, should never be more than 2.
+            # An example of file with an infinite depth is Ange Albertini's
+            # resourceloop.exe
             log.warning('Resource tree too deep')
         elif self.offset & 0x80000000:
             self.dir = ResourceDescriptor(parent=self, content=c,
@@ -1553,6 +1580,8 @@ class ResourceDirectoryEntry(CStruct):
         else:                     return p.depth+1
     depth = property(depth)
     def show_tree(self):
+        if self.depth >= 10:
+            return [ (0, None) ]
         s = (
             self.parent._array.index(self),
             str(self.name) if self.id & 0x80000000 else self.id,

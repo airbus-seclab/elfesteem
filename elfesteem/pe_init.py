@@ -266,7 +266,6 @@ class PE(object):
     Coffhdr = property(lambda self: self.COFFhdr) # Older API
     Doshdr  = property(lambda self: self.DOShdr) # Older API
     def __init__(self, pestr = None,
-                 loadfrommem=False,
                  parse_resources = True,
                  parse_delay = True,
                  parse_reloc = True,
@@ -330,7 +329,6 @@ class PE(object):
 
         else:
             self._content = StrPatchwork(pestr)
-            self.loadfrommem = loadfrommem
             self.parse_content(parse_resources = parse_resources,
                                parse_delay = parse_delay,
                                parse_reloc = parse_reloc)
@@ -377,6 +375,9 @@ class PE(object):
         l = self.Opthdr.bytelen
         self.NThdr = pe.NThdr(parent=self, content=self.content, start=of+l)
         of += self.COFFhdr.sizeofoptionalheader
+        if self.NThdr.numberofrvaandsizes < 13:
+            log.warn('Windows 8 needs at least 13 directories, %d found',
+                self.NThdr.numberofrvaandsizes)
         # Even if the NT header has 64-bit pointers, in 64-bit PE files
         # the Section headers have 32-bit pointers (it is a 32-bit COFF
         # in a 64-bit PE).
@@ -453,14 +454,13 @@ class PE(object):
         s = self.getsectionbyrva(rva, section)
         if s is None:
             return None
-        soff = (s.scnptr//self.NThdr.filealignment)*self.NThdr.filealignment
-        return rva-s.vaddr+soff
+        return rva-s.vaddr+s.scn_baseoff
 
     def off2rva(self, off):
         s = self.getsectionbyoff(off)
         if s is None:
             return None
-        return off-s.scnptr+s.vaddr
+        return off-s.scn_baseoff+s.vaddr
 
     def virt2rva(self, virt):
         if virt is None or not hasattr(self, 'NThdr'):
