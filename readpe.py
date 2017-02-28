@@ -96,8 +96,9 @@ def print_sections(e):
                 class NoSection(object):
                     name = '<no section>'
                 n = NoSection()
+            dirname = pe.constants['DIRECTORY_ENTRY'].get(i, '<noname>')
             print("%2d %15s %#10x %#10x %12s" %(i,
-                   pe.constants['DIRECTORY_ENTRY'][i],
+                   dirname,
                    s.rva, s.size,
                    '' if s.size == 0 else n.name.strip('\0')
                    ))

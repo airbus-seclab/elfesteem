@@ -1046,7 +1046,7 @@ class SHList(CArray):
 #   DirEnt SECURITY     in no section
 #   DirEnt TLS          in .rdata
 
-from visual_studio_mangling import symbol_demangle
+from elfesteem.visual_studio_mangling import symbol_demangle
 
 class CArrayDirectory(CArray):
     def unpack(self, c, o):
@@ -1080,9 +1080,6 @@ class ImportNamePtr(CStruct):
             self.name = self.obj
         else:
             off = self.parent.parent.rva2off(self.rva)
-            if self.rva < self.parent.parent.parent.parent.NThdr.sizeofheaders:
-                # Negate the hack in rva2off
-                off = None
             # When parsing 'firstthunk', either "off' is None
             # or it is identical to 'originalfirstthunk'.
             # But that's just what is usually the case, a valid PE
@@ -1163,6 +1160,11 @@ class DirImport(CArrayDirectory):
         # that the ImportDescriptor does not need to be all zeroes to be a
         # terminator.
         return elt.name_rva == 0 or elt.firstthunk == 0
+        # According to Ange Albertini's manyimportsW7.exe the AddressOfIndex
+        # field of the TLS directory is a terminator too; but at this point
+        # the TLS directory has not been parsed by elfesteem. This will be
+        # handled if we handle relocations, and parse the file in multiple
+        # passes.
     def add_imports(self, *args):
         # We add a new ImportDescriptor for each new DLL
         # We need to avoid changing RVA of the current IAT, because they
