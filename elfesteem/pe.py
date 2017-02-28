@@ -823,6 +823,8 @@ class Shdr(CStruct):
         return bytes_to_name(n)
     name = property(name)
     def scn_baseoff(self):
+        if not self.parent.parent.isPE():
+            return self.scnptr
         # The conversion from RVA to file offset is dependent on
         # the file alignment. Instead of 'scnptr', PE.rva2off
         # will use this 'scn_baseoff' value.
