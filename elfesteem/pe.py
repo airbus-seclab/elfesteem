@@ -713,12 +713,10 @@ class NThdr(CStruct):
         return self.getf('optentries')._array
     def unpack(self, c, o):
         CStruct.unpack(self, c, o)
-        sizeofrva = self.parent.COFFhdr.sizeofoptionalheader
-        sizeofrva -= self.parent.Opthdr.bytelen
-        size_e = 8
-        if sizeofrva != self.numberofrvaandsizes * size_e:
+        sz_opt = self.parent.COFFhdr.sizeofoptionalheader
+        if sz_opt != self.parent.Opthdr.bytelen + self.bytelen:
             log.warn('Number of rva %d does not match sizeofoptionalheader %d',
-                self.numberofrvaandsizes, sizeofrva // size_e)
+                self.numberofrvaandsizes, sz_opt)
 
 ####################################################################
 # Sections

@@ -23,7 +23,7 @@ def print_petype(e):
     machine = pe.constants['IMAGE_FILE_MACHINE'].get(COFFhdr.machine,
         "UNKNOWN(%#x)" % COFFhdr.machine)
     if hasattr(e, 'NThdr'):
-        print("PE for %s"%machine)
+        print("PE for %s (%s header)"%(machine,struct.pack("<H",e.DOShdr.magic)))
     else:
         print("COFF for %s"%machine)
     print("COFF: %d sections, %d symbols; flags %#x; szopthdr %#x" % (
@@ -56,8 +56,8 @@ def print_petype(e):
             ))
     print("MaxAddr %#x" % e.virt.max_addr())
     if hasattr(e, 'NThdr'):
-        print("NThdr: Sig %#x OSver %d.%d IMGver %d.%d subsystem %s v%d.%d" % (
-            e.NTsig.signature,
+        print("NThdr: Sig %s OSver %d.%d IMGver %d.%d subsystem %s v%d.%d" % (
+            struct.pack("<H",e.NTsig.signature),
             e.NThdr.majoroperatingsystemversion,
             e.NThdr.minoroperatingsystemversion,
             e.NThdr.MajorImageVersion,
@@ -418,7 +418,12 @@ if __name__ == '__main__':
         if len(args.file) > 1:
             print("\nFile: %s" % file)
         raw = open(file, 'rb').read()
-        if raw[:2] == struct.pack("2B", 0x4d,0x5a):
+        if raw[:2] in (
+            # MZ magic for DOS executable, normally for all PE/COFF files
+            struct.pack("2B", 0x4d,0x5a),
+            # HR magic found in bochsys.dll from IDA
+            struct.pack("2B", 0x48,0x52),
+            ):
             e = pe_init.PE(raw)
             if e.NTsig.signature != 0x4550:
                 print('Not a valid PE')
