@@ -265,11 +265,17 @@ def print_layout(e, filesz):
                         for jdx, t in enumerate(getattr(d, 'IAT', [])):
                             if not hasattr(t.obj, '_size'):
                                 continue
-                            if jdx >= len(getattr(d, 'ILT', [])):
+                            if jdx < len(getattr(d, 'ILT', [])) \
+                               and hasattr(d.ILT[jdx].obj, '_size'):
+                                assert t.rva == d.ILT[jdx].rva
                                 continue
-                            if not hasattr(d.ILT[jdx].obj, '_size'):
-                                continue
-                            assert t.rva == d.ILT[jdx].rva
+                            # Aligned to 2 bytes
+                            size = t.obj.bytelen
+                            if size % 2: size += 1
+                            layout.append((
+                                e.rva2off(t.rva),
+                                size,
+                                '%s IATname [%d,%d]' % (name, idx, jdx)))
                 elif i == pe.DIRECTORY_ENTRY_EXPORT:
                     directory = e.DirExport
                     layout.append((
