@@ -508,6 +508,8 @@ class DOShdr(CStruct):
 
 class NTsig(CStruct):
     _fields = [ ("signature","u32") ]
+    # Needed for miasm2/analysis/binary.py
+    signature_value = property(lambda _:_.signature)
 
 class COFFhdr(CStruct):
     _fields = [ ("machine","u16"),
@@ -888,10 +890,10 @@ class SHList(CArray):
         return self._array
     shlist = property(shlist)
     def __repr__(self):
-        rep = ["#  section         scnptr   size   vaddr     flags   paddr  "]
+        rep = ["#  section         offset   size   addr     flags   rawsize  "]
         for i, s in enumerate(self):
             l = "%-15s"%s.name.strip('\x00')
-            l+="%(scnptr)08x %(size)06x %(vaddr)08x %(flags)08x %(paddr)08x" % s
+            l+="%(offset)08x %(size)06x %(vaddr)08x %(flags)08x %(rawsize)08x" % s
             l = ("%2i " % i)+ l
             rep.append(l)
         return "\n".join(rep)
@@ -966,6 +968,13 @@ class SHList(CArray):
             # In PE file, paddr usually contains the size of the non-padded data
             s.paddr = len(data)
             data = data+data_null*(s.rawsize-len(data))
+        if 'rawsize' in args:
+            # When created with the old elfesteem API
+            s.rsize = args['rawsize']
+            s.paddr = args['rawsize']
+        if 'size' in args:
+            # When created with the old elfesteem API
+            s.paddr = args['size']
         s.data = SectionData(parent=s, data=data)
     
         self.append(s)
@@ -1165,36 +1174,28 @@ class DirImport(CArrayDirectory):
         # the TLS directory has not been parsed by elfesteem. This will be
         # handled if we handle relocations, and parse the file in multiple
         # passes.
-    def add_imports(self, *args):
-        # We add a new ImportDescriptor for each new DLL
-        # We need to avoid changing RVA of the current IAT, because they
-        # can be used e.g. in the executable section .text
-        # But there might not be enough space after the current list of
-        # descriptors to add new descriptors...
-        # The trick we use is to move the list of descriptors in a new
-        # section, where we will also store the new ILT, IAT and names,
-        # leaving the original section unchanged.
-        e = self.parent
-        s = e.SHList.add_section(
-            name='.idata2',
-            flags=IMAGE_SCN_MEM_WRITE|IMAGE_SCN_MEM_READ|IMAGE_SCN_CNT_INITIALIZED_DATA,
-            rsize=0x1000,     # should be enough
-            )
-        base_rva = e.off2rva(s.scnptr)
-        e.NThdr.optentries[self._idx].rva = base_rva
-        self._size += self._cls(parent=self).bytelen * len(args)
-        of = self.bytelen
-        s.data.data = StrPatchwork()
-        for dll_name, dll_func in args:
+    def _initialize(self):
+        CArrayDirectory._initialize(self)
+        # Imports are added in three steps: dll_to_add is computed, a
+        # new section is created, this section is constructed.
+        self.dll_to_add = []
+    def add_dlldesc(self, new_dll):
+        # Expand self.dll_to_add with new DLL and functions
+        # new_dll is a list, where each member is a pair
+        # - dll_name: dict with 'name' giving the DLL name
+        #             The 'firstthunk' value is currently ignored:
+        #             elfesteem used this value to indicate another
+        #             section where the IAT would be located, and
+        #             did not create an ILT.
+        #             TODO: memorize this value to be used in
+        #             'write_directory'
+        # - dll_func: list of function names
+        for dll_name, dll_func in new_dll:
             # First, an empty descriptor
             d = ImportDescriptor(parent=self)
-            self._array.append(d)
+            self.dll_to_add.append(d)
             # Add the DLL name
-            d.name = CString(parent=d, s=dll_name)
-            d.name_rva = base_rva+of
-            s.data.data[of] = d.name.pack()
-            of += d.name.bytelen
-            if of%2: of += 1
+            d.name = CString(parent=d, s=dll_name['name'])
             # Add the Import names; they will be located after the two thunks
             thunk_len = (1+len(dll_func))*(self.wsize/8)
             thunk_len *= 2
@@ -1203,41 +1204,106 @@ class DirImport(CArrayDirectory):
             for n in dll_func:
                 t = ImportNamePtr(parent=d.ILT)
                 t.obj = ImportName(parent=t, s=n)
-                t.rva = base_rva+of+thunk_len
                 t.name = n
-                s.data.data[of+thunk_len] = t.obj.pack()
                 thunk_len += t.obj.bytelen
                 if thunk_len%2: thunk_len += 1
                 d.ILT.append(t)
-            d.originalfirstthunk = base_rva+of
-            s.data.data[of] = d.ILT.pack()
-            of += d.ILT.bytelen
             d.IAT = ImportThunks(parent=d)
             for n in dll_func:
                 t = ImportNamePtr(parent=d.ILT)
-                t.rva = d.ILT[len(d.IAT)].rva
-                t.obj = d.ILT[len(d.IAT)].obj
                 t.name = n
                 d.IAT.append(t)
+    def write_directory(self, base_rva):
+        # Creates in the section starting at 'base_rva' a new Import Directory
+        # with the content of self.dll_to_add
+        
+        # Note that we need to avoid changing RVA of the current IAT, because
+        # they can be used e.g. in the executable section .text
+        # But there might not be enough space after the current list of
+        # descriptors to add new descriptors...
+        # The trick we use is to move the list of descriptors in a new
+        # section (s_dir), where we will also store the new ILT, IAT and
+        # names, leaving the original section unchanged.
+        # 
+        # TODO: The IAT can be stored in another section than the rest of
+        # the directory (descriptors, names, ILT) ; provide this possibility.
+        # TODO: The ILT is not necessary. Provide the possibility of not
+        # creating it.
+        # TODO: If base_rva is not the vaddr of an existing section, but
+        # is inside na existing section, do we overwrite everything after
+        # base_rva?
+
+        e = self.parent
+        for s_dir in e.SHList.shlist:
+            # This section may have been created by
+            #   e.SHList.add_section(name="myimp", rawsize=len(e.DirImport))
+            # which is the original syntax with elfesteem but does not
+            # use the appropriate value for rsize, because len(e.DirImport)
+            # now is the number of DLLs and not the bytelen of the directory.
+            # This does not matter, because we recompute s_dir.rsize at
+            # the end of this function.
+            if s_dir.vaddr == base_rva:
+                break
+        else:
+            # Create the new section s_dir, with appropriate flags; write
+            # is needed if we store the IAT.
+            s_dir = e.SHList.add_section(
+                name='.idata2',
+                flags=IMAGE_SCN_MEM_WRITE|IMAGE_SCN_MEM_READ|IMAGE_SCN_CNT_INITIALIZED_DATA,
+                rsize=0x1000,     # should be enough
+                )
+            base_rva = s_dir.vaddr
+        s_dir.data.data = StrPatchwork()
+        self._size += self._cls(parent=self).bytelen * len(self.dll_to_add)
+        of = self.bytelen
+        for d in self.dll_to_add:
+            self._array.append(d)
+            d.name_rva = base_rva+of
+            s_dir.data.data[of] = d.name.pack()
+            of += d.name.bytelen
+            if of%2: of += 1
+            thunk_len = (1+len(d.ILT))*(self.wsize/8)
+            thunk_len *= 2
+            for t in d.ILT:
+                t.rva = base_rva+of+thunk_len
+                s_dir.data.data[of+thunk_len] = t.obj.pack()
+                thunk_len += t.obj.bytelen
+                if thunk_len%2: thunk_len += 1
+            d.originalfirstthunk = base_rva+of
+            s_dir.data.data[of] = d.ILT.pack()
+            of += d.ILT.bytelen
             d.firstthunk = base_rva+of
-            s.data.data[of] = d.IAT.pack()
+            for idx, t in enumerate(d.IAT):
+                t.obj = d.ILT[idx].obj
+                t.rva = d.ILT[idx].rva
+            s_dir.data.data[of] = d.IAT.pack()
             of += thunk_len - d.ILT.bytelen
-        # Write the descriptor list (now that everyting has been computed)
-        s.data.data[0] = CArray.pack(self)
+        self.dll_to_add = []
+        # Write the descriptor list (now that all RVA have been computed)
+        s_dir.data.data[0] = CArray.pack(self)
         # Update the section sizes
-        s.paddr = len(s.data.data)
-        e.NThdr.optentries[self._idx].size = s.paddr # Unused by PE loaders
-        if s.rsize < s.paddr:
-            s.rsize = s.paddr
-        s.data.data[s.paddr] = data_null*(s.rsize-s.paddr)
+        s_dir.paddr = len(s_dir.data.data)
+        if s_dir.rsize < s_dir.paddr:
+            s_dir.rsize = s_dir.paddr
+        s_dir.data.data[s_dir.paddr] = data_null*(s_dir.rsize-s_dir.paddr)
+        e.NThdr.optentries[self._idx].rva = base_rva
+        e.NThdr.optentries[self._idx].size = s_dir.paddr # Unused by PE loaders
+    def get_funcrva(self, dllname, funcname):
+        # Position of the function in the Import Address Table
+        for d in self:
+            if dllname is not None and str(d.name) != dllname:
+                continue
+            for idx, t in enumerate(d.IAT):
+                if t.name == funcname:
+                    return d.firstthunk+idx*t.bytelen
+        return None
+    def get_funcvirt(self, dllname, funcname):
+        return self.parent.rva2virt(self.get_funcrva(dllname, funcname))
     # For API compatibility with previous versions of elfesteem
     def get_dlldesc(self):
         return [ ({'name': d.name}, [t.name for t in d.IAT]) for d in self ]
-    def add_dlldesc(self, new_dll):
-        args = []
-        for dll_name, dll_func in new_dll:
-            args.append((dll_name['name'],dll_func))
-        self.add_imports(*args)
+    def set_rva(self, addr):
+        self.write_directory(addr)
     def impdesc(self):
         class ImpDesc_e(object):
             def __init__(self, d):
@@ -1249,15 +1315,6 @@ class DirImport(CArrayDirectory):
                 self.impbynames = [Name(str(_.name)) for _ in d.ILT]
         return [ImpDesc_e(_) for _ in self]
     impdesc = property(impdesc)
-    def get_funcrva(self, name):
-        # Position of the function in the Import Address Table
-        for d in self:
-            for idx, t in enumerate(d.IAT):
-                if t.name == name:
-                    return d.firstthunk+idx*t.bytelen
-        return None
-    def get_funcvirt(self, name):
-        return self.parent.rva2virt(self.get_funcrva(name))
 
 
 # Delay Import Directory is similar to Import Directory
@@ -1506,6 +1563,8 @@ class DirReloc(CArrayDirectory):
     _cls = RelocationBlock
     _idx = DIRECTORY_ENTRY_BASERELOC
     def count(self):
+        if self._idx >= len(self.parent.NThdr.optentries):
+            return -1
         # We don't know how many relocation block will be parsed, we stop
         # when reaching the end of the directory
         if self.bytelen < self.parent.NThdr.optentries[self._idx].size:

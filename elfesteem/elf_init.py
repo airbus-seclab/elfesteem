@@ -530,6 +530,9 @@ class virt(object):
     def __getitem__(self, item):
         rva_items = self.get_rvaitem(item)
         return self.rvaitems2binary(rva_items)
+    def get(self, start, end):
+        # Deprecated API
+        return self[start:end]
 
     def rvaitems2binary(self, rva_items):
         data_out = struct.pack("")
@@ -870,6 +873,9 @@ class ELF(object):
             if s.sh.addr <= ad < s.sh.addr + s.sh.size:
                 return True
         return False
+
+    # Old API, needed by miasm2
+    size = property(lambda _:_.wsize)
 
 if __name__ == "__main__":
     import rlcompleter,readline,pdb

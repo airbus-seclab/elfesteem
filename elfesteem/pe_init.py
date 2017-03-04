@@ -122,12 +122,18 @@ class virt(object):
     def __getitem__(self, item):
         rva_item = self.item_virt2rva(item)
         return self.parent.drva.__getitem__(rva_item)
+    def get(self, start, end):
+        # Deprecated API
+        return self[start:end]
 
     def __setitem__(self, item, data):
         if not type(item) is slice:
             item = slice(item, item+len(data), None)
         rva_item = self.item_virt2rva(item)
         self.parent.drva.__setitem__(rva_item, data)
+    def set(self, addr, data):
+        # Deprecated API
+        self[addr] = data
 
     def __len__(self):
         # __len__ should not be used: Python returns an int object, which
@@ -322,7 +328,10 @@ class PE(object):
             #self.NThdr.sizeofheapcommit = 0x1000
             #self.NThdr.sizeofheaders = 0x1000
             self.NThdr.numberofrvaandsizes = 0x10
-            self.NThdr.optentries = pe.OptNThdrs(parent=self)
+            self.NThdr.optentries = pe.OptNThdrs(parent=self.NThdr)
+            for _ in range(self.NThdr.numberofrvaandsizes):
+                self.NThdr.optentries.append(pe.OptNThdr(parent=self.NThdr.optentries))
+            self.NThdr._size += self.NThdr.optentries.bytelen
             self.NThdr.CheckSum = 0
 
             self.NTsig.signature = 0x4550
@@ -804,7 +813,7 @@ if __name__ == "__main__":
     # Add two Descriptors in the Import Directory
     e.DirImport.add_dlldesc(
               [({"name":"kernel32.dll",
-                 "firstthunk":s_test.vaddr},
+                 "firstthunk":s_test.addr},
                 ["CreateFileA",
                  "SetFilePointer",
                  "WriteFile",
@@ -820,12 +829,14 @@ if __name__ == "__main__":
                 )
                ]
               )
+    s_myimp = e.SHList.add_section(name="myimp", rawsize=len(e.DirImport))
+    e.DirImport.set_rva(s_myimp.addr)
     e_str = e.pack()
     open('out.import.bin', 'wb').write(e_str)
     print("WROTE out.import.bin with new imports")
 
-    print("f0 %s" % e.DirImport.get_funcvirt('ExitProcess'))
-    print("f1 %s" % e.DirImport.get_funcvirt('LoadStringW'))
+    print("f0 %s" % e.DirImport.get_funcvirt('KERNEL32.dll','ExitProcess'))
+    print("f1 %s" % e.DirImport.get_funcvirt(None,'LoadStringW'))
     print("f2 %s" % e.DirExport.get_funcvirt('SetUserGeoID'))
 
     if e.DirExport.expdesc is None:

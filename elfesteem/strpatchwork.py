@@ -14,6 +14,7 @@ class StrPatchwork(object):
         self.s_cache = s
         self.paddingbyte=paddingbyte
     def __str__(self):
+        return self.s.tostring() # Needed for miasm2 :-(
         raise AttributeError("Use pack() instead of str()")
     def pack(self):
         return self.s.tostring()
