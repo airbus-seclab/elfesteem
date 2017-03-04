@@ -448,14 +448,18 @@ class PE(object):
         if section is None and self.has_relocatable_sections():
             # TODO: .obj cannot convert rva2off without knowing the section
             return None
+        # Special case rva in header
+        if rva < self.NThdr.sizeofheaders:
+            return rva
         s = self.getsectionbyrva(rva, section)
         if s is None:
             # e.g. Ange Albertini's tinyW7_3264.exe where sizeofheaders is 0
             # therefore the import table is in no section but not detected as
             # in the headers.
-            # The test rva < self.NThdr.sizeofheaders from older elfesteem
-            # seems redundant with this one.
-            return rva
+            # We use 0x400 because it is the normal size for headers
+            if rva < 0x400:
+                return rva
+            return None
         return rva-s.vaddr+s.scn_baseoff
 
     def off2rva(self, off):
