@@ -1,10 +1,11 @@
 #! /usr/bin/env python
-import sys
+import sys, os
 
 if sys.version_info[0] == 2 and sys.version_info[1] < 5:
     sys.stderr.write("python version older than 2.5 is not supported\n")
     exit(1)
 
+sys.path.insert(1, os.path.abspath(sys.path[0]+'/..'))
 from elfesteem import elf_init, elf
 
 et_strings = {
