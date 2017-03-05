@@ -6,7 +6,7 @@ setup(
     name = 'ELF-Esteem',
     version = '0.1',    
     packages=['elfesteem'],
-    scripts = ['elfcli'],
+    scripts = ['examples/readelf.py'],
     # Metadata
     author = 'Philippe BIONDI',
     author_email = 'phil(at)secdev.org',

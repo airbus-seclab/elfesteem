@@ -1,11 +1,12 @@
 #! /usr/bin/env python
 
-from elfesteem import macho_init, macho, intervals
-from elfesteem.cstruct import data_null
-import os.path
+import sys, os
 import time
 import platform
-import sys
+
+sys.path.insert(1, os.path.abspath(sys.path[0]+'/..'))
+from elfesteem import macho_init, macho, intervals
+from elfesteem.cstruct import data_null
 
 def print_header(e):
     print("Mach header")
