@@ -257,7 +257,7 @@ def name_extract_special(data):
     elif data[:3] == '_R1':
         data.advance(3)
         fragment = quote_b + 'RTTI Base Class Descriptor at (%d,%d,%d,%d)' + quote_e
-        fragment = fragment % tuple(decode_number(data) for _ in range(4))
+        fragment = fragment % tuple([decode_number(data) for _ in range(4)])
         name.append(fragment)
     elif data[:2] == '$?':
         # operator template
