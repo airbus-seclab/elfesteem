@@ -95,6 +95,9 @@ class drva(object):
              return
         off = 0
         for s, n_item in rva_items:
+            if s is None:
+                log.warn('Cannot write at RVA %s', n_item)
+                continue
             i = slice(off, n_item.stop+off-n_item.start, n_item.step)
             data_slice = data.__getitem__(i)
             s.data.__setitem__(n_item, data_slice)
