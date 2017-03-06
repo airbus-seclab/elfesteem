@@ -1415,6 +1415,8 @@ class ExportDescriptor(CStruct):
             start=self.rva2off(self.addressofnames))
         self.EOT = ExportOrdinalTable(parent=self, content=c,
             start=self.rva2off(self.addressofordinals))
+        self.compute_exports()
+    def compute_exports(self):
         # 'exports' contains the same information as displayed by IDA's export
         # tab; it has issues, especially when the number of functions is not
         # the number of names
@@ -1527,6 +1529,8 @@ class DirExport(CArrayDirectory):
         if s.rsize < s.paddr:
             s.rsize = s.paddr
         s.data.data[s.paddr] = data_null*(s.rsize-s.paddr)
+        # Finalize
+        d.compute_exports()
     def get_funcrva(self, name):
         for d in self:
             for t in d.INPT:
