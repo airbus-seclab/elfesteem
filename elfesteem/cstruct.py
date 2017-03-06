@@ -119,7 +119,7 @@ class CString(CBase):
     def __str__(self):
         return bytes_to_name(self.X)
     def __repr__(self):
-        return repr(self.X)
+        return '<CString %r>' % self.X
     def pprint(self):
         return self.X
 

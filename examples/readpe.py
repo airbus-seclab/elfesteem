@@ -106,11 +106,7 @@ def print_sections(e):
 
 def print_symtab(e):
     if hasattr(e, 'Symbols'):
-        print("\nCOFF SYMBOLS")
-        for s in e.Symbols.symbols:
-            print('    name=%r' % s.name)
-            print('        type=%-8s storage=%-9s value=%#010x section=%s' % (
-                s.type_str, s.storage, s.value, s.section))
+        print(e.Symbols.display())
     if hasattr(e, 'OSF1Symbols'):
         print("\nOSF1/Tru64 SYMBOLS")
         print("%r"%e.OSF1Symbols)
@@ -400,11 +396,11 @@ def print_layout(e, filesz):
         print("Not in a section: %s" % (' '.join(l[2:])))
 
 def pe_dir_display(e):
-    if hasattr(e, 'DirImport'): e.DirImport.display()
-    if hasattr(e, 'DirExport'): e.DirExport.display()
-    if hasattr(e, 'DirDelay'):  e.DirDelay.display()
-    if hasattr(e, 'DirRes'):    e.DirRes.display()
-    if hasattr(e, 'DirReloc'):  e.DirReloc.display()
+    if hasattr(e, 'DirImport'): print(e.DirImport.display())
+    if hasattr(e, 'DirExport'): print(e.DirExport.display())
+    if hasattr(e, 'DirDelay'):  print(e.DirDelay.display())
+    if hasattr(e, 'DirRes'):    print(e.DirRes.display())
+    if hasattr(e, 'DirReloc'):  print(e.DirReloc.display())
 
 if __name__ == '__main__':
     import argparse
