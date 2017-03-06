@@ -840,6 +840,14 @@ class Shdr(CStruct):
         filealignment = 0x200
         return (self.scnptr//filealignment)*filealignment
     scn_baseoff = property(scn_baseoff)
+    def is_in_file(self):
+        if self.rsize == 0:
+            # Empty section, not in the file!
+            return False
+        if self.flags & (STYP_BSS|STYP_SBSS|STYP_DSECT):
+            # bss/dummy section, not in the file!
+            return False
+        return True
     # For API compatibility with previous versions of elfesteem
     rawsize = property(lambda self: self.rsize)
     offset  = property(lambda self: self.scnptr)
@@ -905,17 +913,17 @@ class SHList(CArray):
         if len(self):
             # Check that there is enough free space in the headers
             # to add a new section
-            first_section_offset = 0
+            min_size = (self.parent.DOShdr.lfanew +
+                        self.parent.NTsig.bytelen +
+                        self.parent.COFFhdr.bytelen +
+                        self.parent.COFFhdr.sizeofoptionalheader +
+                        (1+len(self))*Shdr(parent=self).bytelen)
+            first_section_offset = min_size
             for s in self.parent.SHList:
-                if first_section_offset < s.scnptr:
+                if s.is_in_file() and first_section_offset > s.scnptr:
                     first_section_offset = s.scnptr
             # Should be equal to self.parent.NThdr.sizeofheaders
-            if first_section_offset < (
-                    self.parent.DOShdr.lfanew +
-                    self.parent.NTsig.bytelen +
-                    self.parent.COFFhdr.bytelen +
-                    self.parent.COFFhdr.sizeofoptionalheader +
-                    (1+len(self))*Shdr(parent=self).bytelen):
+            if first_section_offset < min_size:
                 log.error("Cannot add section %s: not enough space for section list", name)
                 # Could be solved by changing the section offsets, but some
                 # sections may contain data that depends on the offset.

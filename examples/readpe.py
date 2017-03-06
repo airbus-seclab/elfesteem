@@ -141,11 +141,7 @@ def print_layout(e, filesz):
     if hasattr(e, 'NThdr'):
         layout.append((DOShdr.lfanew, of-DOShdr.lfanew, 'PE header'))
     for i, s in enumerate(e.SHList):
-        if s.rsize == 0:
-            # Empty section, not in the file!
-            continue
-        if s.flags & (pe.STYP_BSS|pe.STYP_SBSS|pe.STYP_DSECT):
-            # bss/dummy section, not in the file!
+        if not s.is_in_file():
             continue
         if i == 0 and s.name.startswith('$'):
             # '$build.attributes' dummy section is seen in TI COFF sample file
