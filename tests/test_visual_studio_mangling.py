@@ -334,11 +334,18 @@ tests = [
 
 from elfesteem.visual_studio_mangling import symbol_demangle
 
-ok = True
-for k, v in tests:
-    n, r = symbol_demangle(k)
-    if r or (v != n):
-        print('Non-regression failure for %r'%k)
-        ok = False
-if ok:
-    print('OK')
+def run_test():
+    ko = []
+    for k, v in tests:
+        n, r = symbol_demangle(k)
+        if r or (v != n):
+            ko.append(k)
+    return ko
+
+if __name__ == "__main__":
+    ko = run_test()
+    if ko:
+        for k in ko:
+            print('Non-regression failure for %r'%k)
+    else:
+        print('OK')

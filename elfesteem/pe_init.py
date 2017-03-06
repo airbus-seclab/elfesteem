@@ -3,12 +3,7 @@
 import struct, array
 from elfesteem import pe
 from elfesteem.strpatchwork import StrPatchwork
-import logging
-log = logging.getLogger("peparse")
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
-log.addHandler(console_handler)
-log.setLevel(logging.WARN)
+log = pe.log
 
 
 
@@ -217,7 +212,6 @@ class virt(object):
         ad_start = self.parent.virt2rva(ad_start)
         if ad_stop != None:
             ad_stop = self.parent.virt2rva(ad_stop)
-
         rva_items = self.parent.drva.get_rvaitem(ad_start, ad_stop, section)
         data_out = pe.data_empty
         for s, n_item in rva_items:
@@ -225,7 +219,6 @@ class virt(object):
                 data_out += self.parent.__getitem__(n_item)
             else:
                 data_out += s.data.data.__getitem__(n_item)
-
         return data_out
 
 class StrTable(object):
@@ -381,6 +374,10 @@ class PE(object):
         of += self.COFFhdr.bytelen
         magic, = struct.unpack('H', self.content[of:of+2])
         self.wsize = (magic>>8)*32
+        if not magic in (0x10b, 0x20b):
+            # e.g. Ange Albertini's d_nonnull.dll d_tiny.dll
+            log.warn('Opthdr magic %#x', magic)
+            self.wsize = 32
         self.Opthdr = {32: pe.Opthdr32, 64: pe.Opthdr64}[self.wsize](parent=self, content=self.content, start=of)
         l = self.Opthdr.bytelen
         self.NThdr = pe.NThdr(parent=self, content=self.content, start=of+l)
@@ -453,7 +450,7 @@ class PE(object):
             # TODO: .obj cannot convert rva2off without knowing the section
             return None
         # Special case rva in header
-        if rva < self.NThdr.sizeofheaders:
+        if not self.has_relocatable_sections() and rva < self.NThdr.sizeofheaders:
             return rva
         s = self.getsectionbyrva(rva, section)
         if s is None:
@@ -617,6 +614,7 @@ class PE(object):
         return all_func
 
     def reloc_to(self, imgbase):
+        DEPRECATED
         offset = imgbase - self.NThdr.ImageBase
         for rel in self.DirReloc.reldesc:
             rva = rel.rva
@@ -759,81 +757,3 @@ class Coff(PE):
                 pe.constants['IMAGE_FILE_MACHINE'].get(
                       self.COFFhdr.machine, '%#x'%self.COFFhdr.machine))
             log.warn('%r', self.Opthdr)
-
-
-if __name__ == "__main__":
-    import rlcompleter,readline,pdb, sys
-    from pprint import pprint as pp
-    readline.parse_and_bind("tab: complete")
-
-    data = open(sys.argv[1]).read()
-    print("Read file of len %d"%len(data))
-    e = PE(data)
-    # Packed file is not identical :-(
-    # Are missing:
-    # - the data between the end of DOS header and the start of PE header
-    # - the padding after the list of sections, before the first section
-    # - many parts of directories
-    e_str = e.pack()
-    print("Packed file of len %d"%len(e_str))
-    open('out.packed.bin', 'wb').write(e_str)
-
-    # Remove Bound Import directory
-    # Usually, its content is not stored in any section... that's
-    # a future version of elfesteem will need to manage this
-    # specific directory in a specific way.
-    e.NThdr.optentries[pe.DIRECTORY_ENTRY_BOUND_IMPORT].rva = 0
-    e.NThdr.optentries[pe.DIRECTORY_ENTRY_BOUND_IMPORT].size = 0
-
-    # Create new sections with all zero content
-    s_redir = e.SHList.add_section(name = "redir", size = 0x1000)
-    s_test  = e.SHList.add_section(name = "test",  size = 0x1000)
-    s_rel   = e.SHList.add_section(name = "rel",   size = 0x5000)
-    e_str = e.pack()
-    open('out.sect.bin', 'wb').write(e_str)
-    print("WROTE out.sect.bin with added sections")
-
-    e = PE(data)
-    # Delete the last sections => OK
-    for _ in range(2):
-        del e.SHList._array[-1]
-        e.SHList._size -= 40
-        e.COFFhdr.numberofsections -= 1
-    # Add two Descriptors in the Import Directory
-    e.DirImport.add_dlldesc(
-              [({"name":"kernel32.dll",
-                 "firstthunk":s_test.addr},
-                ["CreateFileA",
-                 "SetFilePointer",
-                 "WriteFile",
-                 "CloseHandle",
-                 ]
-                ),
-               ({"name":"USER32.dll",
-                 "firstthunk":None},
-                ["SetDlgItemInt",
-                 "GetMenu",
-                 "HideCaret",
-                 ]
-                )
-               ]
-              )
-    s_myimp = e.SHList.add_section(name="myimp", rawsize=len(e.DirImport))
-    e.DirImport.set_rva(s_myimp.addr)
-    e_str = e.pack()
-    open('out.import.bin', 'wb').write(e_str)
-    print("WROTE out.import.bin with new imports")
-
-    print("f0 %s" % e.DirImport.get_funcvirt('KERNEL32.dll','ExitProcess'))
-    print("f1 %s" % e.DirImport.get_funcvirt(None,'LoadStringW'))
-    print("f2 %s" % e.DirExport.get_funcvirt('SetUserGeoID'))
-
-    if e.DirExport.expdesc is None:
-        e.DirExport.create(['coco'])
-
-    e_str = e.pack()
-    open('out.export.bin', 'wb').write(e_str)
-    print("WROTE out.export.bin with new exports")
-
-    f = PE()
-    open('uu.bin', 'wb').write(f.pack())
