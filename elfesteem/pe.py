@@ -1540,7 +1540,10 @@ class DirExport(CArrayDirectory):
     def get_funcvirt(self, name):
         return self.parent.rva2virt(self.get_funcrva(name))
     # For API compatibility with previous versions of elfesteem
-    expdesc        = property(lambda _:_[0] if len(_) else None)
+    def expdesc(self):
+        if len(self): return self[0]
+        else:         return None
+    expdesc        = property(expdesc)
     f_address      = property(lambda _:getattr(_.expdesc,'EAT',[]))
     f_nameordinals = property(lambda _:getattr(_.expdesc,'EOT',[]))
     f_names        = property(lambda _:getattr(_.expdesc,'ENPT',[]))
@@ -1568,6 +1571,10 @@ class RelocationBlock(CStruct):
                 ("size","u32"), # Should be at least 8
                 ("rels", RelocationTable) ]
     # TODO: don't parse 'rels' if it goes beyond the end of the directory
+    def __repr__(self):
+        return '<%s RVA=%#x size=%d [table of length %d]>' % (
+            self.__class__.__name__,
+            self.rva, self.size, len(self.rels))
 
 class DirReloc(CArrayDirectory):
     _cls = RelocationBlock
@@ -1617,6 +1624,10 @@ class ResourceDataDescription(CStruct):
         # Follow the RVA
         of=self.parent.rva2off(self.rva)
         self.data = c[of:of+self.size]
+    def __repr__(self):
+        return '<%s RVA=%#x size=%d codepage=%d zero=%d>' % (
+            self.__class__.__name__,
+            self.rva, self.size, self.codepage, self.zero)
 
 class ResourceDirectoryEntry(CStruct):
     _fields = [ ("id","u32"),
@@ -1654,10 +1665,13 @@ class ResourceDirectoryEntry(CStruct):
     def show_tree(self):
         if self.depth >= 10:
             return [ (0, None) ]
+        def choose(val, true, false):
+            if val & 0x80000000: return true
+            else:                return false
         s = (
             self.parent._array.index(self),
-            str(self.name) if self.id & 0x80000000 else self.id,
-            None if self.offset & 0x80000000 else self.data
+            choose(self.id, getattr(self, 'name', None), self.id),
+            choose(self.offset, None, getattr(self, 'data', None)),
             )
         tree = [ (0, s) ]
         if self.offset & 0x80000000:
