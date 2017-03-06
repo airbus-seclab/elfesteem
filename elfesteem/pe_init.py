@@ -42,8 +42,6 @@ class drva(object):
         return data_out
 
     def get_rvaitem(self, start, stop = None, section = None):
-        if self.parent.SHList is None:
-            return [(None, start)]
         if stop == None:
             s = self.parent.getsectionbyrva(start, section)
             if s is None:
@@ -428,8 +426,6 @@ class PE(object):
         self.content.__setitem__(item, data)
 
     def getsectionbyrva(self, rva, section = None):
-        if self.SHList is None:
-            return None
         if section:
             return self.getsectionbyname(section)
         for s in self.SHList.shlist:
@@ -441,16 +437,12 @@ class PE(object):
         return self.getsectionbyrva(self.virt2rva(vad), section)
 
     def getsectionbyoff(self, off):
-        if self.SHList is None:
-            return None
         for s in self.SHList.shlist:
             if s.scnptr <= off < s.scnptr+s.rsize:
                 return s
         return None
 
     def getsectionbyname(self, name):
-        if self.SHList is None:
-            return None
         for s in self.SHList:
             if s.name.strip('\x00') ==  name:
                 return s
@@ -617,10 +609,6 @@ class PE(object):
         return self.build_content()
 
     def export_funcs(self):
-        if self.DirExport is None:
-            print('no export dir found')
-            return None, None
-
         all_func = {}
         for i, n in enumerate(self.DirExport.f_names):
             all_func[n.name.name] = self.rva2virt(self.DirExport.f_address[self.DirExport.f_nameordinals[i].ordinal].rva)
@@ -630,8 +618,6 @@ class PE(object):
 
     def reloc_to(self, imgbase):
         offset = imgbase - self.NThdr.ImageBase
-        if self.DirReloc is None:
-            log.warn('no relocation found!')
         for rel in self.DirReloc.reldesc:
             rva = rel.rva
             for reloc in rel.rels:
