@@ -950,9 +950,10 @@ class SHList(CArray):
         vaddr = (vaddr+(s_align-1))&~(s_align-1)
         scnptr = (scnptr+(f_align-1))&~(f_align-1)
     
-        name += (8-len(name))*data_null
+        # 'name' is a string, 'name_data' is a sequence of bytes
+        name_data = name.encode('latin1') + (8-len(name))*data_null
         rsize = (len(data)+(f_align-1))&~(f_align-1)
-        f = {"name_data":name,
+        f = {"name_data":name_data,
              "paddr":len(data), # was named 'size'
              "vaddr":vaddr,     # was named 'addr'
              "rsize":rsize,     # was named 'rawsize'
@@ -1199,7 +1200,7 @@ class DirImport(CArrayDirectory):
             d = ImportDescriptor(parent=self)
             self.dll_to_add.append(d)
             # Add the DLL name
-            d.name = CString(parent=d, s=dll_name['name'])
+            d.name = CString(parent=d, s=dll_name['name'].encode('latin1'))
             # Add the Import names; they will be located after the two thunks
             thunk_len = (1+len(dll_func))*(self.wsize/8)
             thunk_len *= 2
@@ -1207,7 +1208,7 @@ class DirImport(CArrayDirectory):
             d.ILT = ImportThunks(parent=d)
             for n in dll_func:
                 t = ImportNamePtr(parent=d.ILT)
-                t.obj = ImportName(parent=t, s=n)
+                t.obj = ImportName(parent=t, s=n.encode('latin1'))
                 t.name = n
                 thunk_len += t.obj.bytelen
                 if thunk_len%2: thunk_len += 1
@@ -1266,7 +1267,7 @@ class DirImport(CArrayDirectory):
             s_dir.data.data[of] = d.name.pack()
             of += d.name.bytelen
             if of%2: of += 1
-            thunk_len = (1+len(d.ILT))*(self.wsize/8)
+            thunk_len = (1+len(d.ILT))*(self.wsize//8)
             thunk_len *= 2
             for t in d.ILT:
                 t.rva = base_rva+of+thunk_len
@@ -1482,7 +1483,7 @@ class DirExport(CArrayDirectory):
         self.append(d)
         of = self.bytelen
         # Add the DLL name
-        d.name = CString(parent=d, s=name)
+        d.name = CString(parent=d, s=name.encode('latin1'))
         d.name_rva = base_rva+of
         s.data.data[of] = d.name.pack()
         of += d.name.bytelen
@@ -1513,7 +1514,7 @@ class DirExport(CArrayDirectory):
         for f in funcs:
             if isinstance(f, tuple): f = f[0] # The name of the function
             t = ExportNamePointerRVA(parent=d.ENPT)
-            t.name = CString(parent=t, s=f)
+            t.name = CString(parent=t, s=f.encode('latin1'))
             t.name.name = f # For API compatibility with previous versions
             t.rva = base_rva+of+pos
             s.data.data[of+pos] = t.name.pack()
