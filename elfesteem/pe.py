@@ -889,7 +889,7 @@ class SHList(CArray):
     def shlist(self):
         return self._array
     shlist = property(shlist)
-    def __repr__(self):
+    def display(self):
         rep = ["#  section         offset   size   addr     flags   rawsize  "]
         for i, s in enumerate(self):
             l = "%-15s"%s.name.strip('\x00')
@@ -897,6 +897,9 @@ class SHList(CArray):
             l = ("%2i " % i)+ l
             rep.append(l)
         return "\n".join(rep)
+    def __repr__(self):
+        # Not respecting python's recommendation of what __repr__ should return
+        return self.display()
     
     def add_section(self, name="default", data = data_empty, **args):
         if len(self):
@@ -1145,14 +1148,14 @@ class DirImport(CArrayDirectory):
     _cls = ImportDescriptor
     _idx = DIRECTORY_ENTRY_IMPORT
     def display(self):
-        print("<%s>" % self.__class__.__name__)
+        res = '<%s>' % self.__class__.__name__
         def repr_obj(obj):
             if hasattr(obj, 'name'):
                 name, _ = symbol_demangle(str(obj.name))
                 return '%04X %r' % (obj.hint, name)
             else: return repr(obj)
         for idx, d in enumerate(self):
-            print("%2d %r"%(idx,d.name))
+            res += '\n%2d %r' % (idx, str(d.name))
             for jdx, t in enumerate(d.IAT):
                 t_virt = self.parent.rva2virt(d.firstthunk+jdx*t.bytelen)
                 t_obj = repr_obj(t.obj)
@@ -1161,7 +1164,8 @@ class DirImport(CArrayDirectory):
                     u = d.ILT[jdx]
                     if u.rva != t.rva:
                         t_obj += ' ' + repr_obj(u.obj)
-                print("        %2d %#10x %s"%(jdx,t_virt,t_obj))
+                res += '\n        %2d %#10x %s' % (jdx, t_virt, t_obj)
+        return res
     def pack(self):
         raise AttributeError("Cannot pack '%s': the Directory Entry data is not always contiguous"%self.__class__.__name__)
     def stop(self, elt):
@@ -1440,10 +1444,10 @@ class DirExport(CArrayDirectory):
     _idx = DIRECTORY_ENTRY_EXPORT
     count = lambda _: 1
     def display(self):
-        print("<%s>" % self.__class__.__name__)
+        res = '<%s>' % self.__class__.__name__
         if len(self) == 0: return
         d = self[0]
-        print("  %r"%d.name)
+        res += '\n  %r' % str(d.name)
         for i in sorted(d.exports.keys()):
             addr, name = d.exports[i]
             if hasattr(addr, 'name'):
@@ -1455,7 +1459,8 @@ class DirExport(CArrayDirectory):
                     addr -= 1
                 addr = '%08X' % self.parent.rva2virt(addr)
             name, _ = symbol_demangle(str(name))
-            print('    %2d %s %r'%(i,addr,name))
+            res += '\n    %2d %s %r' % (i, addr, name)
+        return res
     def create(self, funcs, name = 'default.dll'):
         # Don't separate 'create()' and 'add_name()' because adding new
         # exports to an existing export table is very tricky: we need to
@@ -1571,10 +1576,11 @@ class DirReloc(CArrayDirectory):
             return len(self)+1
         return -1
     def display(self):
-        print("<%s>" % self.__class__.__name__)
+        res = '<%s>' % self.__class__.__name__
         for b in self:
-             print("   %r"%b)
+             res += '\n   %r' % b
              # Don't display the relocation table... too long
+        return res
     def add_reloc(self, rels, rtype = 3, patchrel = True):
         TODO
     def del_reloc(self, taboffset):
@@ -1690,8 +1696,9 @@ class DirRes(CArrayDirectory):
             if d > 2: return False
         return True
     def display(self):
-        print("<%s>" % self.__class__.__name__)
-        if len(self) == 0: return
+        res = '<%s>' % self.__class__.__name__
+        if len(self) == 0:
+            return res
         if self.is_depth_3_tree():
             # Windows-specific display, tree with all branches of depth 3
             assert self[0].characteristics == 0
@@ -1702,7 +1709,7 @@ class DirRes(CArrayDirectory):
             # says it is always 0
             assert self[0].majorv in (0, 4)
             assert self[0].minorv == 0
-            print('     Index     Type     Name Lang')
+            res += '\n     Index     Type     Name Lang'
             pos = [None, None, None]
             val = [None, None, None]
             for d, (x, y, z) in self[0].show_tree():
@@ -1712,11 +1719,12 @@ class DirRes(CArrayDirectory):
                     assert z is None
                     continue
                 assert d == 2
-                print('  %2d %2d %2d %8s %8s %4s %r'%tuple(pos+val+[z]))
+                res += '\n  %2d %2d %2d %8s %8s %4s %r' % tuple(pos+val+[z])
         else:
             # Generic display
             for d, s in self[0].show_tree():
-                print((1+d)*'  ' + str(s))
+                res += '\n' + (1+d)*'  ' + str(s)
+        return res
 
 
 
@@ -1839,6 +1847,13 @@ class CoffSymbols(CArray):
             n -= 1 + len(s.aux)
         else:
             return None
+    def display(self):
+        res = '<%s>' % self.__class__.__name__
+        for s in self.symbols:
+            res += '\n    name=%r' % s.name
+            res += '\n        type=%-8s storage=%-9s value=%#010x section=%s' % (s.type_str, s.storage, s.value, s.section)
+        return res
+
     # For API compatibility with previous versions of elfesteem
     symbols = property(lambda _: _._array)
 
