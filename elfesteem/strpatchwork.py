@@ -38,7 +38,7 @@ class StrPatchwork(object):
             if item > len(s):
                 return self.paddingbyte
             else:
-                return chr(s[item])
+                return array("B",[s[item]]).tostring()
     def __setitem__(self, item, val):
         if val == None:
             return

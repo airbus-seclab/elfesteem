@@ -206,7 +206,7 @@ class CStruct(CStruct_base):
         self._size = struct.calcsize(self._packstring)
         for f in self._names:
             # Default values
-            if self._format[f].endswith('s'): self.setf(f,'')
+            if self._format[f].endswith('s'): self.setf(f,data_empty)
             else:                             self.setf(f,0)
         for fname, fclass in self._opt:
             v = fclass(parent=self)

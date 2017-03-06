@@ -33,7 +33,7 @@ class drva(object):
         rva_items = self.get_rvaitem(item.start, item.stop, item.step)
         if rva_items is None:
              return
-        data_out = ""
+        data_out = pe.data_empty
         for s, n_item in rva_items:
             if s is not None:
                 data_out += s.data.__getitem__(n_item)
@@ -520,7 +520,7 @@ class PE(object):
         data = c[:]
         l = len(data)
         if len(c)%2:
-            end = struct.unpack('B', data[-1])[0]
+            end = struct.unpack('B', data[-1:])[0]
             data = data[:-1]
         if (len(c)&~0x1)%4:
             s+=struct.unpack('H', data[:2])[0]
