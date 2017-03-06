@@ -6,7 +6,7 @@ from elfesteem.cstruct import bytes_to_name, name_to_bytes
 from elfesteem.strpatchwork import StrPatchwork
 import struct
 import logging
-log = logging.getLogger("pepy")
+log = logging.getLogger("pe")
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
 log.addHandler(console_handler)
@@ -764,6 +764,10 @@ class SectionData(CBase):
         return self.data.__getitem__(item)
     def __setitem__(self, item, value):
         return self.data.__setitem__(item, value)
+    def find(self, pattern, *args):
+        return self.data.find(pattern, *args)
+    def rfind(self, pattern, *args):
+        return self.data.rfind(pattern, *args)
 
 class COFFRelocation(CStruct):
     _fields = [ ("VirtualAddress","u32"),
@@ -1542,8 +1546,8 @@ class DirExport(CArrayDirectory):
         d.compute_exports()
     def get_funcrva(self, name):
         for d in self:
-            for t in d.INPT:
-                if t.name == name: return t.rva
+            for t in d.ENPT:
+                if str(t.name) == name: return t.rva
         return None
     def get_funcvirt(self, name):
         return self.parent.rva2virt(self.get_funcrva(name))
@@ -1750,7 +1754,10 @@ class DirRes(CArrayDirectory):
         else:
             # Generic display
             for d, s in self[0].show_tree():
-                res += '\n' + (1+d)*'  ' + str(s)
+                if s is None:
+                    res += '\n' + (1+d)*'  ' + str(s)
+                else:
+                    res += '\n' + (1+d)*'  ' + '%d %s %r' % s
         return res
 
 
