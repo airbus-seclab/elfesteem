@@ -32,7 +32,9 @@ class StrPatchwork(object):
                     r.extend(array("B",self.paddingbyte*(end-len(s))))
                 else:
                     # We are entirely after the end of 's'
-                    r = array("B",self.paddingbyte*(end-item.start))
+                    start = item.start
+                    if start is None: start = 0
+                    r = array("B",self.paddingbyte*(end-start))
             return r.tostring()
         else:
             if item > len(s):

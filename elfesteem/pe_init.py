@@ -19,7 +19,7 @@ class ContentManager(object):
         self.__set__(owner, None)
 
 
-class drva(object):
+class ContentRVA(object):
     def __init__(self, x):
         self.parent = x
     def get_slice_raw(self, item):
@@ -27,11 +27,11 @@ class drva(object):
             return None
         rva_items = self.get_rvaitem(item.start, item.stop, item.step)
         if rva_items is None:
-             return
+             return pe.data_null
         data_out = pe.data_empty
         for s, n_item in rva_items:
             if s is not None:
-                data_out += s.data.__getitem__(n_item)
+                data_out += s.section_data.__getitem__(n_item)
             else:
                 data_out += self.parent.__getitem__(n_item)
         return data_out
@@ -59,7 +59,11 @@ class drva(object):
                 s = self.parent.getsectionbyrva(start, section)
                 if s is None:
                     log.warn('unknown rva address! %x'%start)
-                    return []
+                    # We would like to return an empty list, but it is
+                    # not compatible with miasm2 non-regression tests
+                    # If we return None, then reading at an unknown RVA
+                    # will result in getting one null byte.
+                    return None
                 s_max = s.rawsize
                 if hasattr(self.parent, 'NThdr'):
                     # PE, not COFF
@@ -93,16 +97,18 @@ class drva(object):
                 continue
             i = slice(off, n_item.stop+off-n_item.start, n_item.step)
             data_slice = data.__getitem__(i)
-            s.data.__setitem__(n_item, data_slice)
+            s.section_data.__setitem__(n_item, data_slice)
             off = i.stop
             #XXX test patch content
             file_off = self.parent.rva2off(s.vaddr+n_item.start)
             if self.parent.content:
                 self.parent.content = self.parent.content[:file_off]+ data_slice + self.parent.content[file_off+len(data_slice):]
-        return #s.data.__setitem__(n_item, data)
+    def set(self, rva, data):
+        # API used by miasm2
+        self[rva] = data
 
 
-class virt(object):
+class ContentVirtual(object):
     def __init__(self, x):
         self.parent = x
 
@@ -167,7 +173,7 @@ class virt(object):
                 off = start - s.vaddr
             else:
                 off = 0
-            ret = s.data.find(pattern, off)
+            ret = s.section_data.find(pattern, off)
             if ret == -1:
                 continue
             if end != None and s.vaddr + ret >= end:
@@ -197,7 +203,7 @@ class virt(object):
             else:
                 off = 0
             if end == None:
-                ret = s.data.rfind(pattern, off)
+                ret = s.section_data.rfind(pattern, off)
             else:
                 ret = s.data.rfind(pattern, off, end-s.vaddr)
             if ret == -1:
@@ -218,7 +224,7 @@ class virt(object):
             if s is None:
                 data_out += self.parent.__getitem__(n_item)
             else:
-                data_out += s.data.data.__getitem__(n_item)
+                data_out += s.section_data.data.__getitem__(n_item)
         return data_out
 
 class StrTable(object):
@@ -270,8 +276,8 @@ class PE(object):
                  parse_delay = True,
                  parse_reloc = True,
                  wsize = 32):
-        self._drva = drva(self)
-        self._virt = virt(self)
+        self._rva = ContentRVA(self)
+        self._virt = ContentVirtual(self)
         if pestr == None:
             self.sex = '<'
             self.wsize = wsize
@@ -494,15 +500,9 @@ class PE(object):
                 return True
         return False
 
-    def get_drva(self):
-        return self._drva
-
-    drva = property(get_drva)
-
-    def get_virt(self):
-        return self._virt
-
-    virt = property(get_virt)
+    drva = property(lambda _: _._rva) # Deprecated
+    rva = property(lambda _: _._rva)
+    virt = property(lambda _: _._virt)
 
     def patch_crc(self, c, olds):
         s = 0
@@ -575,7 +575,7 @@ class PE(object):
                 log.warn("section %s offset %#x overlap previous section",
                     s.name, s.scnptr)
             off = s.scnptr+s.rawsize
-            c[s.scnptr:off] = s.data.data.pack()
+            c[s.scnptr:off] = s.section_data.data.pack()
 
         # symbols and strings
         if self.COFFhdr.numberofsymbols:
