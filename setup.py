@@ -11,7 +11,7 @@ setup(
     author = 'Philippe BIONDI',
     author_email = 'phil(at)secdev.org',
     description = 'ELF-Esteem: ELF file manipulation library',
-    license = 'GPLv2',
+    license = 'LGPLv2.1',
     # keywords = '',
     # url = '',
 )
