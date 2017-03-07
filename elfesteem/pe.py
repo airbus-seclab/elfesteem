@@ -815,7 +815,7 @@ class Shdr(CStruct):
                 ("nreloc","u16"),  # was named 'numberofrelocations'
                 ("nlnno","u16"),   # was named 'numberoflinenumbers'
                 ("flags","u32"),
-                ("data",SectionData) ]
+                ("section_data",SectionData) ]
     def name(self):
         # Offset in the string table, if more than 8 bytes long
         n = self.name_data
@@ -852,15 +852,26 @@ class Shdr(CStruct):
             # bss/dummy section, not in the file!
             return False
         return True
-    # For API compatibility with previous versions of elfesteem
-    rawsize = property(lambda self: self.rsize)
-    offset  = property(lambda self: self.scnptr)
-    addr    = property(lambda self: self.vaddr)
+    # For API compatibility with previous versions of elfesteem,
+    # especially miasm2/jitter/loader/pe.py
+    def set_rawsize(self, v):
+        self.rsize = v
+    rawsize = property(lambda _: _.rsize, set_rawsize)
+    def set_offset(self, v):
+        self.scnptr = v
+    offset  = property(lambda _: _.scnptr, set_offset)
+    addr    = property(lambda _: _.vaddr)
     def size(self):
         # Return the virtual size (for PE) or the RAW size (for COFF)
         if self.parent.parent.isPE(): return self.paddr
         else:                         return self.rawsize
-    size    = property(size)
+    def set_size(self, value):
+        if self.parent.parent.isPE(): self.paddr = value
+        else:                         self.rawsize = value
+    size    = property(size, set_size)
+    def set_data(self, value):
+        self.section_data.data = value
+    data    = property(lambda _: _.section_data.data, set_data)
 
 class ShdrTI(Shdr):
     # 48 bytes long, when the standard COFF is 40 bytes long
@@ -991,7 +1002,7 @@ class SHList(CArray):
         if 'size' in args:
             # When created with the old elfesteem API
             s.paddr = args['size']
-        s.data = SectionData(parent=s, data=data)
+        s.section_data = SectionData(parent=s, data=data)
     
         self.append(s)
         self.parent.COFFhdr.numberofsections = len(self)
@@ -999,6 +1010,22 @@ class SHList(CArray):
         l = (s.vaddr+s.rawsize+(s_align-1))&~(s_align-1)
         self.parent.NThdr.sizeofimage = l
         return s
+    
+    def align_sections(self, f_align=None, s_align=None):
+        if f_align == None:
+            f_align = self.parent.NThdr.filealignment
+            f_align = max(0x200, f_align)
+        if s_align == None:
+            s_align = self.parent.NThdr.sectionalignment
+            s_align = max(0x1000, s_align)
+        addr = self[0].offset
+        for s in self:
+            if not s.is_in_file():
+                continue
+            raw_off = f_align * ((addr + f_align - 1) / f_align)
+            s.offset = raw_off
+            s.rawsize = len(s.data)
+            addr = raw_off + s.rawsize
 
 
 ####################################################################
@@ -1270,39 +1297,39 @@ class DirImport(CArrayDirectory):
                 rsize=0x1000,     # should be enough
                 )
             base_rva = s_dir.vaddr
-        s_dir.data.data = StrPatchwork()
+        s_dir.section_data.data = StrPatchwork()
         self._size += self._cls(parent=self).bytelen * len(self.dll_to_add)
         of = self.bytelen
         for d in self.dll_to_add:
             self._array.append(d)
             d.name_rva = base_rva+of
-            s_dir.data.data[of] = d.name.pack()
+            s_dir.section_data.data[of] = d.name.pack()
             of += d.name.bytelen
             if of%2: of += 1
             thunk_len = (1+len(d.ILT))*(self.wsize//8)
             thunk_len *= 2
             for t in d.ILT:
                 t.rva = base_rva+of+thunk_len
-                s_dir.data.data[of+thunk_len] = t.obj.pack()
+                s_dir.section_data.data[of+thunk_len] = t.obj.pack()
                 thunk_len += t.obj.bytelen
                 if thunk_len%2: thunk_len += 1
             d.originalfirstthunk = base_rva+of
-            s_dir.data.data[of] = d.ILT.pack()
+            s_dir.section_data.data[of] = d.ILT.pack()
             of += d.ILT.bytelen
             d.firstthunk = base_rva+of
             for idx, t in enumerate(d.IAT):
                 t.obj = d.ILT[idx].obj
                 t.rva = d.ILT[idx].rva
-            s_dir.data.data[of] = d.IAT.pack()
+            s_dir.section_data.data[of] = d.IAT.pack()
             of += thunk_len - d.ILT.bytelen
         self.dll_to_add = []
         # Write the descriptor list (now that all RVA have been computed)
-        s_dir.data.data[0] = CArray.pack(self)
+        s_dir.section_data.data[0] = CArray.pack(self)
         # Update the section sizes
-        s_dir.paddr = len(s_dir.data.data)
+        s_dir.paddr = len(s_dir.section_data.data)
         if s_dir.rsize < s_dir.paddr:
             s_dir.rsize = s_dir.paddr
-        s_dir.data.data[s_dir.paddr] = data_null*(s_dir.rsize-s_dir.paddr)
+        s_dir.section_data.data[s_dir.paddr] = data_null*(s_dir.rsize-s_dir.paddr)
         e.NThdr.optentries[self._idx].rva = base_rva
         e.NThdr.optentries[self._idx].size = s_dir.paddr # Unused by PE loaders
     def get_funcrva(self, dllname, funcname):
@@ -1324,14 +1351,20 @@ class DirImport(CArrayDirectory):
     def impdesc(self):
         class ImpDesc_e(object):
             def __init__(self, d):
-                class Name(object):
-                    def __init__(self, s):
-                        self.name = s
                 self.firstthunk = d.firstthunk
-                self.dlldescname = Name(str(d.name))
-                self.impbynames = [Name(str(_.name)) for _ in d.ILT]
+                self.dlldescname = APICompatibilityName(str(d.name))
+                self.impbynames = [APICompatibilityName(str(_.name)) for _ in d.IAT]
         return [ImpDesc_e(_) for _ in self]
-    impdesc = property(impdesc)
+    def set_impdesc(self, value):
+        if value in (None, []):
+            CArrayDirectory._initialize(self)
+            return
+        TODO
+    impdesc = property(impdesc, set_impdesc)
+class APICompatibilityName(object):
+    def __init__(self, s):
+        self.name = s
+ImportByName = APICompatibilityName
 
 
 # Delay Import Directory is similar to Import Directory
@@ -1489,7 +1522,7 @@ class DirExport(CArrayDirectory):
             )
         base_rva = e.off2rva(s.scnptr)
         e.NThdr.optentries[self._idx].rva = base_rva
-        s.data.data = StrPatchwork()
+        s.section_data.data = StrPatchwork()
         # First, an empty descriptor
         d = ExportDescriptor(parent=self, base=1)
         self.append(d)
@@ -1497,7 +1530,7 @@ class DirExport(CArrayDirectory):
         # Add the DLL name
         d.name = CString(parent=d, s=name.encode('latin1'))
         d.name_rva = base_rva+of
-        s.data.data[of] = d.name.pack()
+        s.section_data.data[of] = d.name.pack()
         of += d.name.bytelen
         # Add the EAT, ENPT & EOT
         d.numberoffunctions += len(funcs)
@@ -1512,14 +1545,14 @@ class DirExport(CArrayDirectory):
             t = ExportAddressRVA(parent=d.EAT, rva=rva)
             d.EAT.append(t)
         d.addressoffunctions = base_rva+of
-        s.data.data[of] = d.EAT.pack()
+        s.section_data.data[of] = d.EAT.pack()
         of += d.EAT.bytelen
         d.EOT = ExportOrdinalTable(parent=d)
         for idx in range(len(funcs)):
             t = ExportOrdinal(parent=d.EOT, ordinal=idx)
             d.EOT.append(t)
         d.addressofordinals = base_rva+of
-        s.data.data[of] = d.EOT.pack()
+        s.section_data.data[of] = d.EOT.pack()
         of += d.EOT.bytelen
         pos = len(funcs)*4 # size of ENPT
         d.ENPT = ExportNamePointersTable(parent=d)
@@ -1529,19 +1562,19 @@ class DirExport(CArrayDirectory):
             t.name = CString(parent=t, s=f.encode('latin1'))
             t.name.name = f # For API compatibility with previous versions
             t.rva = base_rva+of+pos
-            s.data.data[of+pos] = t.name.pack()
+            s.section_data.data[of+pos] = t.name.pack()
             pos += t.name.bytelen
             d.ENPT.append(t)
         d.addressofnames = base_rva+of
-        s.data.data[of] = d.ENPT.pack()
+        s.section_data.data[of] = d.ENPT.pack()
         # Write the descriptor list (now that everyting has been computed)
-        s.data.data[0] = CArray.pack(self)
+        s.section_data.data[0] = CArray.pack(self)
         # Update the section sizes
-        s.paddr = len(s.data.data)
+        s.paddr = len(s.section_data.data)
         e.NThdr.optentries[self._idx].size = s.paddr # Unused by PE loaders
         if s.rsize < s.paddr:
             s.rsize = s.paddr
-        s.data.data[s.paddr] = data_null*(s.rsize-s.paddr)
+        s.section_data.data[s.paddr] = data_null*(s.rsize-s.paddr)
         # Finalize
         d.compute_exports()
     def get_funcrva(self, name):

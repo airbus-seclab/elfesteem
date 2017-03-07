@@ -127,8 +127,8 @@ def run_test():
     assertion('21ac18c2564a3b408b31aae0af19d502',
               hashlib.md5(d).hexdigest(),
               'Extract chunk from mapped memory, in a section')
-    d = e.virt[0x100:0x200]
-    assertion('d41d8cd98f00b204e9800998ecf8427e',
+    d = e.virt[0x100:0x200] # One null byte
+    assertion('93b885adfe0da089cdf634904fd59f71',
               hashlib.md5(d).hexdigest(),
               'Extract chunk from non-mapped memory')
     assertion(e.virt[0x401000:0x401020],
@@ -139,6 +139,11 @@ def run_test():
     assertion('2f08b8315c4e0a30d51a8decf104345c',
               hashlib.md5(d).hexdigest(),
               'Writing in raw data')
+    e.rva.set(0x1100, e.virt[0x401100:0x401120])
+    d = e.pack()
+    assertion('2f08b8315c4e0a30d51a8decf104345c',
+              hashlib.md5(d).hexdigest(),
+              'Writing at RVA')
     e.virt[0x401100:0x401120] = e.virt[0x401100:0x401120]
     d = e.pack()
     assertion('2f08b8315c4e0a30d51a8decf104345c',
@@ -155,6 +160,11 @@ def run_test():
     assertion(0x4014B4,
               e.virt.rfind(struct.pack('BB', 0xc9, 0xc3)),
               'Find pattern (from the end)')
+    e.SHList.align_sections()
+    d = e.pack()
+    assertion('2f08b8315c4e0a30d51a8decf104345c',
+              hashlib.md5(d).hexdigest(),
+              'Align sections')
     # Remove Bound Import directory
     # Usually, its content is not stored in any section... that's
     # a future version of elfesteem will need to manage this

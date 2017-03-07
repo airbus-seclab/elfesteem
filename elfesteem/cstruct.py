@@ -56,6 +56,10 @@ class CBase(object):
       sex and wsize: endianess and wordsize
     """
     def __init__(self, *args, **kargs):
+        if not 'parent' in kargs:
+            # Old API of elfesteem
+            # e.g. used by miasm2's example/jitter/unpack_upx.py
+            kargs['parent'] = args[0]
         self._parent_parse(kargs)
         self._initialize()
         if 'content' in kargs:
