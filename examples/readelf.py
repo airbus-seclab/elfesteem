@@ -152,6 +152,7 @@ def display_dynamic(e):
             elif type in ('PLTGOT','HASH','STRTAB','SYMTAB','INIT','FINI','REL',
                           'JMPREL','DEBUG','RELA',
                           'CHECKSUM','VERNEED',
+                          'GNU_HASH',
                           'MIPS_BASE_ADDRESS','MIPS_LIBLIST','MIPS_GOTSYM',
                           'MIPS_HIDDEN_GOTIDX','MIPS_PROTECTED_GOTIDX',
                           'MIPS_LOCAL_GOTIDX','MIPS_LOCALPAGE_GOTIDX',
@@ -176,143 +177,16 @@ def display_dynamic(e):
                                         if b == '1' ])
             else:
                 name = d.name
-            output = format%(d.type, '('+type+')', name)
+            output = format%(d.type, '(%s)'%type, name)
             print(output)
 
-def display_reloc(e, sh):
-    # Output format similar to readelf -r
-    if not 'rel' in dir(sh):
-        return
-    print("\nRelocation section %r at offset 0x%x contains %d entries:" % (sh.sh.name, sh.sh.offset, len(sh.reltab)))
-    if e.wsize == 32:
-        header = " Offset     Info    Type            Sym.Value  Sym. Name"
-        format = "%08x  %08x %-16s  %08x   %s"
-    elif e.wsize == 64:
-        header = "  Offset          Info           Type           Sym. Value     Sym. Name"
-        format = "%012x  %012x %-16s  %016x  %s"
-    if sh.sht == elf.SHT_RELA:
-        header = header + " + Addend"
-    elif sh.sht == elf.SHT_REL:
-        pass
-    else:
-        Fail
-    print(header)
-    for r in sh.reltab:
-        name = r.sym
-        if name == '':
-            name = e.sh[r.shndx].sh.name
-        machine = elf.constants['EM'][e.Ehdr.machine]
-        if machine == 'SPARC32PLUS': machine = 'SPARC'
-        if machine == 'SPARCV9':     machine = 'SPARC'
-        if not machine in elf.constants['R']:
-            type = '%d aka. %#x' % (r.type, r.type)
-        elif hasattr(r, 'type1'):
-            # MIPS64
-            type = 'R_%s_%s' % (machine, elf.constants['R'][machine][r.type1])
-        else:
-            type = 'R_%s_%s' % (machine, elf.constants['R'][machine][r.type])
-        output = format%(r.offset, r.info, type, r.value, name)
-        if sh.sht == elf.SHT_RELA:
-            if r.addend < 0: output = output + " - %x"%-r.addend
-            else:            output = output + " + %x"%r.addend
-        print(output)
-        if hasattr(r, 'type1'):
-            type = 'R_%s_%s' % (machine, elf.constants['R'][machine][r.type2])
-            print("                    Type2: %-16s" % type)
-            type = 'R_%s_%s' % (machine, elf.constants['R'][machine][r.type3])
-            print("                    Type3: %-16s" % type)
-
-def display_sections(e):
-    print("There are %d section headers, starting at offset %#x:"
-        % (len(e.sh.shlist),e.Ehdr.shoff))
-    print("\nSection Headers:")
-    if e.wsize == 32:
-        header = "  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al"
-        format = "  [%2d] %-17s %-15s %08x %06x %06x %02x %3s %2d %3d %2d"
-    elif e.wsize == 64:
-        header = "  [Nr] Name              Type             Address           Offset\n       Size              EntSize          Flags  Link  Info  Align"
-        format = "  [%2d] %-17s %-15s  %016x  %08x\n       %016x  %016x %3s      %2d    %2d    %2d"
-    print(header)
-    m = elf.constants['EM'][e.Ehdr.machine]
-    for i, sh in enumerate(e.sh):
-        flags = ""
-        if sh.sh.flags & elf.SHF_WRITE:            flags += "W"
-        if sh.sh.flags & elf.SHF_ALLOC:            flags += "A"
-        if sh.sh.flags & elf.SHF_EXECINSTR:        flags += "X"
-        if sh.sh.flags & elf.SHF_MERGE:            flags += "M"
-        if sh.sh.flags & elf.SHF_STRINGS:          flags += "S"
-        if sh.sh.flags & elf.SHF_INFO_LINK:        flags += "I"
-        if sh.sh.flags & elf.SHF_LINK_ORDER:       flags += "L"
-        if sh.sh.flags & elf.SHF_OS_NONCONFORMING: flags += "O"
-        if sh.sh.flags & elf.SHF_GROUP:            flags += "G"
-        if sh.sh.flags & elf.SHF_TLS:              flags += "T"
-        if sh.sh.flags & elf.SHF_EXCLUDE:          flags += "E"
-        if m in elf.constants['SHT'] and sh.sh.type in elf.constants['SHT'][m]:
-            type = m+'_'+elf.constants['SHT'][m][sh.sh.type]
-        elif sh.sh.type in elf.constants['SHT']:
-            type = elf.constants['SHT'][sh.sh.type]
-        elif elf.SHT_LOOS <= sh.sh.type <= elf.SHT_HIOS:
-            type = "LOOS+%x"%(sh.sh.type - elf.SHT_LOOS)
-        elif elf.SHT_LOPROC <= sh.sh.type <= elf.SHT_HIPROC:
-            type = "LOPROC+%x"%(sh.sh.type - elf.SHT_LOPROC)
-        elif elf.SHT_LOUSER <= sh.sh.type <= elf.SHT_HIUSER:
-            type = "LOUSER+%x"%(sh.sh.type - elf.SHT_LOUSER)
-        else:
-            type = "Unknown%#x"%sh.sh.type
-        if type == 'GNU_verdef':   type = 'VERDEF'
-        if type == 'GNU_verneed':  type = 'VERNEED'
-        if type == 'GNU_versym':   type = 'VERSYM'
-        print(format%(i, sh.sh.name[:17], type,
-                         sh.sh.addr, sh.sh.offset,
-                         sh.sh.size, sh.sh.entsize, flags,
-                         sh.sh.link, sh.sh.info, sh.sh.addralign))
-    print("Key to Flags:")
-    print("  W (write), A (alloc), X (execute), M (merge), S (strings)")
-    print("  I (info), L (link order), G (group), T (TLS), E (exclude), x (unknown)")
-    print("  O (extra OS processing required) o (OS specific), p (processor specific)")
-
-
-def display_groups(e):
-    for i, sh in enumerate(e.sh):
-        if sh.sh.type == elf.SHT_GROUP:
-            if sh.flags == elf.GRP_COMDAT: flags = 'COMDAT'
-            else: flags = ''
-            symbol = e.sh[sh.sh.link]
-            if not symbol.sh.type == elf.SHT_SYMTAB:
-                print("readelf: Error: Bad sh_link in group section `%s'"%sh.sh.name)
-                continue
-            symbol = symbol[sh.sh.info].name
-            print("%s group section [%4d] `%s' [%s] contains %d sections:"%(
-                flags,i,sh.sh.name,symbol,len(sh.sections)))
-            format = "   [%5s]   %s"
-            print(format%('Index',' Name'))
-            for s in sh.sections:
-                print(format%(s,e.sh[s].sh.name))
-                if not (e.sh[s].sh.flags & elf.SHF_GROUP):
-                    print("No SHF_GROUP in %s"%e.sh[s].sh.name)
 
 def display_symbols(e, table_name):
     # Output format similar to readelf -s or readelf --dyn-syms
     if not table_name in e.sh.__dict__:
         print("Symbol table '.%s' missing" % table_name)
         return
-    table = e.sh.__dict__[table_name]
-    print("Symbol table '.%s' contains %d entries:" % (table_name, len(table.symtab)))
-    if e.wsize == 32:
-        header = "   Num:    Value  Size Type    Bind   Vis      Ndx Name"
-        format = "%6d: %08x  %4d %-7s %-6s %-7s  %-3s %s"
-    elif e.wsize == 64:
-        header = "   Num:    Value          Size Type    Bind   Vis      Ndx Name"
-        format = "%6d: %016x  %4d %-7s %-6s %-7s  %-3s %s"
-    print(header)
-    for i, value in enumerate(table.symtab):
-        type = elf.constants['STT'][value.info&0xf]
-        bind = elf.constants['STB'][value.info>>4]
-        visibility = elf.constants['STV'][value.other]
-        if value.shndx>999:  ndx = "ABS"
-        elif value.shndx==0: ndx = "UND"
-        else:                ndx = "%3d"%value.shndx
-        print(format%(i, value.value, value.size, type, bind, visibility, ndx, value.name))
+    print(e.sh.__dict__[table_name].readelf_display())
 
 
 
@@ -340,17 +214,23 @@ if __name__ == '__main__':
         if 'headers' in args.options:
             display_headers(e)
         if 'sections' in args.options:
-            display_sections(e)
+            print(e.sh.readelf_display())
         if 'reltab' in args.options:
+            # Same output as readelf -r
             for sh in e.sh:
-                display_reloc(e, sh)
+                if not 'rel' in dir(sh): continue
+                print("\n" + sh.readelf_display())
         if 'symtab' in args.options:
+            # Same output as readelf -s
             display_symbols(e, 'symtab')
         if 'dynsym' in args.options:
+            # Same output as readelf --dyn-syms
             display_symbols(e, 'dynsym')
         if 'dynamic' in args.options:
             display_dynamic(e)
         if 'program' in args.options:
             display_program_headers(e)
         if 'groups' in args.options:
-            display_groups(e)
+            for sh in e.sh:
+                if not sh.sh.type == elf.SHT_GROUP: continue
+                print(sh.readelf_display())

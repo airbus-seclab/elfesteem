@@ -97,9 +97,7 @@ wsize = parent.wsize)
         if type(val) is int:
             self.sh.info = val
     infosection = property(get_infosection, set_infosection)
-    def get_shstrtab(self):
-        return self.parent._shstrtab
-    shstrtab = property(get_shstrtab)
+    shstrtab = property(lambda _: _.parent._shstrtab)
     def __init__(self, parent, sh=None, **kargs):
         self.parent=parent
         self.phparent=None
@@ -109,17 +107,10 @@ wsize = parent.wsize)
         self.sh=sh
         self._content=StrPatchwork()
     def __repr__(self):
-        r = "{%(name)s ofs=%(offset)#x sz=%(size)#x addr=%(addr)#010x}" % self.sh
-        return r
-    def get_size(self):
-        return self.sh.size
-    size = property(get_size)
-    def get_addr(self):
-        return self.sh.addr
-    addr = property(get_addr)
-    def get_name(self):
-        return self.sh.name
-    name = property(get_name)
+        return "%(name)-15s %(offset)08x %(size)06x %(addr)08x %(flags)x" % self.sh
+    size = property(lambda _: _.sh.size)
+    addr = property(lambda _: _.sh.addr)
+    name = property(lambda _: _.sh.name)
 
 class NullSection(Section):
     sht = elf.SHT_NULL
@@ -165,6 +156,28 @@ class GroupSection(Section):
         self.content[4] = struct.pack("I"*len(value), *value)
     flags = property(get_flags, set_flags)
     sections = property(get_sections, set_sections)
+    def readelf_display(self):
+        if self.flags == elf.GRP_COMDAT: flags = 'COMDAT'
+        else:                            flags = ''
+        symbol = self.parent.parent.sh[self.sh.link]
+        if not symbol.sh.type == elf.SHT_SYMTAB:
+            return "readelf: Error: Bad sh_link in group section `%s'"%self.sh.name
+        symbol = symbol[self.sh.info].name
+        rep = [ "%s group section [%4d] `%s' [%s] contains %d sections:" % (
+            flags,
+            self.parent.parent.sh.shlist.index(self),
+            self.sh.name,
+            symbol,
+            len(self.sections)) ]
+        format = "   [%5s]   %s"
+        rep.append(format % ('Index',' Name'))
+        for s_idx in self.sections:
+            s = self.parent.parent.sh[s_idx].sh
+            rep.append(format % (s_idx,s.name))
+            if not (s.flags & elf.SHF_GROUP):
+                rep.append("No SHF_GROUP in %s" % s.name)
+        return "\n".join(rep)
+
 
 class SymTabSHIndeces(Section):
     sht = elf.SHT_SYMTAB_SHNDX
@@ -228,7 +241,7 @@ class StrTable(Section):
     sht = elf.SHT_STRTAB
 
     def get_name(self, idx):
-        n = self.content[idx:self.content.find(data_null, offset=idx)]
+        n = self.content[idx:self.content.find(data_null, idx)]
         return bytes_to_name(n)
 
     def add_name(self, name):
@@ -246,7 +259,7 @@ class StrTable(Section):
 
     def mod_name(self, idx, name):
         name = name_to_bytes(name)
-        n = self.content[idx:self.content.find(data_null, offset=idx)]
+        n = self.content[idx:self.content.find(data_null, idx)]
         data = self.content
         if type(data) != str: data = data.pack()
         data = data[:idx]+name+data[idx+len(n):]
@@ -261,11 +274,13 @@ class StrTable(Section):
 
 class SymTable(Section):
     sht = elf.SHT_SYMTAB
+    def __init__(self, *args, **kargs):
+        Section.__init__(self, *args, **kargs)
+        self.symtab=[]
+        self.symbols={}
     def parse_content(self):
         Sym = { 32: elf.Sym32, 64: elf.Sym64 }[self.wsize]
         c = self.content
-        self.symtab=[]
-        self.symbols={}
         sz = self.sh.entsize
         idx = 0
         while len(c) > sz*idx:
@@ -281,9 +296,6 @@ class SymTable(Section):
     def __setitem__(self,item,val):
         if not isinstance(val, elf.Sym32):
             raise ValueError("Cannot set SymTable item to %r"%val)
-        if not hasattr(self, 'symtab'):
-            self.symtab=[]
-            self.symbols={}
         if item >= len(self.symtab):
             self.symtab.extend([None for i in range(item+1-len(self.symtab))])
         self.symtab[item] = val
@@ -292,6 +304,16 @@ class SymTable(Section):
         if val.info>>4 == elf.STB_LOCAL and item >= self.sh.info:
             # One greater than the symbol table index of the last local symbol
             self.sh.info = item+1
+    def readelf_display(self):
+        rep = [ "Symbol table '%s' contains %d entries:"
+                % (self.sh.name, len(self.symtab)) ]
+        if self.wsize == 32:
+            rep.append("   Num:    Value  Size Type    Bind   Vis      Ndx Name")
+        elif self.wsize == 64:
+            rep.append("   Num:    Value          Size Type    Bind   Vis      Ndx Name")
+        rep.extend([ _.readelf_display() for _ in self.symtab ])
+        return "\n".join(rep)
+
 
 class DynSymTable(SymTable):
     sht = elf.SHT_DYNSYM
@@ -317,6 +339,20 @@ class RelTable(Section):
             rel = Rel(parent=self, content=s)
             self.reltab.append(rel)
             self.rel[rel.sym] = rel
+    def readelf_display(self):
+        ret = "Relocation section %r at offset 0x%x contains %d entries:" % (
+            self.sh.name,
+            self.sh.offset,
+            len(self.reltab))
+        if self.wsize == 32:
+            ret += "\n Offset     Info    Type            Sym.Value  Sym. Name"
+        elif self.wsize == 64:
+            ret += "\n  Offset          Info           Type           Sym. Value    Sym. Name"
+        if self.sht == elf.SHT_RELA:
+            ret += " + Addend"
+        for r in self.reltab:
+            ret += "\n" + r.readelf_display()
+        return ret
 
 class RelATable(RelTable):
     sht = elf.SHT_RELA
@@ -378,9 +414,24 @@ class SHList(object):
     def __repr__(self):
         rep = ["#  section         offset   size   addr     flags"]
         for i,s in enumerate(self.shlist):
-            l = "%(name)-15s %(offset)08x %(size)06x %(addr)08x %(flags)x " % s.sh
-            l = ("%2i " % i)+ l + s.__class__.__name__
-            rep.append(l)
+            rep.append("%2i %r %s" % (i, s, s.__class__.__name__))
+        return "\n".join(rep)
+    def readelf_display(self):
+        rep = [ "There are %d section headers, starting at offset %#x:"
+                % (len(self.shlist), self.parent.Ehdr.shoff),
+                "",
+                "Section Headers:" ]
+        if self.wsize == 32:
+            rep.append( "  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al" )
+        elif self.wsize == 64:
+            rep.extend(["  [Nr] Name              Type             Address           Offset","       Size              EntSize          Flags  Link  Info  Align"])
+        rep.extend([ _.sh.readelf_display() for _ in self ])
+        rep.extend([ # Footer
+"Key to Flags:",
+"  W (write), A (alloc), X (execute), M (merge), S (strings)",
+"  I (info), L (link order), G (group), T (TLS), E (exclude), x (unknown)",
+"  O (extra OS processing required) o (OS specific), p (processor specific)",
+            ])
         return "\n".join(rep)
     def __str__(self):
         raise AttributeError("Use pack() instead of str()")
@@ -699,8 +750,6 @@ def elf_default_content_reloc(self, **kargs):
     # elf_set_offsets() should take care of that
 
 def elf_set_offsets(self):
-    if self.Ehdr.shoff != 0:
-        return
     if self.Ehdr.type != elf.ET_REL:
         # TODO
         return
@@ -787,7 +836,8 @@ class ELF(object):
         return self.content[item]
 
     def build_content(self):
-        elf_set_offsets(self)
+        if self.Ehdr.shoff == 0:
+            elf_set_offsets(self)
         c = StrPatchwork()
         c[0] = self.Ehdr.pack()
         c[self.Ehdr.phoff] = self.ph.pack()
