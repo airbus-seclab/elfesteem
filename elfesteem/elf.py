@@ -29,9 +29,49 @@ class Shdr(CStructWithStrTable):
                 ("info","u32"),
                 ("addralign","ptr"),
                 ("entsize","ptr") ]
-    def strtab(self):
-        return self.parent.shstrtab
-    strtab = property(strtab)
+    strtab = property(lambda _: _.parent.shstrtab)
+    format = property(lambda _: {
+        32: "  [%(idx)2d] %(name17)-17s %(type_txt)-15s %(addr)08x %(offset)06x %(size)06x %(entsize)02x %(flags_txt)3s %(link)2d %(info)3d %(addralign)2d",
+        64: "  [%(idx)2d] %(name17)-17s %(type_txt)-15s  %(addr)016x  %(offset)08x\n       %(size)016x  %(entsize)016x %(flags_txt)3s      %(link)2d    %(info)2d    %(addralign)2d",
+        }[_.wsize])
+    name17 = property(lambda _: _.name[:17])
+    idx = property(lambda _: _.parent.parent.shlist.index(_.parent))
+    def flags_txt(self):
+        ret = ""
+        if self.flags & SHF_WRITE:            ret += "W"
+        if self.flags & SHF_ALLOC:            ret += "A"
+        if self.flags & SHF_EXECINSTR:        ret += "X"
+        if self.flags & SHF_MERGE:            ret += "M"
+        if self.flags & SHF_STRINGS:          ret += "S"
+        if self.flags & SHF_INFO_LINK:        ret += "I"
+        if self.flags & SHF_LINK_ORDER:       ret += "L"
+        if self.flags & SHF_OS_NONCONFORMING: ret += "O"
+        if self.flags & SHF_GROUP:            ret += "G"
+        if self.flags & SHF_TLS:              ret += "T"
+        if self.flags & SHF_EXCLUDE:          ret += "E"
+        return ret
+    flags_txt = property(flags_txt)
+    def type_txt(self):
+        m = constants['EM'][self.parent.parent.parent.Ehdr.machine]
+        if m in constants['SHT'] and self.type in constants['SHT'][m]:
+            ret = m+'_'+constants['SHT'][m][self.type]
+        elif self.type in constants['SHT']:
+            ret = constants['SHT'][self.type]
+        elif elf.SHT_LOOS <= self.type <= SHT_HIOS:
+            ret = "LOOS+%x"%(self.type - SHT_LOOS)
+        elif elf.SHT_LOPROC <= self.type <= SHT_HIPROC:
+            ret = "LOPROC+%x"%(self.type - SHT_LOPROC)
+        elif elf.SHT_LOUSER <= self.type <= SHT_HIUSER:
+            ret = "LOUSER+%x"%(self.type - SHT_LOUSER)
+        else:
+            ret = "Unknown%#x"%self.type
+        if ret == 'GNU_verdef':   ret = 'VERDEF'
+        if ret == 'GNU_verneed':  ret = 'VERNEED'
+        if ret == 'GNU_versym':   ret = 'VERSYM'
+        return ret
+    type_txt = property(type_txt)
+    def readelf_display(self):
+        return self.format % self
 
 class Phdr32(CStruct):
     _fields = [ ("type","u32"),
@@ -60,9 +100,19 @@ class Sym32(CStructWithStrTable):
                 ("info","u08"),
                 ("other","u08"),
                 ("shndx","u16") ]
-    def strtab(self):
-        return self.parent.linksection
-    strtab = property(strtab)
+    format = '%(idx)06d: %(value)08x %(size)4d %(type)-7s %(bind)-6s %(visibility)-7s  %(ndx)-3s %(name)s'
+    idx = property(lambda _: _.parent.symtab.index(_))
+    strtab = property(lambda _: _.parent.linksection)
+    type = property(lambda _: constants['STT'][_.info&0xf])
+    bind = property(lambda _: constants['STB'][_.info>>4])
+    visibility = property(lambda _: constants['STV'][_.other])
+    def ndx(self):
+        if self.shndx>999:  return "ABS"
+        elif self.shndx==0: return "UND"
+        else:               return "%3d"%self.shndx
+    ndx = property(ndx)
+    def readelf_display(self):
+        return self.format % self
 
 class Sym64(Sym32):
     _fields = [ ("name_idx","u32"),
@@ -71,6 +121,7 @@ class Sym64(Sym32):
                 ("shndx","u16"),
                 ("value","u64"),
                 ("size","u64") ]
+    format = '%(idx)06d: %(value)016x %(size)4d %(type)-7s %(bind)-6s %(visibility)-7s  %(ndx)-3s %(name)s'
 
 class Dym(CStruct):
     _fields = [ ("tag","u32"),
@@ -89,37 +140,55 @@ class RelBase(CStruct):
             return VoidName()
         return self.parent.linksection.symtab[self.sym_idx]
     symbol = property(symbol)
-    def shndx(self):
-        return self.symbol.shndx
-    shndx = property(shndx)
-    def value(self):
-        return self.symbol.value
-    value = property(value)
-    def sym(self):
-        return self.symbol.name
-    sym = property(sym)
+    shndx = property(lambda _: _.symbol.shndx)
+    value = property(lambda _: _.symbol.value)
+    sym = property(lambda _: _.symbol.name)
+    def name(self):
+        if self.sym == '':
+            return self.parent.parent.parent.sh[self.shndx].sh.name
+        else:
+            return self.sym
+    name = property(name)
+    def type17(self):
+        machine = constants['EM'][self.parent.parent.parent.Ehdr.machine]
+        if machine == 'SPARC32PLUS': machine = 'SPARC'
+        if machine == 'SPARCV9':     machine = 'SPARC'
+        if not machine in constants['R']:
+            ret = '%d aka. %#x' % (self.type, self.type)
+        elif hasattr(self, 'type1'): # MIPS64
+            ret = 'R_%s_%s' % (machine, constants['R'][machine][self.type1])
+        else:
+            ret = 'R_%s_%s' % (machine, constants['R'][machine][self.type])
+        return ret[:17] # truncated by readelf!
+    type17 = property(type17)
+    def readelf_display(self):
+        res = self.format % self
+        if self.parent.sht == SHT_RELA:
+            if self.addend < 0: res += " - %x" % -self.addend
+            else:               res += " + %x" %  self.addend
+        if hasattr(self, 'type1'):
+            machine = constants['EM'][self.parent.parent.parent.Ehdr.machine]
+            type = 'R_%s_%s' % (machine, constants['R'][machine][self.type2])
+            res += "\n                    Type2: %-16s" % type
+            type = 'R_%s_%s' % (machine, constants['R'][machine][self.type3])
+            res += "\n                    Type3: %-16s" % type
+        return res
 
 class Rel32(RelBase):
     # sym_idx is 24-bit long, cannot be defined as a field type
     # we get it by parsing 'info'
     _fields = [ ("offset","ptr"),
                 ("info","u32") ]
-    def type(self):
-        return self.info & 0xff
-    type = property(type)
-    def sym_idx(self):
-        return self.info>>8
-    sym_idx = property(sym_idx)
+    format = '%(offset)08x  %(info)08x %(type17)-17s %(value)08x   %(name)s'
+    type = property(lambda _: _.info & 0xff)
+    sym_idx = property(lambda _:_.info>>8)
 
 class Rel64(RelBase):
     _fields = [ ("offset","ptr"),
                 ("info","u64") ]
-    def type(self):
-        return self.info & 0xffffffff
-    type = property(type)
-    def sym_idx(self):
-        return self.info>>32
-    sym_idx = property(sym_idx)
+    format = '%(offset)012x  %(info)012x %(type17)-17s %(value)016x %(name)s'
+    type = property(lambda _: _.info & 0xffffffff)
+    sym_idx = property(lambda _:_.info>>32)
 
 class Rel64MIPS(RelBase):
     # e.g. http://www.openwall.com/lists/musl/2016/01/22/2
@@ -132,13 +201,7 @@ class Rel64MIPS(RelBase):
     def type(self):
         raise ValueError("MIPS64 relocation type is a combination of 3 relocation types each of size 1 byte")
     type = property(type)
-    def info(self):
-        return self.type1 \
-            + (self.type2<<8) \
-            + (self.type3<<16) \
-            + (self.ssym<<24) \
-            + (self.sym_idx<<32)
-    info = property(info)
+    info = property(lambda _:_.type1 + (_.type2<<8) + (_.type3<<16) + (_.ssym<<24) + (_.sym_idx<<32))
 
 class Rela32(Rel32):
     _fields = [ ("offset","ptr"),
@@ -696,6 +759,9 @@ DT_VALNUM = 12                    ; no_show['DT_VALNUM'] = True
 # If any adjustment is made to the ELF object after it has been
 # built these entries will need to be adjusted.
 DT_ADDRRNGLO    = 0x6ffffe00      ; no_show['DT_EXTRANUM'] = True
+DT_GNU_HASH     = 0x6ffffef5
+DT_TLSDESC_PLT  = 0x6ffffef6
+DT_TLSDESC_GOT  = 0x6ffffef7
 DT_GNU_CONFLICT = 0x6ffffef8      # Start of conflict section
 DT_GNU_LIBLIST  = 0x6ffffef9      # Library list
 DT_CONFIG       = 0x6ffffefa      # Configuration information.
@@ -725,6 +791,7 @@ DT_VERSIONTAGNUM = 16             ; no_show['DT_VERSIONTAGNUM'] = True
 # Sun added these machine-independent extensions in the "processor-specific"
 # range.  Be compatible.
 DT_AUXILIARY    = 0x7ffffffd      # Shared object to load before self
+DT_USED         = 0x7ffffffe
 DT_FILTER       = 0x7fffffff      # Shared object to get values from
 DT_EXTRANUM     = 3               ; no_show['DT_EXTRANUM'] = True
 
@@ -755,6 +822,17 @@ DF_1_CONFALT    = 0x00002000      # Configuration alternative created.
 DF_1_ENDFILTEE  = 0x00004000      # Filtee terminates filters search.
 DF_1_DISPRELDNE = 0x00008000      # Disp reloc applied at build time.
 DF_1_DISPRELPND = 0x00010000      # Disp reloc applied at run-time.
+DF_1_NODIRECT   = 0x00020000
+DF_1_IGNMULDEF  = 0x00040000
+DF_1_NOKSYMS    = 0x00080000
+DF_1_NOHDR      = 0x00100000
+DF_1_EDITED     = 0x00200000
+DF_1_NORELOC    = 0x00400000
+DF_1_SYMINTPOSE = 0x00800000
+DF_1_GLOBAUDIT  = 0x01000000
+DF_1_SINGLETON  = 0x02000000
+DF_1_STUB       = 0x04000000
+DF_1_PIE        = 0x08000000
 
 # Flags for the feature selection in DT_FEATURE_1.
 DTF_1_PARINIT   = 0x00000001
