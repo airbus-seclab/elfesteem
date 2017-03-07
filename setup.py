@@ -11,7 +11,7 @@ setup(
     author = 'Philippe BIONDI',
     author_email = 'phil(at)secdev.org',
     description = 'ELFEsteem: ELF/PE/Mach-O file manipulation library',
-    license = 'LGPLv2',
+    license = 'LGPLv2.1',
     # keywords = '',
     # url = '',
 )
