@@ -1022,7 +1022,7 @@ class SHList(CArray):
         for s in self:
             if not s.is_in_file():
                 continue
-            raw_off = f_align * ((addr + f_align - 1) / f_align)
+            raw_off = f_align * ((addr + f_align - 1) // f_align)
             s.offset = raw_off
             s.rawsize = len(s.data)
             addr = raw_off + s.rawsize
