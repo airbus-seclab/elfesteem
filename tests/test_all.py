@@ -30,6 +30,7 @@ class print_colored(object): # Namespace
 for name in (
         'visual_studio_mangling',
         'pe_manipulation',
+        'elf_manipulation',
         ):
     module = import_by_name('test_' + name)
     print_colored.bold(name)

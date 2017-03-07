@@ -296,6 +296,7 @@ def run_test():
     try:
         # Not COFF: OptHdr size too big
         e = Coff(open(__dir__+'/binary_input/Ange/README.txt', 'rb').read())
+        ko.append('Not COFF')
     except ValueError:
         pass
     obj_mingw = open(__dir__+'/binary_input/coff_mingw.obj', 'rb').read()
