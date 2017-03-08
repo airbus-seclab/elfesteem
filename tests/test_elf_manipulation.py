@@ -57,7 +57,7 @@ def run_test():
               hashlib.md5(d).hexdigest(),
               'Creation of an ELF with a given list of sections')
     try:
-        e = ELF(open(__dir__+'/binary_input/Ange/README.txt', 'rb').read())
+        e = ELF(open(__dir__+'/binary_input/README.txt', 'rb').read())
         ko.append('Not an ELF')
     except ValueError:
         pass
@@ -173,6 +173,20 @@ def run_test():
     assertion('5c80b11a64a32e7aaee8ef378da4ccef',
               hashlib.md5(d).hexdigest(),
               'Display Group Section')
+    elf_tmp320c6x = open(__dir__+'/binary_input/notle-tesla-dsp.xe64T', 'rb').read()
+    assertion('fb83ed8d809f394e70f5d84d0c8e593f',
+              hashlib.md5(elf_tmp320c6x).hexdigest(),
+              'Reading notle-tesla-dsp.xe64T')
+    e = ELF(elf_tmp320c6x)
+    d = e.pack()
+    assertion('fb83ed8d809f394e70f5d84d0c8e593f',
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading notle-tesla-dsp.xe64T')
+    # Packed file is identical :-)
+    d = e.sh.readelf_display().encode('latin1')
+    assertion('ecf169c765d29175177528e24601f1be',
+              hashlib.md5(d).hexdigest(),
+              'Display Section Headers (TMP320C6x)')
     return ko
 
 if __name__ == "__main__":
