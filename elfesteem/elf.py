@@ -57,11 +57,11 @@ class Shdr(CStructWithStrTable):
             ret = m+'_'+constants['SHT'][m][self.type]
         elif self.type in constants['SHT']:
             ret = constants['SHT'][self.type]
-        elif elf.SHT_LOOS <= self.type <= SHT_HIOS:
+        elif SHT_LOOS <= self.type <= SHT_HIOS:
             ret = "LOOS+%x"%(self.type - SHT_LOOS)
-        elif elf.SHT_LOPROC <= self.type <= SHT_HIPROC:
+        elif SHT_LOPROC <= self.type <= SHT_HIPROC:
             ret = "LOPROC+%x"%(self.type - SHT_LOPROC)
-        elif elf.SHT_LOUSER <= self.type <= SHT_HIUSER:
+        elif SHT_LOUSER <= self.type <= SHT_HIUSER:
             ret = "LOUSER+%x"%(self.type - SHT_LOUSER)
         else:
             ret = "Unknown%#x"%self.type

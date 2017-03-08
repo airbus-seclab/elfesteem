@@ -305,7 +305,7 @@ def run_test():
     # Now, we parse COFF files
     try:
         # Not COFF: OptHdr size too big
-        e = Coff(open(__dir__+'/binary_input/Ange/README.txt', 'rb').read())
+        e = Coff(open(__dir__+'/binary_input/README.txt', 'rb').read())
         ko.append('Not COFF')
     except ValueError:
         pass
