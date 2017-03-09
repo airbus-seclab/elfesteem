@@ -354,27 +354,11 @@ class RelTable(Section):
             s,c = c[:sz],c[sz:]
             rel = WRel(self,sex, size, s)
             self.reltab.append(rel)
-            self.rel[rel.sym] = rel
+            if rel.parent.linksection != self.parent.shlist[0]:
+                self.rel[rel.sym] = rel
 
-class RelATable(Section):
+class RelATable(RelTable):
     sht = elf.SHT_RELA
-    def parse_content(self, sex, size):
-        self.sex, self.size = sex, size
-        if size == 32:
-            WRela = WRela32
-        elif size == 64:
-            WRela = WRela64
-        else:
-            ValueError('unknown size')
-        c = self.content
-        self.reltab=[]
-        self.rel = {}
-        sz = self.sh.entsize
-        while c:
-            s,c = c[:sz],c[sz:]
-            rel = WRela(self,sex, size, s)
-            self.reltab.append(rel)
-            self.rel[rel.sym] = rel
 
 ### Section List
 
@@ -402,8 +386,8 @@ class SHList:
         done = []
         while todo:
             s = todo.pop(0)
-            if ( (s.linksection == zero or s.linksection in done)
-                 and  (s.infosection in  [zero, None] or s.infosection in done)):
+            if ((s.linksection == zero or s.linksection in done) and
+                (s.infosection in  [zero, None] or s.infosection in done)):
                 done.append(s)
                 s.parse_content(sex, size)
             else:

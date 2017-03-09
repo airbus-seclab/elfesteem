@@ -91,8 +91,8 @@ class Rela64(CStruct):
                 ("addend","ptr") ]
 
 class Dynamic(CStruct):
-    _fields = [ ("type","u32"),
-                ("name","u32") ]
+    _fields = [ ("type","ptr"),
+                ("name","ptr") ]
 
 
 # Legal values for e_ident (identification indexes)
