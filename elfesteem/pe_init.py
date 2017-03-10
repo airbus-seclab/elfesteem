@@ -7,18 +7,6 @@ log = pe.log
 
 
 
-class ContentManager(object):
-    def __get__(self, owner, x):
-        if hasattr(owner, '_content'):
-            return owner._content
-    def __set__(self, owner, new_content):
-        owner.resize(len(owner._content), len(new_content))
-        owner._content=new_content
-        #owner.parse_content()
-    def __delete__(self, owner):
-        self.__set__(owner, None)
-
-
 class ContentRVA(object):
     def __init__(self, x):
         self.parent = x
@@ -268,7 +256,6 @@ class StrTable(object):
 # PE object
 
 class PE(object):
-    content = ContentManager()
     Coffhdr = property(lambda self: self.COFFhdr) # Older API
     Doshdr  = property(lambda self: self.DOShdr) # Older API
     def __init__(self, pestr = None,
@@ -281,7 +268,6 @@ class PE(object):
         if pestr == None:
             self.sex = '<'
             self.wsize = wsize
-            self._content = StrPatchwork()
             self.DOShdr = pe.DOShdr(parent=self)
             self.NTsig = pe.NTsig(parent=self)
             self.COFFhdr = pe.COFFhdr(parent=self)
@@ -335,9 +321,10 @@ class PE(object):
             self.NThdr.CheckSum = 0
 
             self.NTsig.signature = 0x4550
+            self.content = StrPatchwork(self.pack())
 
         else:
-            self._content = StrPatchwork(pestr)
+            self.content = StrPatchwork(pestr)
             self.parse_content(parse_resources = parse_resources,
                                parse_delay = parse_delay,
                                parse_reloc = parse_reloc)
