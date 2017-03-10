@@ -27,17 +27,6 @@ def inherit_sex_wsize(self, parent, kargs):
             setattr(self, f, getattr(parent, f))
     self.parent = parent
 
-class ContentManager(object):
-    def __get__(self, owner, x):
-        if hasattr(owner, '_content'):
-            return owner._content
-    def __set__(self, owner, new_content):
-        owner.resize(len(owner._content), len(new_content))
-        owner._content=StrPatchwork(new_content)
-        owner.parse_content(owner.sex, owner.wsize)
-    def __delete__(self, owner):
-        self.__set__(owner, None)
-
 def type_to_format(type, val):
     if len(type) > 2 and type[-1] == 's' and int(type[:-1]) > 0:
         val = val.strip('\0')
@@ -93,7 +82,6 @@ class Loader(LoaderBase):
         i.__init__(**kargs)
         return i
 
-    content = ContentManager()
     def parse_content(self, **kargs):
         if self.__class__.lhc == None:
             self._repr_fields = []
@@ -113,7 +101,7 @@ class Loader(LoaderBase):
         else :
             raise ValueError("No lh given in Loader __init__")
         inherit_sex_wsize(self, self.parent, kargs)
-        self._content = StrPatchwork()
+        self.content = StrPatchwork()
         self.parse_content(**kargs)
     def __repr__(self):
         return "<" + self.__class__.__name__ + " " + ' '.join(map(lambda f:f[0]+" "+type_to_format(f[1],getattr(self,f[0])),self._repr_fields)) + ">"
@@ -512,8 +500,8 @@ class LHList(object):
         for i in range(mhdr.ncmds):
             lhstr = parent[of:of+8]
             lh = Loader.create(parent=self, content=lhstr)
-            lh._content = StrPatchwork(parent[of+8:of+lh.lh.cmdsize])
-            lh.parse_content(parent=self, content=lh._content)
+            lh.content = StrPatchwork(parent[of+8:of+lh.lh.cmdsize])
+            lh.parse_content(parent=self, content=lh.content)
             self.lhlist.append(lh)
             if parent.interval is not None :
                 if not parent.interval.contains(of,of+len(lh.pack())):
@@ -1209,7 +1197,7 @@ class MACHO(object):
     def __init__(self, machostr, interval=None, verbose=False, parseSymbols=True):
         self.interval = interval
         self.verbose = verbose
-        self._content = machostr
+        self.content = StrPatchwork(machostr)
         self.parse_content()
         if parseSymbols and hasattr(self, 'Mhdr'):
             self.parse_symbols()
@@ -1218,7 +1206,6 @@ class MACHO(object):
         return self._virt
     virt = property(get_virt)
     
-    content = ContentManager()
     def parse_content(self):
         magic, = struct.unpack("<I",self.content[0:4])
         if  magic == macho.FAT_MAGIC or magic == macho.FAT_CIGAM:
@@ -1369,8 +1356,8 @@ class MACHO(object):
             s= args[0]
             if hasattr(self,'fh'):
                 for f in self.fh.farchlist:
-                    if f._content.wsize == s.wsize:
-                        f._content.add(s)
+                    if f.content.wsize == s.wsize:
+                        f.content.add(s)
                 return
             if isinstance(s, Section):
                 if not self.lh.addSH(s):
@@ -1463,7 +1450,7 @@ class MACHO(object):
             raise ValueError("No interval argument in macho_init call")
         result = []
         for i in self.interval :
-            data = self._content[i:i+1]
+            data = self.content[i:i+1]
             if data != data_null :
                 result.append((i, data))
         if 'detect_nop' in kargs and kargs['detect_nop']:

@@ -12,16 +12,6 @@ console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
 log.addHandler(console_handler)
 log.setLevel(logging.WARN)
 
-class ContentManager(object):
-    def __get__(self, owner, x):
-        if hasattr(owner, '_content'):
-            return owner._content
-    def __set__(self, owner, new_content):
-        owner.resize(len(owner._content), len(new_content))
-        owner._content=StrPatchwork(new_content)
-        owner.parse_content()
-    def __delete__(self, owner):
-        self.__set__(owner, None)
 
 
 ### Sections
@@ -62,7 +52,6 @@ wsize = parent.wsize)
         return i
     create = classmethod(create)
 
-    content = ContentManager()
     def resize(self, old, new):
         self.sh.size += new-old
         self.parent.resize(self, new-old)
@@ -105,7 +94,7 @@ wsize = parent.wsize)
         if sh is None:
             sh = elf.Shdr(parent=self, type=self.sht, name_idx=0, **kargs)
         self.sh=sh
-        self._content=StrPatchwork()
+        self.content=StrPatchwork()
     def __repr__(self):
         return "%(name)-15s %(offset)08x %(size)06x %(addr)08x %(flags)x" % self.sh
     size = property(lambda _: _.sh.size)
@@ -248,10 +237,8 @@ class StrTable(Section):
         name = name_to_bytes(name)
         if data_null+name+data_null in self.content:
             return self.content.find(name)
-        data = self.content
-        if type(data) != str: data = data.pack()
-        idx = len(data)
-        self.content = data+name+data_null
+        idx = len(self.content)
+        self.content[idx] = name+data_null
         for sh in self.parent.shlist:
             if sh.sh.offset > self.sh.offset:
                 sh.sh.offset += len(name)+1
@@ -384,7 +371,7 @@ class SHList(object):
 
         for s in self.shlist:
             if not isinstance(s, NoBitsSection):
-                s._content = StrPatchwork(parent[s.sh.offset: s.sh.offset+s.sh.size])
+                s.content = StrPatchwork(parent[s.sh.offset: s.sh.offset+s.sh.size])
         # Follow dependencies when initializing sections
         zero = self.shlist[0]
         todo = self.shlist[1:]
@@ -812,7 +799,7 @@ class ELF(object):
             self.ph = PHList(self)
             elf_default_content(self, **kargs)
             return
-        self._content = elfstr
+        self.content = StrPatchwork(elfstr)
         self.parse_content()
         self.check_coherency()
 
@@ -820,7 +807,6 @@ class ELF(object):
         return self._virt
     virt = property(get_virt)
 
-    content = ContentManager()
     def parse_content(self):
         h = struct.unpack("B"*8, self.content[:8])
         if h[:4] != ( 0x7f,0x45,0x4c,0x46 ): # magic number, \x7fELF
@@ -926,6 +912,7 @@ class ELF(object):
 
     # Old API, needed by miasm2
     size = property(lambda _:_.wsize)
+    _content = property(lambda _:_.content)
 
 if __name__ == "__main__":
     import rlcompleter,readline,pdb
