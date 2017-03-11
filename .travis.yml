@@ -1,0 +1,11 @@
+language: python
+python:
+  - '3.6'
+  - '3.5'
+  - '3.4'
+  - '2.7'
+  - '2.6'
+  # elfesteem works with 2.4 and 2.5 too, but they are not available in travis
+before_script:
+  export PYTHONPATH=$PYTHONPATH:$(pwd)
+script: ./tests/test_all.py
