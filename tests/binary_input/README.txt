@@ -11,6 +11,7 @@ cku200.dec-osf-1.3a
     Source ftp://kermit.columbia.edu/kermit/bin/
 
 notle-tesla-dsp.xe64T
+ducati-m3_p768.bin
     Source https://drive.google.com/drive/folders/0B2AlG69ZVaWldU1vUnRFUklCek0
     Linked from https://github.com/radare/radare2/issues/1602
 

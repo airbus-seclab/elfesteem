@@ -148,7 +148,12 @@ def run_test():
     d = e.pack()
     assertion('2f08b8315c4e0a30d51a8decf104345c',
               hashlib.md5(d).hexdigest(),
-              'Writing in memory')
+              'Writing in memory (interval)')
+    e.virt[0x401100] = e.virt[0x401100:0x401120]
+    d = e.pack()
+    assertion('2f08b8315c4e0a30d51a8decf104345c',
+              hashlib.md5(d).hexdigest(),
+              'Writing in memory (address)')
     # Warning: Cannot write at RVA slice(256, 288, None)
     e.virt[0x400100:0x400120] = e.virt[0x400100:0x400120]
     # Warning: __len__ deprecated

@@ -130,7 +130,12 @@ def run_test():
     d = e.pack()
     assertion('d5284d5f438e25ef5502a0c1de97d84f',
               hashlib.md5(d).hexdigest(),
-              'Writing in memory')
+              'Writing in memory (interval)')
+    e.virt[0x080483d0] = e.virt[0x080483d0:0x080483e0]
+    d = e.pack()
+    assertion('d5284d5f438e25ef5502a0c1de97d84f',
+              hashlib.md5(d).hexdigest(),
+              'Writing in memory (address)')
     # Warning: __len__ deprecated
     assertion(0x804a028, len(e.virt), 'Max virtual address')
     # Find leave; ret
