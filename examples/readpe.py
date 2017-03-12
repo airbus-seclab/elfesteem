@@ -75,6 +75,19 @@ def print_petype(e):
             e.NThdr.sizeofimage,
             e.NThdr.sizeofheaders,
             ))
+        print("  CheckSum %#x sz_sr %#x sz_sc %#x sz_hr %#x sz_hc %#x" % (
+            e.NThdr.CheckSum,
+            e.NThdr.sizeofstackreserve,
+            e.NThdr.sizeofstackcommit,
+            e.NThdr.sizeofheapreserve,
+            e.NThdr.sizeofheapcommit,
+            ))
+        print("  NbDir %d DLLchar %#x LoaderFlg %#x Reserved %#x" % (
+            e.NThdr.numberofrvaandsizes,
+            e.NThdr.dllcharacteristics,
+            e.NThdr.loaderflags,
+            e.NThdr.Reserved1,
+            ))
 
 def print_sections(e):
     print("\nSECTIONS")

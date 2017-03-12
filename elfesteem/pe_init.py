@@ -268,12 +268,12 @@ class PE(object):
         if pestr == None:
             self.sex = '<'
             self.wsize = wsize
-            self.DOShdr = pe.DOShdr(parent=self)
-            self.NTsig = pe.NTsig(parent=self)
-            self.COFFhdr = pe.COFFhdr(parent=self)
+            self.DOShdr = pe.DOShdr(parent=self, wsize=32)
+            self.NTsig = pe.NTsig(parent=self, wsize=32)
+            self.COFFhdr = pe.COFFhdr(parent=self, wsize=32)
             self.Opthdr = {32: pe.Opthdr32, 64: pe.Opthdr64}[wsize](parent=self)
             self.NThdr = pe.NThdr(parent=self)
-            self.SHList = pe.SHList(parent=self)
+            self.SHList = pe.SHList(parent=self, wsize=32)
 
             self.DirImport = pe.DirImport(parent=self)
             self.DirExport = pe.DirExport(parent=self)
@@ -294,25 +294,26 @@ class PE(object):
                 self.COFFhdr.characteristics = 0x22
                 self.COFFhdr.sizeofoptionalheader = 0xf0
                 self.Opthdr.magic = pe.IMAGE_NT_OPTIONAL_HDR64_MAGIC
-            #self.Opthdr.majorlinkerversion = 0x7
-            #self.Opthdr.minorlinkerversion = 0x0
+            self.Opthdr.majorlinkerversion = 0x7
+            self.Opthdr.minorlinkerversion = 0x0
 
             self.NThdr.ImageBase = 0x400000
             self.NThdr.sectionalignment = 0x1000
             self.NThdr.filealignment = 0x200
-            #self.NThdr.majoroperatingsystemversion = 0x5
-            #self.NThdr.minoroperatingsystemversion = 0x1
-            #self.NThdr.MajorImageVersion = 0x5
-            #self.NThdr.MinorImageVersion = 0x1
-            #self.NThdr.majorsubsystemversion = 0x4
-            #self.NThdr.minorsubsystemversion = 0x0
-            #self.NThdr.subsystem = 0x3
-            #self.NThdr.dllcharacteristics = 0x8000
-            #self.NThdr.sizeofstackreserve = 0x200000
-            #self.NThdr.sizeofstackcommit = 0x1000
-            #self.NThdr.sizeofheapreserve = 0x100000
-            #self.NThdr.sizeofheapcommit = 0x1000
-            #self.NThdr.sizeofheaders = 0x1000
+            self.NThdr.filealignment = 0x1000 # previous versions of elfesteem
+            self.NThdr.majoroperatingsystemversion = 0x5
+            self.NThdr.minoroperatingsystemversion = 0x1
+            self.NThdr.MajorImageVersion = 0x5
+            self.NThdr.MinorImageVersion = 0x1
+            self.NThdr.majorsubsystemversion = 0x4
+            self.NThdr.minorsubsystemversion = 0x0
+            self.NThdr.subsystem = 0x3
+            self.NThdr.dllcharacteristics = 0x8000
+            self.NThdr.sizeofstackreserve = 0x200000
+            self.NThdr.sizeofstackcommit = 0x1000
+            self.NThdr.sizeofheapreserve = 0x100000
+            self.NThdr.sizeofheapcommit = 0x1000
+            self.NThdr.sizeofheaders = 0x1000
             self.NThdr.numberofrvaandsizes = 0x10
             self.NThdr.optentries = pe.OptNThdrs(parent=self.NThdr)
             for _ in range(self.NThdr.numberofrvaandsizes):
@@ -527,6 +528,7 @@ class PE(object):
 
     def build_content(self):
         c = StrPatchwork()
+        c[self.NThdr.sizeofheaders-1] = pe.data_null
         c[0] = self.DOShdr.pack()
 
         # fix image size
