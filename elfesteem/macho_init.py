@@ -1199,6 +1199,8 @@ class virt(object):
 # MACHO object
 class MACHO(object):
     def __init__(self, machostr, interval=None, verbose=False, parseSymbols=True):
+        if interval is True:
+            interval = intervals.Intervals().add(0,len(machostr))
         self.interval = interval
         self.verbose = verbose
         self.content = StrPatchwork(machostr)
@@ -1258,7 +1260,17 @@ class MACHO(object):
             self.symbols = sect
             for symbol in sect.symbols:
                 sect.symbols_from_name[symbol.name] = symbol
+        # 'rawdata' is a list of pairs (position, byte) that is used by
+        # pack() to reconstruct what was not parsed by analysing the
+        # headers. Null padding is not memorized.
         self.rawdata = []
+        if self.interval is not None:
+            for i in self.interval:
+                data = self.content[i:i+1]
+                if data != data_null:
+                    self.rawdata.append( (i, data) )
+            if len(self.rawdata):
+                log.warn("Part of the file was not parsed: %d bytes", len(self.rawdata))
 
     def parse_symbols(self):
         lctext = self.lh.findlctext()
@@ -1466,11 +1478,6 @@ class MACHO(object):
                 if (pos,val) in result:
                     self.rawdata.append((pos,val))
                     result.remove((pos,val))
-
-        if 'add_rawdata' in kargs and kargs['add_rawdata']:
-            for pos, val in result:
-                self.rawdata.append( (pos, val) )
-            result = []
         return result
 
     def get_stringtable(self):
