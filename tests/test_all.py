@@ -32,6 +32,7 @@ for name in (
         'visual_studio_mangling',
         'pe_manipulation',
         'elf_manipulation',
+        'macho_manipulation',
         'rprc_manipulation',
         ):
     module = import_by_name('test_' + name)
