@@ -102,7 +102,6 @@ class Loader(LoaderBase):
             raise ValueError("No lh given in Loader __init__")
         inherit_sex_wsize(self, self.parent, kargs)
         self.content = StrPatchwork()
-        self.parse_content(**kargs)
     def __repr__(self):
         return "<" + self.__class__.__name__ + " " + ' '.join(map(lambda f:f[0]+" "+type_to_format(f[1],getattr(self,f[0])),self._repr_fields)) + ">"
     def pack(self):
@@ -1400,7 +1399,10 @@ class MACHO(object):
             else:
                 wsize= self.wsize
             type = kargs['type']
-            nwlc = Loader.create(parent=parent,sex=sex,wsize=wsize, content=struct.pack("<II",type.lht,0))
+            largs = { 'parent': parent, 'sex': sex, 'wsize': wsize,
+                      'content': struct.pack("<II",type.lht,0) }
+            nwlc = Loader.create(**largs)
+            nwlc.parse_content(**largs)
             if 'segname' in kargs :
                 nwlc.segname = kargs['segname']
             else:
