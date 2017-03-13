@@ -462,11 +462,9 @@ class LoaderUnixthread(Loader):
                 log.warn("  observed (%d, %d) ; wanted (%d, %d)"
                     % (self.lhc.flavor, self.lhc.count, flavor, count))
             data = self.content[8:8+(self.lhc.count)*4]
-        self.packstring = "%s%d%s" % (
-            self.sex,
-            int(self.lhc.count/self.regsize),
-            "Q" if self.regsize == 2 else "I",
-            )
+        self.packstring = self.sex + str(self.lhc.count//self.regsize)
+        if self.regsize == 2: self.packstring += "Q"
+        else:                 self.packstring += "I"
         self.data = list(struct.unpack(self.packstring, data))
     def _str_additional_data(self):
         return struct.pack(self.packstring, *self.data)
@@ -1209,7 +1207,8 @@ class MACHO(object):
     def parse_content(self):
         magic, = struct.unpack("<I",self.content[0:4])
         if  magic == macho.FAT_MAGIC or magic == macho.FAT_CIGAM:
-            self.sex = '<' if magic == macho.FAT_MAGIC else '>'
+            if   magic == macho.FAT_MAGIC: self.sex = '<'
+            elif magic == macho.FAT_CIGAM: self.sex = '>'
             self.wsize = 0
             self.Fhdr = macho.Fhdr(parent=self, content=self.content)
             if self.verbose: print("FHDR is %r" % self.Fhdr)
