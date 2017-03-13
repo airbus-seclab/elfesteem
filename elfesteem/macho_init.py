@@ -602,7 +602,7 @@ class FarchList(object):
         c = []
         for farch in self.farchlist:
             c.append(farch.pack())
-        return "".join(c)
+        return data_empty.join(c)
 
 class MachoList(object):
     def __init__(self, parent, **kargs):
