@@ -397,9 +397,14 @@ if __name__ == '__main__':
     for file in args.file:
         raw = open(file, 'rb').read()
         filesize = os.path.getsize(file)
-        e = macho_init.MACHO(raw,
-            interval=intervals.Intervals().add(0,filesize),
-            parseSymbols = False)
+        try:
+            e = macho_init.MACHO(raw,
+                interval=intervals.Intervals().add(0,filesize),
+                parseSymbols = False)
+        except ValueError, err:
+            print("%s:" %file)
+            print("    %s" % err)
+            continue
         if args.arch_type is None:
             if hasattr(e, 'Fhdr'):
                 # Select the current architecture, if present
