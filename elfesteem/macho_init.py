@@ -188,6 +188,13 @@ class LoaderSegmentBase(Loader):
                 c = data_empty
             else :
                 c = raw[sh.offset:sh.offset+sh.size]
+            # Sections of odd length are padded with one byte.
+            # For data sections, it is usually \x00, and can be ignored, but
+            # for text sections it is ususally a nop (e.g. \x90 for x86) and
+            # keeping it is is necessary if we want pack() to reconstruct
+            # the file as it has been input.
+            eod = sh.offset+sh.size
+            if eod%2 == 1: c += raw[eod:eod+1]
             if sh.type == macho.S_SYMBOL_STUBS:
                 cls = SymbolStubList
             elif sh.type == macho.S_NON_LAZY_SYMBOL_POINTERS:
