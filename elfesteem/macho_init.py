@@ -605,12 +605,13 @@ class FarchList(object):
         return data_empty.join(c)
 
 class MachoList(object):
-    def __init__(self, parent, **kargs):
+    def __init__(self, parent, parseSymbols=True, **kargs):
         inherit_sex_wsize(self, parent, kargs)
         self.macholist = []
         for farch in parent.fh:
             macho = MACHO(parent[farch.offset:farch.offset+farch.size],
-                          intervals.Intervals().add(0,farch.size))
+                          interval=intervals.Intervals().add(0,farch.size),
+                          parseSymbols=parseSymbols)
             macho.offset = farch.offset
             self.macholist.append(macho)
             inverse = intervals.Intervals().add(0,farch.size)
@@ -1204,7 +1205,7 @@ class MACHO(object):
         self.interval = interval
         self.verbose = verbose
         self.content = StrPatchwork(machostr)
-        self.parse_content()
+        self.parse_content(parseSymbols=parseSymbols)
         if parseSymbols and hasattr(self, 'Mhdr'):
             self.parse_symbols()
         self._virt = virt(self)
@@ -1212,7 +1213,7 @@ class MACHO(object):
         return self._virt
     virt = property(get_virt)
     
-    def parse_content(self):
+    def parse_content(self, parseSymbols=True):
         magic, = struct.unpack("<I",self.content[0:4])
         if  magic == macho.FAT_MAGIC or magic == macho.FAT_CIGAM:
             if   magic == macho.FAT_MAGIC: self.sex = '<'
@@ -1221,7 +1222,7 @@ class MACHO(object):
             self.Fhdr = macho.Fhdr(parent=self, content=self.content)
             if self.verbose: print("FHDR is %r" % self.Fhdr)
             self.fh = FarchList(self)
-            self.arch = MachoList(self)
+            self.arch = MachoList(self, parseSymbols=parseSymbols)
             self.rawdata = []
             return
         elif  magic == macho.MH_MAGIC:
