@@ -966,6 +966,9 @@ class SHList(CArray):
             scnptr += self.parent.COFFhdr.sizeofoptionalheader
             # space for 10 sections
             scnptr += Shdr(parent=self).bytelen * 10
+            if scnptr > self.parent.NThdr.sizeofheaders:
+               log.error('xxx')
+            scnptr = max(scnptr, self.parent.NThdr.sizeofheaders)
         # alignment
         s_align = self.parent.NThdr.sectionalignment
         s_align = max(0x1000, s_align)
@@ -999,9 +1002,11 @@ class SHList(CArray):
             # When created with the old elfesteem API
             s.rsize = args['rawsize']
             s.paddr = args['rawsize']
+            data = data+data_null*(s.rawsize-len(data))
         if 'size' in args:
             # When created with the old elfesteem API
             s.paddr = args['size']
+        s.paddr = max(s.paddr, s_align)
         s.section_data = SectionData(parent=s, data=data)
     
         self.append(s)

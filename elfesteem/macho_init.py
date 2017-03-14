@@ -27,17 +27,6 @@ def inherit_sex_wsize(self, parent, kargs):
             setattr(self, f, getattr(parent, f))
     self.parent = parent
 
-class ContentManager(object):
-    def __get__(self, owner, x):
-        if hasattr(owner, '_content'):
-            return owner._content
-    def __set__(self, owner, new_content):
-        owner.resize(len(owner._content), len(new_content))
-        owner._content=StrPatchwork(new_content)
-        owner.parse_content(owner.sex, owner.wsize)
-    def __delete__(self, owner):
-        self.__set__(owner, None)
-
 def type_to_format(type, val):
     if len(type) > 2 and type[-1] == 's' and int(type[:-1]) > 0:
         val = val.strip('\0')
@@ -93,7 +82,6 @@ class Loader(LoaderBase):
         i.__init__(**kargs)
         return i
 
-    content = ContentManager()
     def parse_content(self, **kargs):
         if self.__class__.lhc == None:
             self._repr_fields = []
@@ -113,8 +101,7 @@ class Loader(LoaderBase):
         else :
             raise ValueError("No lh given in Loader __init__")
         inherit_sex_wsize(self, self.parent, kargs)
-        self._content = StrPatchwork()
-        self.parse_content(**kargs)
+        self.content = StrPatchwork()
     def __repr__(self):
         return "<" + self.__class__.__name__ + " " + ' '.join(map(lambda f:f[0]+" "+type_to_format(f[1],getattr(self,f[0])),self._repr_fields)) + ">"
     def pack(self):
@@ -201,6 +188,13 @@ class LoaderSegmentBase(Loader):
                 c = data_empty
             else :
                 c = raw[sh.offset:sh.offset+sh.size]
+            # Sections of odd length are padded with one byte.
+            # For data sections, it is usually \x00, and can be ignored, but
+            # for text sections it is ususally a nop (e.g. \x90 for x86) and
+            # keeping it is is necessary if we want pack() to reconstruct
+            # the file as it has been input.
+            eod = sh.offset+sh.size
+            if eod%2 == 1: c += raw[eod:eod+1]
             if sh.type == macho.S_SYMBOL_STUBS:
                 cls = SymbolStubList
             elif sh.type == macho.S_NON_LAZY_SYMBOL_POINTERS:
@@ -474,11 +468,9 @@ class LoaderUnixthread(Loader):
                 log.warn("  observed (%d, %d) ; wanted (%d, %d)"
                     % (self.lhc.flavor, self.lhc.count, flavor, count))
             data = self.content[8:8+(self.lhc.count)*4]
-        self.packstring = "%s%d%s" % (
-            self.sex,
-            int(self.lhc.count/self.regsize),
-            "Q" if self.regsize == 2 else "I",
-            )
+        self.packstring = self.sex + str(self.lhc.count//self.regsize)
+        if self.regsize == 2: self.packstring += "Q"
+        else:                 self.packstring += "I"
         self.data = list(struct.unpack(self.packstring, data))
     def _str_additional_data(self):
         return struct.pack(self.packstring, *self.data)
@@ -512,8 +504,8 @@ class LHList(object):
         for i in range(mhdr.ncmds):
             lhstr = parent[of:of+8]
             lh = Loader.create(parent=self, content=lhstr)
-            lh._content = StrPatchwork(parent[of+8:of+lh.lh.cmdsize])
-            lh.parse_content(parent=self, content=lh._content)
+            lh.content = StrPatchwork(parent[of+8:of+lh.lh.cmdsize])
+            lh.parse_content(parent=self, content=lh.content)
             self.lhlist.append(lh)
             if parent.interval is not None :
                 if not parent.interval.contains(of,of+len(lh.pack())):
@@ -610,7 +602,7 @@ class FarchList(object):
         c = []
         for farch in self.farchlist:
             c.append(farch.pack())
-        return "".join(c)
+        return data_empty.join(c)
 
 class MachoList(object):
     def __init__(self, parent, **kargs):
@@ -1207,9 +1199,11 @@ class virt(object):
 # MACHO object
 class MACHO(object):
     def __init__(self, machostr, interval=None, verbose=False, parseSymbols=True):
+        if interval is True:
+            interval = intervals.Intervals().add(0,len(machostr))
         self.interval = interval
         self.verbose = verbose
-        self._content = machostr
+        self.content = StrPatchwork(machostr)
         self.parse_content()
         if parseSymbols and hasattr(self, 'Mhdr'):
             self.parse_symbols()
@@ -1218,11 +1212,11 @@ class MACHO(object):
         return self._virt
     virt = property(get_virt)
     
-    content = ContentManager()
     def parse_content(self):
         magic, = struct.unpack("<I",self.content[0:4])
         if  magic == macho.FAT_MAGIC or magic == macho.FAT_CIGAM:
-            self.sex = '<' if magic == macho.FAT_MAGIC else '>'
+            if   magic == macho.FAT_MAGIC: self.sex = '<'
+            elif magic == macho.FAT_CIGAM: self.sex = '>'
             self.wsize = 0
             self.Fhdr = macho.Fhdr(parent=self, content=self.content)
             if self.verbose: print("FHDR is %r" % self.Fhdr)
@@ -1266,7 +1260,17 @@ class MACHO(object):
             self.symbols = sect
             for symbol in sect.symbols:
                 sect.symbols_from_name[symbol.name] = symbol
+        # 'rawdata' is a list of pairs (position, byte) that is used by
+        # pack() to reconstruct what was not parsed by analysing the
+        # headers. Null padding is not memorized.
         self.rawdata = []
+        if self.interval is not None:
+            for i in self.interval:
+                data = self.content[i:i+1]
+                if data != data_null:
+                    self.rawdata.append( (i, data) )
+            if len(self.rawdata):
+                log.warn("Part of the file was not parsed: %d bytes", len(self.rawdata))
 
     def parse_symbols(self):
         lctext = self.lh.findlctext()
@@ -1369,8 +1373,8 @@ class MACHO(object):
             s= args[0]
             if hasattr(self,'fh'):
                 for f in self.fh.farchlist:
-                    if f._content.wsize == s.wsize:
-                        f._content.add(s)
+                    if f.content.wsize == s.wsize:
+                        f.content.add(s)
                 return
             if isinstance(s, Section):
                 if not self.lh.addSH(s):
@@ -1414,7 +1418,10 @@ class MACHO(object):
             else:
                 wsize= self.wsize
             type = kargs['type']
-            nwlc = Loader.create(parent=parent,sex=sex,wsize=wsize, content=struct.pack("<II",type.lht,0))
+            largs = { 'parent': parent, 'sex': sex, 'wsize': wsize,
+                      'content': struct.pack("<II",type.lht,0) }
+            nwlc = Loader.create(**largs)
+            nwlc.parse_content(**largs)
             if 'segname' in kargs :
                 nwlc.segname = kargs['segname']
             else:
@@ -1463,7 +1470,7 @@ class MACHO(object):
             raise ValueError("No interval argument in macho_init call")
         result = []
         for i in self.interval :
-            data = self._content[i:i+1]
+            data = self.content[i:i+1]
             if data != data_null :
                 result.append((i, data))
         if 'detect_nop' in kargs and kargs['detect_nop']:
@@ -1471,11 +1478,6 @@ class MACHO(object):
                 if (pos,val) in result:
                     self.rawdata.append((pos,val))
                     result.remove((pos,val))
-
-        if 'add_rawdata' in kargs and kargs['add_rawdata']:
-            for pos, val in result:
-                self.rawdata.append( (pos, val) )
-            result = []
         return result
 
     def get_stringtable(self):

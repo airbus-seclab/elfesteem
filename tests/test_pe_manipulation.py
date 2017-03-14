@@ -29,12 +29,12 @@ def run_test():
     pe.log.setLevel(logging.ERROR)
     e = PE()
     d = e.pack()
-    assertion('4511fc7e7fe5ae5196b1d7e6780e0fff',
+    assertion('901e6383ee161b569af1d35d3f77b038',
               hashlib.md5(d).hexdigest(),
               'Creation of a standard empty PE')
     e.SHList.add_section(name = 'new', rawsize = 0x1000)
     d = e.pack()
-    assertion('6c3c99fb3ee0274daf6354f909947bfb',
+    assertion('15aefbcc8f4b39e9484df8b1ed277c75',
               hashlib.md5(d).hexdigest(),
               'Adding a section to an empty PE')
     e.SHList.add_section(name = 'nxt', rawsize = 0x1000)
@@ -43,15 +43,15 @@ def run_test():
               hashlib.md5(d).hexdigest(),
               'Extract chunk from mapped memory, across multiple sections')
     pe.log.setLevel(logging.CRITICAL)
-    for _ in range(12):
+    for _ in range(89):
         e.SHList.add_section(name = 'nxt', rawsize = 0x1000)
-    assertion(13, # Should be 14 if the last section has been added
+    assertion(90, # Should be 91 if the last section could been added
               len(e.SHList),
               'Add too many sections')
     pe.log.setLevel(logging.ERROR)
     e = PE(wsize=64)
     d = e.pack()
-    assertion('5815feb66c6ef755d4760aefd44e42b1',
+    assertion('863bf62f521b0cad3209e42cff959eed',
               hashlib.md5(d).hexdigest(),
               'Creation of a standard empty PE+')
     pe_mingw = open(__dir__+'/binary_input/pe_mingw.exe', 'rb').read()
@@ -148,7 +148,12 @@ def run_test():
     d = e.pack()
     assertion('2f08b8315c4e0a30d51a8decf104345c',
               hashlib.md5(d).hexdigest(),
-              'Writing in memory')
+              'Writing in memory (interval)')
+    e.virt[0x401100] = e.virt[0x401100:0x401120]
+    d = e.pack()
+    assertion('2f08b8315c4e0a30d51a8decf104345c',
+              hashlib.md5(d).hexdigest(),
+              'Writing in memory (address)')
     # Warning: Cannot write at RVA slice(256, 288, None)
     e.virt[0x400100:0x400120] = e.virt[0x400100:0x400120]
     # Warning: __len__ deprecated

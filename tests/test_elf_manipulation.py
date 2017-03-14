@@ -105,6 +105,9 @@ def run_test():
     assertion('5e94f899265a799826a46ec86a293e16',
               hashlib.md5(d).hexdigest(),
               'Extract chunk from raw data')
+    assertion(e[0x100:0x120],
+              e._content[0x100:0x120],
+              'Extract chunk from raw data, deprecated API')
     assertion(True,
               e.virt.is_addr_in(0x080483d0),
               'Address in mapped virtual memory')
@@ -127,7 +130,12 @@ def run_test():
     d = e.pack()
     assertion('d5284d5f438e25ef5502a0c1de97d84f',
               hashlib.md5(d).hexdigest(),
-              'Writing in memory')
+              'Writing in memory (interval)')
+    e.virt[0x080483d0] = e.virt[0x080483d0:0x080483e0]
+    d = e.pack()
+    assertion('d5284d5f438e25ef5502a0c1de97d84f',
+              hashlib.md5(d).hexdigest(),
+              'Writing in memory (address)')
     # Warning: __len__ deprecated
     assertion(0x804a028, len(e.virt), 'Max virtual address')
     # Find leave; ret
