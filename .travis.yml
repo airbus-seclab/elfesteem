@@ -6,6 +6,11 @@ python:
   - '2.7'
   - '2.6'
   # elfesteem works with 2.4 and 2.5 too, but they are not available in travis
+install:
+  - pip install coverage codecov
 before_script:
   export PYTHONPATH=$PYTHONPATH:$(pwd)
-script: ./tests/test_all.py
+script:
+  - coverage run ./tests/test_all.py
+after_success:
+  - codecov
