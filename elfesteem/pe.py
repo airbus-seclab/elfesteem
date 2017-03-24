@@ -1170,7 +1170,8 @@ class ImportDescriptor(CStruct):
         # Follow the RVAs
         of = self.rva2off(self.name_rva)
         if of is None:
-            self.name = '<invalid_dll_name>'
+            name = '<invalid_dll_name>\0'.encode('latin1')
+            self.name = CString(parent=self, content=name)
             # e.g. Ange Albertini's imports_relocW7.exe where relocation
             # is modifying the import table.
             # TODO: apply relocations before the decoding.
