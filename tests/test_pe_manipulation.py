@@ -343,6 +343,10 @@ def run_test():
     e = Coff(open(__dir__+'/binary_input/cku193a05.apollo-sr10-s5r3', 'rb').read())
     # C-Kermit XCOFF32 binary for AIX
     e = Coff(open(__dir__+'/binary_input/cku190.rs6aix32c-3.2.4', 'rb').read())
+    # C-Kermit eCOFF32 binary for MIPS, big endian
+    e = Coff(open(__dir__+'/binary_input/cku192.irix40', 'rb').read())
+    # C-Kermit eCOFF32 binary for MIPS, little endian
+    e = Coff(open(__dir__+'/binary_input/cku192.ultrix43c-mips3', 'rb').read())
     return ko
     # print('HASH', hashlib.md5(d).hexdigest())
 

@@ -5,6 +5,8 @@ C28346_Load_Program_to_Flash.out
     Source https://github.com/slavaprokopiy/Mini-TMS320C28346/blob/master/For_user/C28346_Load_Program_to_Flash/Debug/C28346_Load_Program_to_Flash.out
 
 cku190.rs6aix32c-3.2.4
+cku192.irix40
+cku192.ultrix43c-mips3
 cku193a05.apollo-sr10-s5r3
 cku196.clix-3.1
 cku200.dec-osf-1.3a

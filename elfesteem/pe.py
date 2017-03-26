@@ -592,9 +592,33 @@ class OpthdrClipper(CStruct):
                 ("c1","u32"),    # Clipper specific?
                 ]
 
-# Specs of COFF for Tru64 aka. OSF1 found at
+# 32-bit eCOFF (for MIPS)
+# The only source of information found is binutils' include/coff/mips.h
+class OpthdrECOFF32(CStruct):
+    _fields = [ ("magic","u16"),
+                ("vstamp","u16"),
+                ("tsize","u32"),
+                ("dsize","u32"),
+                ("bsize","u32"),
+                ("entry","u32"),
+                ("text_start","u32"),
+                ("data_start","u32"),
+                ("bss_start","u32"),
+                ("gprmask","u32"),
+                ("cprmask0","u32"),
+                ("cprmask1","u32"),
+                ("cprmask2","u32"),
+                ("cprmask3","u32"),
+                ("gp_value","u32"),
+                ]
+    majorlinkerversion = property(lambda _:_.vstamp>>8)
+    minorlinkerversion = property(lambda _:_.vstamp&0xff)
+
+# Specs of eCOFF for Tru64 aka. OSF1 found at
 # http://h41361.www4.hpe.com/docs/base_doc/DOCUMENTATION/V50A_ACRO_SUP/OBJSPEC.PDF
-class OpthdrOSF1(CStruct):
+# Not fully consistent with binutils' include/coff/alpha.h
+# Looking at sample files, it seems that binutils is right
+class OpthdrECOFF64(CStruct):
     _fields = [ ("magic","u16"),
                 ("vstamp","u16"),
                 ("bldrev","u16"),
@@ -607,8 +631,10 @@ class OpthdrOSF1(CStruct):
                 ("data_start","u64"),
                 ("bss_start","u64"),
                 ("gprmask","u32"),
-                ("fprmask","u64"),
-                ("gp_value","u32"),
+                ("fprmask","u32"),  # As with binutils
+                ("gp_value","u64"), # As with binutils
+                #("fprmask","u64"),  # As with OBJSPEC.PDF
+                #("gp_value","u32"), # As with OBJSPEC.PDF
                 ]
     majorlinkerversion = property(lambda _:_.vstamp>>8)
     minorlinkerversion = property(lambda _:_.vstamp&0xff)
@@ -753,6 +779,8 @@ class SectionData(CBase):
         if self.parent.scn_baseoff+raw_sz > len(c):
             raw_sz = len(c) - self.parent.scn_baseoff
         self.data[0] = c[self.parent.scn_baseoff:self.parent.scn_baseoff+raw_sz]
+        if self.parent.relptr >= len(c):
+            raise ValueError("COFF invalid relptr")
         self.relocs = COFFRelocations(parent=self.parent,
                                       content=c,
                                       start=self.parent.relptr)

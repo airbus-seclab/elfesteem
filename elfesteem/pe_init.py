@@ -680,9 +680,17 @@ class Coff(PE):
         elif self.COFFhdr.sizeofoptionalheader == 44:
             assert self.COFFhdr.machine == pe.IMAGE_FILE_MACHINE_APOLLOM68K
             self.Opthdr = pe.OpthdrApollo(**kargs)
+        elif self.COFFhdr.sizeofoptionalheader == 56:
+            assert self.COFFhdr.machine in (
+                pe.IMAGE_FILE_MACHINE_MIPSIII,
+                pe.IMAGE_FILE_MACHINE_MIPSEB,
+                pe.IMAGE_FILE_MACHINE_R3000,
+                pe.IMAGE_FILE_MACHINE_R4000,
+                pe.IMAGE_FILE_MACHINE_R10000)
+            self.Opthdr = pe.OpthdrECOFF32(**kargs)
         elif self.COFFhdr.sizeofoptionalheader == 80:
             assert self.COFFhdr.machine == pe.IMAGE_FILE_MACHINE_ALPHA_O
-            self.Opthdr = pe.OpthdrOSF1(**kargs)
+            self.Opthdr = pe.OpthdrECOFF64(**kargs)
         elif self.COFFhdr.sizeofoptionalheader == 72:
             self.Opthdr = pe.OpthdrXCOFF32(**kargs)
         elif self.COFFhdr.sizeofoptionalheader == 110:

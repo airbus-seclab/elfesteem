@@ -26,7 +26,7 @@ def print_petype(e):
     if hasattr(e, 'NThdr'):
         print("PE for %s (%s header)"%(machine,struct.pack("<H",e.DOShdr.magic)))
     else:
-        print("COFF for %s"%machine)
+        print("COFF %s endian for %s"%({'<':'little','>':'big'}[e.sex],machine))
     print("COFF: %d sections, %d symbols; flags %#x; szopthdr %#x" % (
         COFFhdr.numberofsections,
         COFFhdr.numberofsymbols,
