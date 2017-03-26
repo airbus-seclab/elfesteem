@@ -558,6 +558,9 @@ class dylib_command(CStruct):
                 ("current_version","u32"),
                 ("compatibility_version","u32")]
 
+class rpath_command(CStruct):
+    _fields = [ ("stroffset","u32")]
+
 class linkedit_data_command(CStruct):
     _fields = [ ("dataoff","u32"),
                 ("datasize","u32")]

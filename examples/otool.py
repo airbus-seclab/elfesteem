@@ -5,13 +5,13 @@ import time
 import platform
 
 sys.path.insert(1, os.path.abspath(sys.path[0]+'/..'))
-from elfesteem import macho_init, macho, intervals
+from elfesteem import macho_init, macho
 from elfesteem.cstruct import data_null
 
 def print_header(e):
     print("Mach header")
     print("      magic cputype cpusubtype  caps    filetype ncmds sizeofcmds      flags")
-    print(" 0x%08x %7d %10d  0x%02x %10u %5u %10u 0x%08x" %(e.Mhdr.magic,e.Mhdr.cputype ,e.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK),(e.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK) >> 24,e.Mhdr.filetype,e.Mhdr.ncmds,e.Mhdr.sizeofcmds,e.Mhdr.flags))
+    print(" 0x%08x %7d %10d  0x%02x  %10u %5u %10u 0x%08x" %(e.Mhdr.magic,e.Mhdr.cputype ,e.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK),(e.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK) >> 24,e.Mhdr.filetype,e.Mhdr.ncmds,e.Mhdr.sizeofcmds,e.Mhdr.flags))
 
 def split_integer(v, nbits, ndigits, truncate=None):
     mask = (1<<nbits)-1
@@ -44,8 +44,10 @@ def print_lc(e):
             elif name == "flags":
                 value = "0x%x" % value
             elif name == "stroffset":
-                name = "        name"
-                value = "%s (offset %u)" %(lc.name, value)
+                name = "%12s" % lc.strname
+                value = "%s (offset %u)" %(getattr(lc,lc.strname), value)
+            elif name == "sdk" and value == 0:
+                value = "n/a"
             elif name == "timestamp":
                 name = "time stamp"
                 value = "%u %s" %(value, time.ctime(value))
@@ -92,18 +94,24 @@ def print_lc(e):
                         print("  sectname %.16s" %s.sh.sectname)
                         print("   segname %.16s" %s.sh.segname)
                         if lc.cmd == macho.LC_SEGMENT_64:
-                            print("      addr 0x%016x" %s.sh.addr)
-                            print("      size 0x%016x" %s.sh.size)
+                            fmt = "0x%016x"
                         else:
-                            print("      addr 0x%08x" %s.sh.addr)
-                            print("      size 0x%08x" %s.sh.size)
+                            fmt = "0x%08x"
+                        print(("      addr "+fmt) %s.sh.addr)
+                        if s.sh.offset + s.sh.size > len(e.content):
+                            fmt += " (past end of file)"
+                        print(("      size "+fmt) %s.sh.size)
                         print("    offset %u" %s.sh.offset)
                         print("     align 2^%u (%d)" %(s.sh.align, 1 << s.sh.align))
                         print("    reloff %u" %s.sh.reloff)
                         print("    nreloc %u" %s.sh.nreloc)
                         print("     flags 0x%08x" %s.sh.all_flags)
                         comment1 = ""
-                        if s.sh.type == macho.S_SYMBOL_STUBS or s.sh.type == macho.S_LAZY_SYMBOL_POINTERS or s.sh.type == macho.S_NON_LAZY_SYMBOL_POINTERS :
+                        if s.sh.type in (
+                                macho.S_SYMBOL_STUBS,
+                                macho.S_LAZY_SYMBOL_POINTERS,
+                                macho.S_NON_LAZY_SYMBOL_POINTERS,
+                                macho.S_LAZY_DYLIB_SYMBOL_POINTERS):
                             comment1 = " (index into indirect symbol table)"
                         print(" reserved1 %u%s" %(s.sh.reserved1,comment1))
                         comment2 = ""
@@ -384,6 +392,7 @@ if __name__ == '__main__':
     if 'header' in args.options:
         functions.append(print_header)
     if 'load' in args.options:
+        functions.append(print_header)
         functions.append(print_lc)
     if 'symbols' in args.options:
         functions.append(print_symbols)
@@ -399,7 +408,6 @@ if __name__ == '__main__':
         filesize = os.path.getsize(file)
         try:
             e = macho_init.MACHO(raw,
-                interval=intervals.Intervals().add(0,filesize),
                 parseSymbols = False)
         except ValueError, err:
             print("%s:" %file)

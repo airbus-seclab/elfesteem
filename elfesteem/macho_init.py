@@ -290,23 +290,44 @@ class LoaderDysymTab(Loader):
         return self.sect
 
 class LoaderLib(Loader):
+    strname = "name"
     def _parse_content(self):
-        self.name = bytes_to_name(self.content[self.lhc.stroffset-8:]).strip('\0')
-        self.padding = self.lh.cmdsize - len(self.lh.pack()) - len(self.lhc.pack()) - len(self.name)
-        self._repr_fields[0] = ("name", "s")
+        setattr(self, self.strname, bytes_to_name(self.content[self.lhc.stroffset-8:]).strip('\0'))
+        self.padding = self.lh.cmdsize - len(self.lh.pack()) - len(self.lhc.pack()) - len(getattr(self, self.strname))
+        self._repr_fields[0] = (self.strname, "s")
     def _str_additional_data(self):
-        return name_to_bytes(self.name)+data_null*self.padding
+        return name_to_bytes(getattr(self,self.strname))+data_null*self.padding
 
 class LoaderLoadDylib(LoaderLib):
     lht = macho.LC_LOAD_DYLIB
+    lhc = macho.dylib_command
+
+class LoaderLazyLoadDylib(LoaderLib):
+    lht = macho.LC_LAZY_LOAD_DYLIB
     lhc = macho.dylib_command
 
 class LoaderIDDylib(LoaderLib):
     lht = macho.LC_ID_DYLIB
     lhc = macho.dylib_command
 
+class LoaderReexportDylib(LoaderLib):
+    lht = macho.LC_REEXPORT_DYLIB
+    lhc = macho.dylib_command
+
+class LoaderWeakDylib(LoaderLib):
+    lht = macho.LC_LOAD_WEAK_DYLIB
+    lhc = macho.dylib_command
+
+class LoaderUpwardDylib(LoaderLib):
+    lht = macho.LC_LOAD_UPWARD_DYLIB
+    lhc = macho.dylib_command
+
 class LoaderDylinker(LoaderLib):
     lht = macho.LC_LOAD_DYLINKER
+    lhc = macho.dylinker_command
+
+class LoaderIdDylinker(LoaderLib):
+    lht = macho.LC_ID_DYLINKER
     lhc = macho.dylinker_command
 
 class LoaderIDfvmLib(LoaderLib):
@@ -316,6 +337,16 @@ class LoaderIDfvmLib(LoaderLib):
 class LoaderLOADfvmLib(LoaderLib):
     lht = macho.LC_LOADFVMLIB
     lhc = macho.fvmlib_command
+
+class LoaderRpath(LoaderLib):
+    lht = macho.LC_RPATH
+    lhc = macho.rpath_command
+    strname = "path"
+
+class LoaderSubClient(LoaderLib):
+    lht = macho.LC_SUB_CLIENT
+    lhc = macho.rpath_command
+    strname = "client"
 
 class LoaderUUID(Loader):
     lht = macho.LC_UUID
@@ -1064,6 +1095,13 @@ class Hint(LinkEditSection):
 
 class Encryption(LinkEditSection):
     pass
+
+class SegmentSplitInfo(LinkEditSection):
+    pass
+
+class LoaderSegmentSplitInfo(LoaderLinkEditDataCommand):
+    lht = macho.LC_SEGMENT_SPLIT_INFO
+    sect_class = SegmentSplitInfo
 
 class SectionList(object):
     def __init__(self, parent):
