@@ -392,7 +392,7 @@ if __name__ == '__main__':
     if 'header' in args.options:
         functions.append(print_header)
     if 'load' in args.options:
-        functions.append(print_header)
+        if not 'header' in args.options: functions.append(print_header)
         functions.append(print_lc)
     if 'symbols' in args.options:
         functions.append(print_symbols)
@@ -421,6 +421,9 @@ if __name__ == '__main__':
                     if current == arch_name(_):
                         e = _
                         break
+                else:
+                    # Display all architectures
+                    e = [ _ for _ in e.arch ]
         elif 'all' in args.arch_type:
             if hasattr(e, 'Fhdr'):
                 # Display all architectures
@@ -462,13 +465,15 @@ if __name__ == '__main__':
                     e = []
 
         if hasattr(e, 'Mhdr'):
-            print("%s:" %file)
+            if functions != [ print_header ]:
+                print("%s:" %file)
             for f in functions:
                 f(e)
         else:
             for _ in e:
                 t0 = _.Mhdr.cputype
                 t1 = _.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK)
-                print("%s (architecture %s):" %(file, arch_name(_)))
+                if functions != [ print_header ]:
+                    print("%s (architecture %s):" %(file, arch_name(_)))
                 for f in functions:
                     f(_)
