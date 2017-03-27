@@ -14,9 +14,9 @@ except ImportError:
             return oldpy_md5.new(data)
         md5 = classmethod(md5)
 
-import struct, logging
-from elfesteem.macho_init import MACHO, log
-from elfesteem import macho, macho_init
+import struct
+from elfesteem.macho import MACHO, log
+from elfesteem import macho
 
 def run_test():
     ko = []
@@ -27,37 +27,35 @@ def run_test():
     assertion('f71dbe52628a3f83a77ab494817525c6',
               hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
               'MD5')
+    # Remove warnings
+    import logging
+    log.setLevel(logging.ERROR)
     # Simple tests of object creation
     e = MACHO(struct.pack("<I",macho.MH_MAGIC))
     d = e.pack()
     assertion('37b830a1776346543c72ff53fbbe2b4a',
               hashlib.md5(d).hexdigest(),
               'Parsing a minimal data, with Mach-O magic number only')
-    e = MACHO(struct.pack("<IIIII",macho.MH_MAGIC,0,0,0,1))
-    assertion(1, len(e.lh.lhlist),
+    f = struct.pack("<IIIIIIIII",macho.MH_MAGIC,0,0,0,1,0,0,0,8)
+    e = MACHO(f)
+    assertion(1, len(e.load),
               'Parsing data, with one empty loader (lhlist length)')
     d = e.pack()
-    assertion('9f3d0a34357e9a81ba87726c812997f2',
-              hashlib.md5(d).hexdigest(),
+    assertion(f, d,
               'Parsing data, with one empty loader (pack)')
-    l = macho_init.Loader.create(parent=None,sex='<',wsize=32,
-        content=struct.pack(""))
-    assertion(macho_init.Loader, l.__class__,
-              'Creation of an empty Loader')
-    l = macho_init.Loader.create(parent=None,sex='<',wsize=32,
-        content=struct.pack("<II",1,0))
-    assertion(macho_init.LoaderSegment, l.__class__,
-              'Creation of an empty LoaderSegment')
-    l.nsects = 2
-    assertion(2, l.nsects,
-              'Modification of the section number of a loader')
-    l = macho_init.Loader.create(parent=None,sex='<',wsize=32,
-        content=struct.pack("<II",123456789,0))
-    assertion(macho_init.Loader, l.__class__,
-              'Creation of a loader command with an unknown lht')
-    l = macho_init.Section(parent=None,sex='<',wsize=32)
-    assertion(macho_init.Section, l.__class__,
-              'Creation of a Section Header')
+    log.setLevel(logging.WARN)
+    l = macho.LoadCommand(sex='<',wsize=32,cmd=0)
+    assertion(macho.LoadCommand, l.__class__,
+              'Creation of an empty load command')
+    l = macho.LoadCommand(sex='<',wsize=32,cmd=macho.LC_SEGMENT)
+    assertion(macho.segment_command, l.__class__,
+              'Creation of an empty LC_SEGMENT')
+    l = macho.LoadCommand(sex='<',wsize=32,cmd=123456789)
+    assertion(macho.LoadCommand, l.__class__,
+              'Creation of a load command with an unknown type')
+    l = macho.Section(parent=macho.sectionHeader(parent=None,sex='<',wsize=32))
+    assertion(macho.Section, l.__class__,
+              'Creation of an empty Section Header')
     # Parsing and modifying files
     macho_32 = open(__dir__+'/binary_input/macho_32.o', 'rb').read()
     macho_32_hash = hashlib.md5(macho_32).hexdigest()
@@ -66,6 +64,17 @@ def run_test():
     assertion(macho_32_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading 32-bit Mach-O object')
+    for s in e.sect.sect:
+        if not hasattr(s, 'reloclist'): continue
+        d = s.reloclist[0].pack()
+        assertion('a8f95e95126c45ff26d5c838300443bc',
+              hashlib.md5(d).hexdigest(),
+              'Not scattered relocation in a 32-bit Mach-O object')
+        d = s.reloclist[2].pack()
+        assertion('4f66fe3447267f2bf90da8108ef10ba6',
+              hashlib.md5(d).hexdigest(),
+              'Scattered relocation in a 32-bit Mach-O object')
+        break
     macho_32 = open(__dir__+'/binary_input/macho_32.out', 'rb').read()
     macho_32_hash = hashlib.md5(macho_32).hexdigest()
     e = MACHO(macho_32, interval=True)
@@ -110,7 +119,8 @@ def run_test():
     assertion('16db05dfe60b5ac86c45d8324ef5cfc6',
               hashlib.md5(d).hexdigest(),
               'Writing in memory (interval) (32 bits)')
-    e.add(macho_init.Section(parent=None, sex=e.sex, wsize=e.wsize, content='arbitrary content'.encode('latin1')))
+    e.add(macho.Section(parent=macho.sectionHeader(parent=e.load),
+                        content='arbitrary content'.encode('latin1')))
     d = e.pack()
     assertion('b61b686819bd3c94e765b220ef708353',
               hashlib.md5(d).hexdigest(),
@@ -124,6 +134,10 @@ def run_test():
     assertion(macho_32be_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading 32-bit big-endian Mach-O shared library')
+    d = ('\n'.join([_ for l in e.load for _ in l.otool()])).encode('latin1')
+    assertion('a6c6497245493f324592fbaac5b9858b',
+              hashlib.md5(d).hexdigest(),
+              'Otool-like output for LC in 32-bit big-endian Mach-O shared library')
     macho_ios = open(__dir__+'/binary_input/Decibels', 'rb').read()
     log.setLevel(logging.ERROR)
     e = MACHO(macho_ios)
@@ -133,6 +147,10 @@ def run_test():
     assertion(macho_ios_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading iOS application')
+    d = ('\n'.join([_ for a in e.arch for l in a.load for _ in l.otool()])).encode('latin1')
+    assertion('37f4c468bee8b22c0530ac7ce3e75eab',
+              hashlib.md5(d).hexdigest(),
+              'Otool-like output for LC in iOS application')
     macho_linkopt = open(__dir__+'/binary_input/TelephonyUtil.o', 'rb').read()
     e = MACHO(macho_linkopt)
     macho_linkopt_hash = hashlib.md5(macho_linkopt).hexdigest()
@@ -146,16 +164,46 @@ def run_test():
     assertion(macho_linkopt_hash,
               hashlib.md5(d).hexdigest(),
               'Fixed-point for object file with LC_LINKER_OPTION')
+    d = ('\n'.join([_ for l in e.load for _ in l.otool()])).encode('latin1')
+    assertion('984bf38084c14e435f30eebe36944b47',
+              hashlib.md5(d).hexdigest(),
+              'Otool-like output for LC in object file with LC_LINKER_OPTION')
     e = MACHO(macho_32)
-    e.add(macho_init.Loader(parent=None,sex='<',wsize=32,
-        content=struct.pack("<II",0x26,0)))
-    e.add(type=macho_init.LoaderSegment, segname='__NEWTEXT',
-        initprot=macho.SEGMENT_READ|macho.SEGMENT_EXECUTE,
+    e.add(macho.LoadCommand(sex='<',wsize=32,cmd=0))
+    d = e.pack()
+    assertion('6fefeaf7b4de67f8270d3425942d7a97',
+              hashlib.md5(d).hexdigest(),
+              'Adding an empty command (32 bits)')
+    f = struct.pack("<III",macho.LC_ROUTINES_64,12,0)
+    log.setLevel(logging.ERROR)
+    l = macho.prebind_cksum_command(parent=None, sex='<', wsize=32, content=f)
+    log.setLevel(logging.WARN)
+    assertion(f, l.pack(),
+              'Creating a LC_PREBIND_CKSUM (with content and incoherent subclass)')
+    f = struct.pack("<III",macho.LC_PREBIND_CKSUM,12,0)
+    l = macho.prebind_cksum_command(parent=None, sex='<', wsize=32, content=f)
+    assertion(f, l.pack(),
+              'Creating a LC_PREBIND_CKSUM (with content and subclass)')
+    l = macho.LoadCommand(parent=None, sex='<', wsize=32, content=f)
+    assertion(f, l.pack(),
+              'Creating a LC_PREBIND_CKSUM (from "content")')
+    l = macho.LoadCommand(sex='<',wsize=32,cmd=macho.LC_PREBIND_CKSUM)
+    assertion(f, l.pack(),
+              'Creating a LC_PREBIND_CKSUM (from "cmd")')
+    e = MACHO(macho_32)
+    e.add(l)
+    d = e.pack()
+    assertion('d7a33133a04126527eb6d270990092fa',
+              hashlib.md5(d).hexdigest(),
+              'Adding a LC_PREBIND_CKSUM command')
+    e = MACHO(macho_32)
+    e.add(type=macho.LC_SEGMENT, segname='__NEWTEXT',
+        initprot=macho.VM_PROT_READ|macho.VM_PROT_EXECUTE,
         content='some binary data'.encode('latin1'))
     d = e.pack()
-    assertion('4c35f05c0df43a3252f079d99e58b4fc',
+    assertion('c4ad6da5422642cb15b91ccd3a09f592',
               hashlib.md5(d).hexdigest(),
-              'Adding a command (32 bits)')
+              'Adding a segment (32 bits)')
     macho_64 = open(__dir__+'/binary_input/macho_64.out', 'rb').read()
     e = MACHO(macho_64)
     d = e.virt[0x100000f50:0x100000f62]
@@ -172,21 +220,20 @@ def run_test():
     assertion('b29fe575093a6f68a54131e59138e1d8',
               hashlib.md5(d).hexdigest(),
               'Writing in memory (address) (64 bits)')
-    e.add(macho_init.Section(parent=None, sex=e.sex, wsize=e.wsize, content='arbitrary content'.encode('latin1')))
+    e.add(macho.Section(parent=macho.sectionHeader(parent=e.load),
+                        content='arbitrary content'.encode('latin1')))
     d = e.pack()
     assertion('be836b2b8adcff60bcc7ca1d712a92a9',
               hashlib.md5(d).hexdigest(),
               'Adding a section (64 bits)')
     e = MACHO(macho_64)
-    e.add(macho_init.Loader(parent=None,sex='<',wsize=64,
-        content=struct.pack("<II",0x26,0)))
-    e.add(type=macho_init.LoaderSegment_64, segname='__NEWTEXT',
-        initprot=macho.SEGMENT_READ|macho.SEGMENT_EXECUTE,
+    e.add(type=macho.LC_SEGMENT_64, segname='__NEWTEXT',
+        initprot=macho.VM_PROT_READ|macho.VM_PROT_EXECUTE,
         content='some binary data'.encode('latin1'))
     d = e.pack()
-    assertion('a946eb818aaf9f38938d0c12fb76ef6e',
+    assertion('b4ad381503c51b6dc9dc3d79fb8ca568',
               hashlib.md5(d).hexdigest(),
-              'Adding a command (64 bits)')
+              'Adding a segment (64 bits)')
     # The function changeMainToUnixThread migrates a Mach-O binary for
     # recent MacOSX (using a LC_MAIN loader) to a Mac-O binary for older
     # versions of MacOSX (10.7 and older, using a LC_UNIXTHREAD loader).
@@ -212,20 +259,21 @@ def run_test():
     assertion('16b63a2d3cdb3549fe9870b805eb80f5',
               hashlib.md5(d).hexdigest(),
               'Migrating from LC_MAIN to LC_UNIXTHREAD with new segment (64 bits)')
+    e = MACHO(macho_64)
     e.changeUUID("2A0405CF8B1F3502A605695A54C407BB")
-    uuid_pos, = e.lh.getpos(macho.LC_UUID)
-    lh = e.lh.lhlist[uuid_pos]
+    uuid_pos, = e.load.getpos(macho.LC_UUID)
+    lh = e.load[uuid_pos]
     assertion((704906703, 35615, 13570, 42501, 26970, 1422133179),
               lh.uuid,
               'UUID change')
     d = e.pack()
-    assertion('e600164b4154d5bde8b691c4439e4535',
+    assertion('f86802506fb24de2ac2bebd9101326e9',
               hashlib.md5(d).hexdigest(),
               'UUID change (pack)')
     e = MACHO(macho_64)
-    for l in e.lh.lhlist:
+    for l in e.load:
         if getattr(l,'segname',None) == "__LINKEDIT": break
-    e.lh.extendSegment(l, 0x1000)
+    e.load.extendSegment(l, 0x1000)
     d = e.pack()
     assertion('405962fd8a4fe751c0ea4fe1a9d02c1e',
               hashlib.md5(d).hexdigest(),
@@ -233,27 +281,38 @@ def run_test():
     return ko
 
 def changeMainToUnixThread(e, **kargs):
-    main_pos, = e.lh.getpos(macho.LC_MAIN)
-    sign_pos, = e.lh.getpos(macho.LC_DYLIB_CODE_SIGN_DRS)
-    sectsign_pos, = e.sect.getpos(e.lh.lhlist[sign_pos].sect[0])
+    main_pos, = e.load.getpos(macho.LC_MAIN)
+    sign_pos, = e.load.getpos(macho.LC_DYLIB_CODE_SIGN_DRS)
+    sectsign_pos, = e.sect.getpos(e.load[sign_pos].sect[0])
     delta_from_start_to_main = 0x40
-    lc_main = e.lh.lhlist[main_pos]
+    lc_main = e.load[main_pos]
     mainasmpos = lc_main.entryoff - delta_from_start_to_main
-    largs = { 'parent': {'cputype':e.Mhdr.cputype}, 'sex': '<', 'wsize': 32,
-              'content': struct.pack("<II",macho.LC_UNIXTHREAD,8), }
-    lh = macho_init.Loader.create(**largs)
-    lh.parse_content(**largs)
+    # At some point, we would like to create a load command with:
+    #lh = macho.LoadCommand(sex='<', wsize=32, cmd=macho.LC_UNIXTHREAD,
+    #    cputype=e.Mhdr.cputype)
+    largs = { 'parent':{'cputype':e.Mhdr.cputype}, 'sex':'<', 'wsize': e.wsize}
+    if e.wsize == 32:
+        c = (macho.LC_UNIXTHREAD, 80, 1, 16,
+             0, 0, 0, 0, 0, 0, 0, 0,
+             0, 0, 0xcafebabe, 0, 0, 0, 0, 0)
+    elif e.wsize == 64:
+        c = (macho.LC_UNIXTHREAD, 184, 4, 42,
+             0,0, 0,0, 0,0, 0,0, 0,0, 0,0, 0,0, 0,0,
+             0,0, 0,0, 0,0, 0,0, 0,0, 0,0, 0,0, 0,0,
+             0xbabecafe,1, 0,0, 0,0, 0,0, 0,0)
+    largs['content'] = struct.pack("<%dI"%len(c), *c)
+    lh = macho.LoadCommand(**largs)
     lh.entrypoint = e.off2ad(mainasmpos)
-    e.lh.append(lh)
-    e.lh.removepos(sign_pos)
-    e.lh.removepos(main_pos)
+    e.load.append(lh)
+    e.load.removepos(sign_pos)
+    e.load.removepos(main_pos)
     e.sect.removepos(sectsign_pos)
 
 def insert_start_function(e):
-    unix_pos, = e.lh.getpos(macho.LC_UNIXTHREAD)
-    lh = e.lh.lhlist[unix_pos]
+    unix_pos, = e.load.getpos(macho.LC_UNIXTHREAD)
+    lh = e.load[unix_pos]
     if e.wsize == 32:
-        segtype = macho_init.LoaderSegment
+        segtype = macho.LC_SEGMENT
         # binary code for the _start function, taken from crt0.o by gcc
         content = (
             106, 0,                  # pushl $0
@@ -282,7 +341,7 @@ def insert_start_function(e):
         offset_of_call_main = 0x30
         offset_of_call_exit = 0x38
     elif e.wsize == 64:
-        segtype = macho_init.LoaderSegment_64
+        segtype = macho.LC_SEGMENT_64
         # binary code for the _start function
         content = (
             106, 0,                  # pushq $0
@@ -310,7 +369,7 @@ def insert_start_function(e):
         offset_of_call_exit = 0x36
     content = struct.pack('%dB'%len(content), *content)
     e.add(type=segtype, segname='__NEWTEXT',
-        initprot=macho.SEGMENT_READ|macho.SEGMENT_EXECUTE, content=content)
+        initprot=macho.VM_PROT_READ|macho.VM_PROT_EXECUTE, content=content)
     off = e.sect.sect[-1].offset
     mainasmpos = e.ad2off(lh.entrypoint)
     lh.entrypoint = e.off2ad(off)

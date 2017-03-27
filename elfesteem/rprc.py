@@ -20,29 +20,8 @@
 # is used, e.g. a value of 'version' greater than 2 in the header.
 
 import struct
-from elfesteem.cstruct import CBase, CStruct, data_null, data_empty
+from elfesteem.cstruct import CBase, CData, CStruct, data_null, data_empty
 from elfesteem.strpatchwork import StrPatchwork
-
-class CData(object):
-    # Generic class to be used at the end of a CStruct, to implement common
-    # cases implemented in C as     struct s { ...; char data[]; }
-    # This should probably be moved to cstruct.py
-    def __new__(self, f):
-        class CDataInstance(CBase):
-            def _initialize(self, f=f):
-                self._size = f(self.parent)
-                self._data = StrPatchwork()
-            def unpack(self, c, o):
-                self._data[0] = c[o:o+self._size]
-            def pack(self):
-                return self._data.pack()
-            def __str__(self):
-                return self.pack().decode('latin1')
-            def __getitem__(self, item):
-                return self._data[item]
-            def __setitem__(self, item, value):
-                self._data[item] = value
-        return CDataInstance
 
 # Section types
 FW_RESOURCE    = 0

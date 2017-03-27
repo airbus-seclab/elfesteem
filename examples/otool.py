@@ -6,7 +6,7 @@ import platform
 
 sys.path.insert(1, os.path.abspath(sys.path[0]+'/..'))
 from elfesteem import macho_init, macho
-from elfesteem.cstruct import data_null
+from elfesteem.cstruct import data_null, CBase
 
 def print_header(e):
     print("Mach header")
@@ -27,162 +27,9 @@ def split_integer(v, nbits, ndigits, truncate=None):
     return ".".join(["%u"%_ for _ in res])
 
 def print_lc(e):
-    for i,lc in enumerate(e.lh.lhlist):
+    for i, lc in enumerate(e.load):
         print("Load command %u" %i)
-        lc_value = [
-            ("cmd",     "LC_%s" %macho.constants['LC'][lc.cmd]),
-            ("cmdsize", lc.cmdsize),
-            ]
-        shift = 1
-        for name, _ in getattr(lc.lhc, '_fields', []):
-            value = getattr(lc, name)
-            if name in ["vmaddr", "vmsize"]:
-                if lc.cmd == macho.LC_SEGMENT_64: value = "0x%016x" % value
-                else:                             value = "0x%08x" % value
-            elif name in ["maxprot", "initprot", "cksum", "header addr"]:
-                value = "0x%08x" % value
-            elif name == "flags":
-                value = "0x%x" % value
-            elif name == "stroffset":
-                name = "%12s" % lc.strname
-                value = "%s (offset %u)" %(getattr(lc,lc.strname), value)
-            elif name == "sdk" and value == 0:
-                value = "n/a"
-            elif name == "timestamp":
-                name = "time stamp"
-                value = "%u %s" %(value, time.ctime(value))
-            elif name in ["current_version", "compatibility_version"]:
-                shift = 0
-                name = name[:-8]
-                value = "version " + split_integer(value, 8, 3)
-            elif name == "pad_segname":
-                name = "segname"
-                value = value.rstrip(data_null)
-            elif lc.cmd == macho.LC_VERSION_MIN_MACOSX:
-                shift = 2
-                value = split_integer(value, 8, 3, truncate=1)
-            elif lc.cmd == macho.LC_VERSION_MIN_IPHONEOS:
-                shift = 2
-                value = split_integer(value, 8, 3, truncate=2)
-            elif lc.cmd == macho.LC_SOURCE_VERSION:
-                shift = 2
-                value = split_integer(value, 10, 5, truncate=2)
-            elif lc.cmd == macho.LC_UNIXTHREAD:
-                shift = 4
-                break
-
-            lc_value.append((name, value))
-        if lc.cmd == macho.LC_UUID:
-            lc_value.append(("uuid", "%.8X-%.4X-%.4X-%.4X-%.4X%.8X" % lc.uuid))
-
-        # otool displays lc_value with a nice alignment
-        name_max_len = 0
-        for name, _ in lc_value:
-            if name_max_len < len(name):
-                name_max_len = len(name)
-        format = "%%%ds %%s" % (name_max_len+shift)
-        for pair in lc_value:
-            print(format % pair)
-        # for some load command, additional information is displayed
-
-        if lc.cmd == macho.LC_SEGMENT or lc.cmd == macho.LC_SEGMENT_64:
-            if hasattr(lc,'sectionsToAdd'):
-                for s in lc.sectionsToAdd(e):
-                    if not hasattr(s, 'reloclist') :
-                        #PRINT SECTION
-                        print("Section")
-                        print("  sectname %.16s" %s.sh.sectname)
-                        print("   segname %.16s" %s.sh.segname)
-                        if lc.cmd == macho.LC_SEGMENT_64:
-                            fmt = "0x%016x"
-                        else:
-                            fmt = "0x%08x"
-                        print(("      addr "+fmt) %s.sh.addr)
-                        if s.sh.offset + s.sh.size > len(e.content):
-                            fmt += " (past end of file)"
-                        print(("      size "+fmt) %s.sh.size)
-                        print("    offset %u" %s.sh.offset)
-                        print("     align 2^%u (%d)" %(s.sh.align, 1 << s.sh.align))
-                        print("    reloff %u" %s.sh.reloff)
-                        print("    nreloc %u" %s.sh.nreloc)
-                        print("     flags 0x%08x" %s.sh.all_flags)
-                        comment1 = ""
-                        if s.sh.type in (
-                                macho.S_SYMBOL_STUBS,
-                                macho.S_LAZY_SYMBOL_POINTERS,
-                                macho.S_NON_LAZY_SYMBOL_POINTERS,
-                                macho.S_LAZY_DYLIB_SYMBOL_POINTERS):
-                            comment1 = " (index into indirect symbol table)"
-                        print(" reserved1 %u%s" %(s.sh.reserved1,comment1))
-                        comment2 = ""
-                        if s.sh.type == macho.S_SYMBOL_STUBS:
-                            comment2 = " (size of stubs)"
-                        print(" reserved2 %u%s" %(s.sh.reserved2,comment2))
-
-        elif lc.cmd == macho.LC_UNIXTHREAD:
-            if e.Mhdr.cputype == macho.CPU_TYPE_POWERPC:
-                print("     flavor PPC_THREAD_STATE")
-                print("      count PPC_THREAD_STATE_COUNT")
-                print("    r0  0x%08x r1  0x%08x r2  0x%08x r3   0x%08x r4   0x%08x" %(lc.data[2], lc.data[3], lc.data[4], lc.data[5], lc.data[6]))
-                print("    r5  0x%08x r6  0x%08x r7  0x%08x r8   0x%08x r9   0x%08x" %(lc.data[7], lc.data[8], lc.data[9], lc.data[10], lc.data[11]))
-                print("    r10 0x%08x r11 0x%08x r12 0x%08x r13  0x%08x r14  0x%08x" %(lc.data[12], lc.data[13], lc.data[14], lc.data[15], lc.data[16]))
-                print("    r15 0x%08x r16 0x%08x r17 0x%08x r18  0x%08x r19  0x%08x" %(lc.data[17], lc.data[18], lc.data[19], lc.data[20], lc.data[21]))
-                print("    r20 0x%08x r21 0x%08x r22 0x%08x r23  0x%08x r24  0x%08x" %(lc.data[22], lc.data[23], lc.data[24], lc.data[25], lc.data[26]))
-                print("    r25 0x%08x r26 0x%08x r27 0x%08x r28  0x%08x r29  0x%08x" %(lc.data[27], lc.data[28], lc.data[29], lc.data[30], lc.data[31]))
-                print("    r30 0x%08x r31 0x%08x cr  0x%08x xer  0x%08x lr   0x%08x" %(lc.data[32], lc.data[33], lc.data[34], lc.data[35], lc.data[36]))
-                print("    ctr 0x%08x mq  0x%08x vrsave 0x%08x srr0 0x%08x srr1 0x%08x" %(lc.data[37], lc.data[38], lc.data[39], lc.data[0], lc.data[1]))
-            elif e.Mhdr.cputype == macho.CPU_TYPE_POWERPC64:
-                print("     flavor PPC_THREAD_STATE64")
-                print("      count PPC_THREAD_STATE64_COUNT")
-                print("    r0  0x%016x r1  0x%016x r2   0x%016x" %(lc.data[2], lc.data[3],lc.data[4]))
-                print("    r3  0x%016x r4  0x%016x r5   0x%016x" %(lc.data[5], lc.data[6], lc.data[7]))
-                print("    r6  0x%016x r7  0x%016x r8   0x%016x" %(lc.data[8], lc.data[9], lc.data[10]))
-                print("    r9  0x%016x r10 0x%016x r11  0x%016x" %(lc.data[11], lc.data[12], lc.data[13]))
-                print("   r12  0x%016x r13 0x%016x r14  0x%016x" %(lc.data[14], lc.data[15], lc.data[16]))
-                print("   r15  0x%016x r16 0x%016x r17  0x%016x" %(lc.data[17], lc.data[18], lc.data[19]))
-                print("   r18  0x%016x r19 0x%016x r20  0x%016x" %(lc.data[20], lc.data[21], lc.data[22]))
-                print("   r21  0x%016x r22 0x%016x r23  0x%016x" %(lc.data[23], lc.data[24], lc.data[25]))
-                print("   r24  0x%016x r25 0x%016x r26  0x%016x" %(lc.data[26], lc.data[27], lc.data[28]))
-                print("   r27  0x%016x r28 0x%016x r29  0x%016x" %(lc.data[29], lc.data[30], lc.data[31]))
-                print("   r30  0x%016x r31 0x%016x cr   0x%08x" %(lc.data[32], lc.data[33], lc.data[34]))
-                print("   xer  0x%016x lr  0x%016x ctr  0x%016x" %(lc.data[35], lc.data[36], lc.data[37]))
-                print("vrsave  0x%08x        srr0 0x%016x srr1 0x%016x" %(lc.data[38], lc.data[0], lc.data[1]))
-            elif e.Mhdr.cputype == macho.CPU_TYPE_I386 and lc.flavor == 1:
-                print("     flavor i386_THREAD_STATE")
-                print("      count i386_THREAD_STATE_COUNT")
-                print("\t    eax 0x%08x ebx    0x%08x ecx 0x%08x edx 0x%08x" %(lc.data[0], lc.data[1],lc.data[2], lc.data[3]))
-                print("\t    edi 0x%08x esi    0x%08x ebp 0x%08x esp 0x%08x" %(lc.data[4], lc.data[5],lc.data[6], lc.data[7]))
-                print("\t    ss  0x%08x eflags 0x%08x eip 0x%08x cs  0x%08x" %(lc.data[8], lc.data[9],lc.data[10], lc.data[11]))
-                print("\t    ds  0x%08x es     0x%08x fs  0x%08x gs  0x%08x" %(lc.data[12], lc.data[13],lc.data[14], lc.data[15]))
-            elif e.Mhdr.cputype == macho.CPU_TYPE_X86_64:
-                print("     flavor x86_THREAD_STATE64")
-                print("      count x86_THREAD_STATE64_COUNT")
-                print("   rax  0x%016x rbx 0x%016x rcx  0x%016x" %(lc.data[0], lc.data[1],lc.data[2]))
-                print("   rdx  0x%016x rdi 0x%016x rsi  0x%016x" %(lc.data[3], lc.data[4],lc.data[5]))
-                print("   rbp  0x%016x rsp 0x%016x r8   0x%016x" %(lc.data[6], lc.data[7],lc.data[8]))
-                print("    r9  0x%016x r10 0x%016x r11  0x%016x" %(lc.data[9], lc.data[10],lc.data[11]))
-                print("   r12  0x%016x r13 0x%016x r14  0x%016x" %(lc.data[12], lc.data[13],lc.data[14]))
-                print("   r15  0x%016x rip 0x%016x" %(lc.data[15], lc.data[16]))
-                print("rflags  0x%016x cs  0x%016x fs   0x%016x" %(lc.data[17], lc.data[18],lc.data[19]))
-                print("    gs  0x%016x" %(lc.data[20]))
-            elif e.Mhdr.cputype == macho.CPU_TYPE_ARM:
-                print("     flavor ARM_THREAD_STATE")
-                print("      count ARM_THREAD_STATE_COUNT")
-                print("\t    r0  0x%08x r1     0x%08x r2  0x%08x r3  0x%08x" %(lc.data[0], lc.data[1],lc.data[2],lc.data[3]))
-                print("\t    r4  0x%08x r5     0x%08x r6  0x%08x r7  0x%08x" %(lc.data[4], lc.data[5],lc.data[6],lc.data[7]))
-                print("\t    r8  0x%08x r9     0x%08x r10 0x%08x r11 0x%08x" %(lc.data[8], lc.data[9],lc.data[10],lc.data[11]))
-                print("\t    r12 0x%08x sp     0x%08x lr  0x%08x pc  0x%08x" %(lc.data[12], lc.data[13],lc.data[14],lc.data[15]))
-                print("\t   cpsr 0x%08x" %lc.data[16])
-            else:
-                print("     flavor %d (unknown)" % lc.flavor)
-                print("      count %d" % lc.count)
-                print("      state:")
-                for k in range(lc.count//8):
-                    print("".join(["%08x "%_ for _ in lc.data[8*k:8*(k+1)]]))
-
-        elif lc.cmd == macho.LC_LINKER_OPTION:
-            for i, s in enumerate(lc.strings):
-                print("  string #%d %s" % (i+1, s))
+        print("\n".join(lc.otool()))
 
 
 
@@ -207,8 +54,7 @@ def print_symbols(e):
             if value.sectionindex == 0:
                 section = "NO_SECT"
             else:
-                section = e.sect.sect[value.sectionindex-1]
-                section = "%s,%s"%(section.sh.segname,section.sh.sectname)
+                section = e.sect.sect[value.sectionindex-1].parent.name
             print("%-35s %-15s %-4s 0x%08x %04x"%(value.name,section,n_type,value.value,desc))
 
 def print_dysym(e):
@@ -220,6 +66,7 @@ def print_dysym(e):
             print("Indirect symbols [%d entries]"%len(sect.entries))
             print("%5s %s"%("index","name"))
             for entry in sect.entries:
+                entry = entry.index
                 if   entry == macho.INDIRECT_SYMBOL_LOCAL:
                     print("%5s" % "LOCAL")
                 elif entry == macho.INDIRECT_SYMBOL_ABS:
