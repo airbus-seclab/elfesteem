@@ -868,7 +868,7 @@ class SymbolOpcode(object):
             self.opsize += 1
         self.flags,  = struct.unpack("B",content[self.opsize:self.opsize+1])
         self.opsize += 1
-        self.name = content[self.opsize:self.opsize+content[self.opsize:].find(data_null)]
+        self.name = content[self.opsize:content.find(data_null,self.opsize)]
         self.opsize += len(self.name)+1
         self.doBind,self.done, = struct.unpack("BB",content[self.opsize:self.opsize+2])
         self.opsize += 2
@@ -1008,9 +1008,7 @@ class DySymbolTable(LinkEditSection):
 
 class StringTable(LinkEditSection):
     def get_name(self, idx):
-        n = self.content[idx:]
-        n = n[:n.find(data_null)]
-        return bytes_to_name(n)
+        return bytes_to_name(self.content[idx:self.content.find(data_null,idx)])
     def add_name(self, name):
         name = name_to_bytes(name)
         if data_null+name+data_null in self.content:
@@ -1025,8 +1023,7 @@ class StringTable(LinkEditSection):
         return idx
     def mod_name(self, idx, name):
         name = name_to_bytes(name)
-        n = self.content[idx:]
-        n = n[:n.find(data_null)]
+        n = self.content[idx:self.content.find(data_null,idx)]
         data = self.content
         if type(data) != str: data = data.pack()
         data = data[:idx]+name+data[idx+len(n):]
