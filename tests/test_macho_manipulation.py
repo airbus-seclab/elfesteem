@@ -122,6 +122,15 @@ def run_test():
     assertion(macho_32be_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading 32-bit big-endian Mach-O shared library')
+    macho_ios = open(__dir__+'/binary_input/Decibels', 'rb').read()
+    log.setLevel(logging.ERROR)
+    e = MACHO(macho_ios)
+    log.setLevel(logging.WARN)
+    macho_ios_hash = hashlib.md5(macho_ios).hexdigest()
+    d = e.pack()
+    assertion(macho_ios_hash,
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading iOS application')
     e = MACHO(macho_32)
     e.add(macho_init.Loader(parent=None,sex='<',wsize=32,
         content=struct.pack("<II",0x26,0)))
