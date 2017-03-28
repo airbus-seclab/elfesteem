@@ -14,8 +14,8 @@ except ImportError:
             return oldpy_md5.new(data)
         md5 = classmethod(md5)
 
-import struct
-from elfesteem.macho_init import MACHO
+import struct, logging
+from elfesteem.macho_init import MACHO, log
 from elfesteem import macho, macho_init
 
 def run_test():
@@ -113,6 +113,15 @@ def run_test():
     assertion('b61b686819bd3c94e765b220ef708353',
               hashlib.md5(d).hexdigest(),
               'Adding a section (32 bits)')
+    macho_32be = open(__dir__+'/binary_input/libPrintServiceQuota.1.dylib', 'rb').read()
+    log.setLevel(logging.ERROR)
+    e = MACHO(macho_32be)
+    log.setLevel(logging.WARN)
+    macho_32be_hash = hashlib.md5(macho_32be).hexdigest()
+    d = e.pack()
+    assertion(macho_32be_hash,
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading 32-bit big-endian Mach-O shared library')
     e = MACHO(macho_32)
     e.add(macho_init.Loader(parent=None,sex='<',wsize=32,
         content=struct.pack("<II",0x26,0)))

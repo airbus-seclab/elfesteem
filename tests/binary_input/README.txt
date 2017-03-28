@@ -26,3 +26,6 @@ elf_small.out
 pe_mingw.exe
 pe_vstudio.dll
     Built by Louis Granboulan for elfesteem non-regression tests
+
+libPrintServiceQuota.1.dylib
+    An example of big-endian Mach-O (from an old MacOSX for PowerPC)
