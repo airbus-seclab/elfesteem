@@ -1,4 +1,4 @@
-from elfesteem.macho_common import *
+from elfesteem.macho.common import *
 from elfesteem.cstruct import CBase, CData, CArray, CStructWithStrTable
 from elfesteem.strpatchwork import StrPatchwork
 

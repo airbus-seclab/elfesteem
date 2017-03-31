@@ -1,4 +1,4 @@
-from elfesteem.macho_common import *
+from elfesteem.macho.common import *
 from elfesteem.cstruct import convert_size2type, CBase, CArray
 import struct
 
@@ -508,7 +508,7 @@ class segment_command(LoadCommand):
             res.append(" reserved2 %u%s" %(s.parent.reserved2,comment2))
         return res
     def sectionsToAdd(self, raw):
-        from elfesteem.macho_sections import Section, Reloc, SymbolStubList, SymbolPtrList
+        from elfesteem.macho.sections import Section, Reloc, SymbolStubList, SymbolPtrList
         self.sect = []
         for sh in self.sh:
             if sh.type == S_ZEROFILL:
@@ -895,7 +895,7 @@ class symtab_command(LoadCommand):
         ("strsize","u32"), # string table size in bytes
         ]
     def sectionsToAdd(self, raw):
-        from elfesteem.macho_sections import StringTable, SymbolTable
+        from elfesteem.macho.sections import StringTable, SymbolTable
         self.sect = []
         # We parse the String Table first, to be able to know the names
         # of symbols.
@@ -958,7 +958,7 @@ class dysymtab_command(LoadCommand):
         ('locrel',      2*4),
         )
     def sectionsToAdd(self, raw):
-        from elfesteem.macho_sections import DySymbolTable
+        from elfesteem.macho.sections import DySymbolTable
         self.sect = []
         for t, object_size in self.symbolsize:
             if type(object_size) == dict: object_size = object_size[self.wsize]
@@ -986,7 +986,7 @@ class twolevel_hints_command(LoadCommand):
         ("nhints","u32"), # number of hints in the hint table
         ]
     def sectionsToAdd(self, raw):
-        from elfesteem.macho_sections import Hint
+        from elfesteem.macho.sections import Hint
         self.sect = []
         if self.offset != 0:
             self.sect.append(Hint(self,content=raw, start=self.offset))
@@ -1043,7 +1043,7 @@ class linkedit_data_command(LoadCommand):
         ("datasize","u32"), # file size of data in __LINKEDIT segment
         ]
     def sectionsToAdd(self, raw):
-        from elfesteem.macho_sections import FunctionStarts, DataInCode, DylibCodeSign, CodeSignature, OptimizationHint, SegmentSplitInfo
+        from elfesteem.macho.sections import FunctionStarts, DataInCode, DylibCodeSign, CodeSignature, OptimizationHint, SegmentSplitInfo
         # The Load Commands below have some additional data in the LINKEDIT segment,
         # this data is considered as being a section inside this segment.
         self.sect = []
@@ -1072,7 +1072,7 @@ class encryption_info_command(LoadCommand):
         ("cryptid","u32"),  # which enryption system, 0 means not-encrypted yet
         ]
     def sectionsToAdd(self, raw):
-        from elfesteem.macho_sections import Encryption
+        from elfesteem.macho.sections import Encryption
         self.sect = []
         if self.cryptoff != 0:
             self.sect.append(Encryption(self,content=raw, start=self.cryptoff, type='crypt'))
@@ -1124,7 +1124,7 @@ class dyld_info_command(LoadCommand):
         ("export_size","u32"),    # size of lazy binding info
         ]
     def sectionsToAdd(self, raw):
-        from elfesteem.macho_sections import DynamicLoaderInfo
+        from elfesteem.macho.sections import DynamicLoaderInfo
         self.sect = []
         for t, _ in self._fields:
             if not t.endswith('_off'): continue

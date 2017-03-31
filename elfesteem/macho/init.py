@@ -1,7 +1,5 @@
-#! /usr/bin/env python
-
-from elfesteem.macho_sections import *
-from elfesteem.macho_loaders import *
+from elfesteem.macho.sections import *
+from elfesteem.macho.loaders import *
 from elfesteem import intervals
 import struct
 
