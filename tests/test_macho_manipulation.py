@@ -30,6 +30,10 @@ def run_test():
     # Remove warnings
     import logging
     log.setLevel(logging.ERROR)
+    # Locale setting is used by otool to display time stamps.
+    # For non-regression tests, we need to negate the effet of the locale.
+    import os
+    os.environ['TZ'] = ''
     # Simple tests of object creation
     e = MACHO(struct.pack("<I",macho.MH_MAGIC))
     d = e.pack()
@@ -135,7 +139,7 @@ def run_test():
               hashlib.md5(d).hexdigest(),
               'Packing after reading 32-bit big-endian Mach-O shared library')
     d = ('\n'.join([_ for l in e.load for _ in l.otool()])).encode('latin1')
-    assertion('a6c6497245493f324592fbaac5b9858b',
+    assertion('cabaf4f4368c094bbb0c09f278510006',
               hashlib.md5(d).hexdigest(),
               'Otool-like output for LC in 32-bit big-endian Mach-O shared library')
     macho_ios = open(__dir__+'/binary_input/Decibels', 'rb').read()
@@ -148,7 +152,7 @@ def run_test():
               hashlib.md5(d).hexdigest(),
               'Packing after reading iOS application')
     d = ('\n'.join([_ for a in e.arch for l in a.load for _ in l.otool()])).encode('latin1')
-    assertion('37f4c468bee8b22c0530ac7ce3e75eab',
+    assertion('0d3281e546fd6e41306dbf38e5fbd0b6',
               hashlib.md5(d).hexdigest(),
               'Otool-like output for LC in iOS application')
     macho_linkopt = open(__dir__+'/binary_input/TelephonyUtil.o', 'rb').read()
