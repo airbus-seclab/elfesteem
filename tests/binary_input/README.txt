@@ -32,3 +32,7 @@ libPrintServiceQuota.1.dylib
 
 Decibels
     An example of iPhone app, with two ARM architectures and Encryption
+
+TelephonyUtil.o
+    An example of object file with a LC_LINKER_OPTION
+    Extracted from /usr/lib/libATCommandStudio.a from a recent MacOSX

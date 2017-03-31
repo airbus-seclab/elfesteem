@@ -22,6 +22,8 @@ def run_test():
     ko = []
     def assertion(target, value, message):
         if target != value: ko.append(message)
+    def assertion_warn(target, value, message):
+        if target != value: log.warn(message)
     assertion('f71dbe52628a3f83a77ab494817525c6',
               hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
               'MD5')
@@ -131,6 +133,19 @@ def run_test():
     assertion(macho_ios_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading iOS application')
+    macho_linkopt = open(__dir__+'/binary_input/TelephonyUtil.o', 'rb').read()
+    e = MACHO(macho_linkopt)
+    macho_linkopt_hash = hashlib.md5(macho_linkopt).hexdigest()
+    d = e.pack()
+    assertion_warn(macho_linkopt_hash,
+              hashlib.md5(d).hexdigest(),
+              "Packing after reading object file with LC_LINKER_OPTION does not return the same value, because there is some nop padding at the end of __TEXT,__text; this is a bug in the way 'intervals' are updated")
+    e = MACHO(d)
+    macho_linkopt_hash = hashlib.md5(d).hexdigest()
+    d = e.pack()
+    assertion(macho_linkopt_hash,
+              hashlib.md5(d).hexdigest(),
+              'Fixed-point for object file with LC_LINKER_OPTION')
     e = MACHO(macho_32)
     e.add(macho_init.Loader(parent=None,sex='<',wsize=32,
         content=struct.pack("<II",0x26,0)))
