@@ -140,6 +140,30 @@ def run_test():
     assertion('2d6194feedf82da26124d3128473a949',
               hashlib.md5(d).hexdigest(),
               'Otool-like output including LC_SOURCE_VERSION')
+    macho_lib = open(__dir__+'/binary_input/libecpg.6.5.dylib', 'rb').read()
+    e = MACHO(macho_lib)
+    macho_lib_hash = hashlib.md5(macho_lib).hexdigest()
+    d = e.pack()
+    assertion(macho_lib_hash,
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading postgresql library')
+    d = ('\n'.join([_ for l in e.load for _ in l.otool()])).encode('latin1')
+    assertion('df729c8806748bba93ef960787036d37',
+              hashlib.md5(d).hexdigest(),
+              'Otool-like output including section size "past end of file"')
+    macho_app = open(__dir__+'/binary_input/OSXII', 'rb').read()
+    log.setLevel(logging.ERROR)
+    e = MACHO(macho_app)
+    log.setLevel(logging.WARN)
+    macho_app_hash = hashlib.md5(macho_app).hexdigest()
+    d = e.pack()
+    assertion(macho_app_hash,
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading OSXII app')
+    d = ('\n'.join([_ for a in e.arch for l in a.load for _ in l.otool()])).encode('latin1')
+    assertion('1a42543a8dfe20f990b969f6a275fb5b',
+              hashlib.md5(d).hexdigest(),
+              'Otool-like output including ppc & i386 register state')
     macho_32be = open(__dir__+'/binary_input/libPrintServiceQuota.1.dylib', 'rb').read()
     log.setLevel(logging.ERROR)
     e = MACHO(macho_32be)

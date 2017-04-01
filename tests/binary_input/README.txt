@@ -43,3 +43,12 @@ TelephonyUtil.o
 libdns_services.dylib
     An example of file with a LC_SOURCE_VERSION
     Copied from /usr/lib/libdns_services.dylib from a recent MacOSX
+
+libecpg.6.5.dylib
+    An example of file with a section size "past end of file"
+    Copied from /usr/lib/libecpg.6.5.dylib from a recent MacOSX
+
+OSXII
+    An example of old universal binary, ppc & i386, with LC_UNIXTHREAD
+    The OSXII software has been discontinued, cf.
+    https://www.macupdate.com/app/mac/10578/osxii
