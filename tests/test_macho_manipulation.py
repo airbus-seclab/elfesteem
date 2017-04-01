@@ -129,6 +129,17 @@ def run_test():
     assertion('b61b686819bd3c94e765b220ef708353',
               hashlib.md5(d).hexdigest(),
               'Adding a section (32 bits)')
+    macho_lib = open(__dir__+'/binary_input/libdns_services.dylib', 'rb').read()
+    e = MACHO(macho_lib)
+    macho_lib_hash = hashlib.md5(macho_lib).hexdigest()
+    d = e.pack()
+    assertion(macho_lib_hash,
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading DNS library')
+    d = ('\n'.join([_ for l in e.load for _ in l.otool()])).encode('latin1')
+    assertion('2d6194feedf82da26124d3128473a949',
+              hashlib.md5(d).hexdigest(),
+              'Otool-like output including LC_SOURCE_VERSION')
     macho_32be = open(__dir__+'/binary_input/libPrintServiceQuota.1.dylib', 'rb').read()
     log.setLevel(logging.ERROR)
     e = MACHO(macho_32be)
@@ -150,11 +161,24 @@ def run_test():
     d = e.pack()
     assertion(macho_ios_hash,
               hashlib.md5(d).hexdigest(),
-              'Packing after reading iOS application')
+              'Packing after reading iOS application Decibels')
     d = ('\n'.join([_ for a in e.arch for l in a.load for _ in l.otool()])).encode('latin1')
     assertion('0d3281e546fd6e41306dbf38e5fbd0b6',
               hashlib.md5(d).hexdigest(),
               'Otool-like output for LC in iOS application')
+    macho_ios = open(__dir__+'/binary_input/LyonMetro', 'rb').read()
+    log.setLevel(logging.ERROR)
+    e = MACHO(macho_ios)
+    log.setLevel(logging.WARN)
+    macho_ios_hash = hashlib.md5(macho_ios).hexdigest()
+    d = e.pack()
+    assertion(macho_ios_hash,
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading iOS application LyonMetro')
+    d = ('\n'.join([_ for l in e.load for _ in l.otool()])).encode('latin1')
+    assertion('7bac82cc00b5cce2cb96344d678508e5',
+              hashlib.md5(d).hexdigest(),
+              'Otool-like output including LC_VERSION_MIN_IPHONEOS')
     macho_linkopt = open(__dir__+'/binary_input/TelephonyUtil.o', 'rb').read()
     e = MACHO(macho_linkopt)
     macho_linkopt_hash = hashlib.md5(macho_linkopt).hexdigest()

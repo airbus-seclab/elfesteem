@@ -289,8 +289,7 @@ class MACHO(object):
             offset = len(mhdr)
             c[offset] = self.load.pack()
             for s in self.sect:
-                if not s.__class__.__name__== 'Encryption':
-                    c[s.offset] = s.pack()
+                c[s.offset] = s.pack()
             for offset, data in self.rawdata:
                 c[offset] = data
             return c.pack()

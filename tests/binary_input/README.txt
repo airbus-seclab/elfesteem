@@ -33,6 +33,13 @@ libPrintServiceQuota.1.dylib
 Decibels
     An example of iPhone app, with two ARM architectures and Encryption
 
+LyonMetro
+    An other example of iPhone app, with a LC_VERSION_MIN_IPHONEOS
+
 TelephonyUtil.o
     An example of object file with a LC_LINKER_OPTION
     Extracted from /usr/lib/libATCommandStudio.a from a recent MacOSX
+
+libdns_services.dylib
+    An example of file with a LC_SOURCE_VERSION
+    Copied from /usr/lib/libdns_services.dylib from a recent MacOSX
