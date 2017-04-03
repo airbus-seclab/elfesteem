@@ -8,7 +8,7 @@ sys.path.insert(1, os.path.abspath(sys.path[0]+'/..'))
 from elfesteem import macho_init, macho
 from elfesteem.cstruct import data_null, CBase
 
-def print_header(e):
+def print_header(e, **fargs):
     print("Mach header")
     print("      magic cputype cpusubtype  caps    filetype ncmds sizeofcmds      flags")
     print(" 0x%08x %7d %10d  0x%02x  %10u %5u %10u 0x%08x" %(e.Mhdr.magic,e.Mhdr.cputype ,e.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK),(e.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK) >> 24,e.Mhdr.filetype,e.Mhdr.ncmds,e.Mhdr.sizeofcmds,e.Mhdr.flags))
@@ -26,14 +26,14 @@ def split_integer(v, nbits, ndigits, truncate=None):
             res = res[:-1]
     return ".".join(["%u"%_ for _ in res])
 
-def print_lc(e):
+def print_lc(e, llvm=False, **fargs):
     for i, lc in enumerate(e.load):
         print("Load command %u" %i)
-        print("\n".join(lc.otool()))
+        print("\n".join(lc.otool(llvm=llvm)))
 
 
 
-def print_symbols(e):
+def print_symbols(e, **fargs):
     for sect in e.sect.sect:
         if type(sect) != macho_init.SymbolTable:
             continue
@@ -57,7 +57,7 @@ def print_symbols(e):
                 section = e.sect.sect[value.sectionindex-1].parent.name
             print("%-35s %-15s %-4s 0x%08x %04x"%(value.name,section,n_type,value.value,desc))
 
-def print_dysym(e):
+def print_dysym(e, **fargs):
     # Display indirect symbol tables
     for sect in e.sect.sect:
         if type(sect) != macho_init.DySymbolTable:
@@ -89,7 +89,7 @@ def print_dysym(e):
             #      reference symbol table
             #      indirect symbol table
 
-def print_indirect(e):
+def print_indirect(e, **fargs):
     # Find section with indirect symbols and indirect symbols table
     indirectsym_table = None
     indirectsym_section = []
@@ -148,7 +148,7 @@ def print_indirect(e):
             idx += 1
             address += len(entry.content)
 
-def print_relocs(e):
+def print_relocs(e, **fargs):
     for s in e.sect.sect:
         if not hasattr(s, 'reloclist'): continue
         print("Relocation information (%s,%s) %u entries"
@@ -229,6 +229,7 @@ if __name__ == '__main__':
     parser.add_argument('--dysym', dest='options', action='append_const', const='dysym', help='print dynamic symbols')
     parser.add_argument('-r', dest='options', action='append_const', const='reloc', help='Display the relocation entries')
     parser.add_argument('-I', dest='options', action='append_const', const='indirect', help='Display the indirect symbol table')
+    parser.add_argument('--llvm', dest='llvm_version', action='append', help='Simulate the output of a given version of llvm-otool')
     parser.add_argument('file', nargs='*', help='object file')
     args = parser.parse_args()
     if args.options == None:
@@ -236,10 +237,18 @@ if __name__ == '__main__':
     if len(args.file) == 0:
         parser.print_help()
     functions = []
+    fargs = {}
+    if args.llvm_version:
+        # Currently only two variants of llvm-otool are known, the one
+        # shipped with Xcode 7, and the one shipped with Xcode 8.
+        for llvm in args.llvm_version:
+            if '7' in llvm: fargs['llvm'] = 7
+            if '8' in llvm: fargs['llvm'] = 8
     if 'header' in args.options:
         functions.append(print_header)
     if 'load' in args.options:
-        if not 'header' in args.options: functions.append(print_header)
+        if fargs.get('llvm',8) >= 8 and not 'header' in args.options:
+            functions.append(print_header)
         functions.append(print_lc)
     if 'symbols' in args.options:
         functions.append(print_symbols)
@@ -315,7 +324,7 @@ if __name__ == '__main__':
             if functions != [ print_header ]:
                 print("%s:" %file)
             for f in functions:
-                f(e)
+                f(e, **fargs)
         else:
             for _ in e:
                 t0 = _.Mhdr.cputype
@@ -323,4 +332,4 @@ if __name__ == '__main__':
                 if functions != [ print_header ]:
                     print("%s (architecture %s):" %(file, arch_name(_)))
                 for f in functions:
-                    f(_)
+                    f(_, **fargs)

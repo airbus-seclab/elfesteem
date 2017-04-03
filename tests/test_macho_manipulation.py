@@ -2,6 +2,7 @@
 
 import os
 __dir__ = os.path.dirname(__file__)
+__dir__ += '/binary_input/macho/'
 
 try:
     import hashlib
@@ -61,7 +62,7 @@ def run_test():
     assertion(macho.Section, l.__class__,
               'Creation of an empty Section Header')
     # Parsing and modifying files
-    macho_32 = open(__dir__+'/binary_input/macho_32.o', 'rb').read()
+    macho_32 = open(__dir__+'macho_32.o', 'rb').read()
     macho_32_hash = hashlib.md5(macho_32).hexdigest()
     e = MACHO(macho_32, interval=True)
     d = e.pack()
@@ -79,35 +80,35 @@ def run_test():
               hashlib.md5(d).hexdigest(),
               'Scattered relocation in a 32-bit Mach-O object')
         break
-    macho_32 = open(__dir__+'/binary_input/macho_32.out', 'rb').read()
+    macho_32 = open(__dir__+'macho_32.out', 'rb').read()
     macho_32_hash = hashlib.md5(macho_32).hexdigest()
     e = MACHO(macho_32, interval=True)
     d = e.pack()
     assertion(macho_32_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading 32-bit Mach-O object')
-    macho_64 = open(__dir__+'/binary_input/macho_64.o', 'rb').read()
+    macho_64 = open(__dir__+'macho_64.o', 'rb').read()
     macho_64_hash = hashlib.md5(macho_64).hexdigest()
     e = MACHO(macho_64, interval=True)
     d = e.pack()
     assertion(macho_64_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading 64-bit Mach-O')
-    macho_64 = open(__dir__+'/binary_input/macho_64.out', 'rb').read()
+    macho_64 = open(__dir__+'macho_64.out', 'rb').read()
     macho_64_hash = hashlib.md5(macho_64).hexdigest()
     e = MACHO(macho_64, interval=True)
     d = e.pack()
     assertion(macho_64_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading 64-bit Mach-O')
-    macho_fat = open(__dir__+'/binary_input/macho_fat.out', 'rb').read()
+    macho_fat = open(__dir__+'macho_fat.out', 'rb').read()
     macho_fat_hash = hashlib.md5(macho_fat).hexdigest()
     e = MACHO(macho_fat, interval=True)
     d = e.pack()
     assertion(macho_fat_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading fat Mach-O')
-    macho_32 = open(__dir__+'/binary_input/macho_32.out', 'rb').read()
+    macho_32 = open(__dir__+'macho_32.out', 'rb').read()
     e = MACHO(macho_32)
     d = e.virt[0x1f9c:0x1fae]
     assertion('structure definie\0',
@@ -129,7 +130,7 @@ def run_test():
     assertion('b61b686819bd3c94e765b220ef708353',
               hashlib.md5(d).hexdigest(),
               'Adding a section (32 bits)')
-    macho_lib = open(__dir__+'/binary_input/libdns_services.dylib', 'rb').read()
+    macho_lib = open(__dir__+'libdns_services.dylib', 'rb').read()
     e = MACHO(macho_lib)
     macho_lib_hash = hashlib.md5(macho_lib).hexdigest()
     d = e.pack()
@@ -140,7 +141,7 @@ def run_test():
     assertion('2d6194feedf82da26124d3128473a949',
               hashlib.md5(d).hexdigest(),
               'Otool-like output including LC_SOURCE_VERSION')
-    macho_lib = open(__dir__+'/binary_input/libecpg.6.5.dylib', 'rb').read()
+    macho_lib = open(__dir__+'libecpg.6.5.dylib', 'rb').read()
     e = MACHO(macho_lib)
     macho_lib_hash = hashlib.md5(macho_lib).hexdigest()
     d = e.pack()
@@ -151,7 +152,11 @@ def run_test():
     assertion('df729c8806748bba93ef960787036d37',
               hashlib.md5(d).hexdigest(),
               'Otool-like output including section size "past end of file"')
-    macho_app = open(__dir__+'/binary_input/OSXII', 'rb').read()
+    d = ('\n'.join([_ for l in e.load for _ in l.otool(llvm=7)])).encode('latin1')
+    assertion('7038d70ea2d7caf8b4a2adc3c9c01ef9',
+              hashlib.md5(d).hexdigest(),
+              'Otool-like output including section size "past end of file", llvm version 7')
+    macho_app = open(__dir__+'OSXII', 'rb').read()
     log.setLevel(logging.ERROR)
     e = MACHO(macho_app)
     log.setLevel(logging.WARN)
@@ -160,11 +165,37 @@ def run_test():
     assertion(macho_app_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading OSXII app')
-    d = ('\n'.join([_ for a in e.arch for l in a.load for _ in l.otool()])).encode('latin1')
-    assertion('1a42543a8dfe20f990b969f6a275fb5b',
+    d = ('\n'.join([_ for a in e.arch for l in a.load for _ in l.otool(llvm=7)])).encode('latin1')
+    assertion('8b926db115b4cae5146774ef589674be',
               hashlib.md5(d).hexdigest(),
               'Otool-like output including ppc & i386 register state')
-    macho_32be = open(__dir__+'/binary_input/libPrintServiceQuota.1.dylib', 'rb').read()
+    macho_app = open(__dir__+'MacTheRipper', 'rb').read()
+    log.setLevel(logging.ERROR)
+    e = MACHO(macho_app)
+    log.setLevel(logging.WARN)
+    macho_app_hash = hashlib.md5(macho_app).hexdigest()
+    d = e.pack()
+    assertion(macho_app_hash,
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading MacTheRipper app')
+    d = ('\n'.join([_ for l in e.load for _ in l.otool()])).encode('latin1')
+    assertion('b10cd006c10906db3329e0dccd0babbe',
+              hashlib.md5(d).hexdigest(),
+              'Otool-like output including LC_PREBOUND_DYLIB')
+    macho_app = open(__dir__+'SweetHome3D', 'rb').read()
+    log.setLevel(logging.ERROR)
+    e = MACHO(macho_app)
+    log.setLevel(logging.WARN)
+    macho_app_hash = hashlib.md5(macho_app).hexdigest()
+    d = e.pack()
+    assertion(macho_app_hash,
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading SweetHome3D app')
+    d = ('\n'.join([_ for a in e.arch for l in a.load for _ in l.otool()])).encode('latin1')
+    assertion('4bf0088471bd2161baf4a42dbb09dc5b',
+              hashlib.md5(d).hexdigest(),
+              'Otool-like output including ppc, i386 & x86_64register state')
+    macho_32be = open(__dir__+'libPrintServiceQuota.1.dylib', 'rb').read()
     log.setLevel(logging.ERROR)
     e = MACHO(macho_32be)
     log.setLevel(logging.WARN)
@@ -177,7 +208,7 @@ def run_test():
     assertion('cabaf4f4368c094bbb0c09f278510006',
               hashlib.md5(d).hexdigest(),
               'Otool-like output for LC in 32-bit big-endian Mach-O shared library')
-    macho_ios = open(__dir__+'/binary_input/Decibels', 'rb').read()
+    macho_ios = open(__dir__+'Decibels', 'rb').read()
     log.setLevel(logging.ERROR)
     e = MACHO(macho_ios)
     log.setLevel(logging.WARN)
@@ -190,7 +221,7 @@ def run_test():
     assertion('0d3281e546fd6e41306dbf38e5fbd0b6',
               hashlib.md5(d).hexdigest(),
               'Otool-like output for LC in iOS application')
-    macho_ios = open(__dir__+'/binary_input/LyonMetro', 'rb').read()
+    macho_ios = open(__dir__+'LyonMetro', 'rb').read()
     log.setLevel(logging.ERROR)
     e = MACHO(macho_ios)
     log.setLevel(logging.WARN)
@@ -203,7 +234,7 @@ def run_test():
     assertion('7bac82cc00b5cce2cb96344d678508e5',
               hashlib.md5(d).hexdigest(),
               'Otool-like output including LC_VERSION_MIN_IPHONEOS')
-    macho_linkopt = open(__dir__+'/binary_input/TelephonyUtil.o', 'rb').read()
+    macho_linkopt = open(__dir__+'TelephonyUtil.o', 'rb').read()
     e = MACHO(macho_linkopt)
     macho_linkopt_hash = hashlib.md5(macho_linkopt).hexdigest()
     d = e.pack()
@@ -256,7 +287,7 @@ def run_test():
     assertion('c4ad6da5422642cb15b91ccd3a09f592',
               hashlib.md5(d).hexdigest(),
               'Adding a segment (32 bits)')
-    macho_64 = open(__dir__+'/binary_input/macho_64.out', 'rb').read()
+    macho_64 = open(__dir__+'macho_64.out', 'rb').read()
     e = MACHO(macho_64)
     d = e.virt[0x100000f50:0x100000f62]
     assertion('structure definie\0',

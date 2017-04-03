@@ -159,8 +159,10 @@ class LoadCommand(LoadBase):
     _fields = [ ("data",CData(lambda _:max(0,_.cmdsize-8))) ]
     def changeOffsets(self, decalage, min_offset=None):
         pass
-    def otool(self):
-        # Output similar to otool
+    def otool(self, llvm=False):
+        # Output similar to llvm-otool (depending on llvm version)
+        # Cf. https://opensource.apple.com/source/cctools/cctools-895/otool/ofile_print.c
+        # and others
         res = []
         import time
         def split_integer(v, nbits, ndigits, truncate=None):
@@ -183,6 +185,21 @@ class LoadCommand(LoadBase):
                 value = "LC_"+constants['LC'][self.cmd]
             elif name == "cmdsize":
                 pass
+            elif name in getattr(self, '_offsets_in_data', []):
+                base = struct.calcsize(''.join([convert_size2type(t,None) for _, t in self._fields[:-1]]))
+                if value >= base:
+                    data = self.data.pack()
+                    if name == "linked_modules":
+                        data, = struct.unpack("B", data[value-base:value-base+1])
+                        data = [str((data&(1<<i))>>i) for i in range(min(8,self.nmodules))]
+                        data = ''.join(data) + '...'
+                    else:
+                        data = data[(value-base):data.index(data_null,value-base)]
+                        data = data.decode('latin1')
+                    value = "%s (offset %u)" %(data, value)
+                else:
+                    value = "?(bad offset %u)" % value
+                name = "%12s" % name
             elif name in ["vmaddr", "vmsize"]:
                 if self.cmd == LC_SEGMENT_64: value = "%#018x" % value
                 else:                         value = "%#010x" % value
@@ -190,10 +207,6 @@ class LoadCommand(LoadBase):
                 value = "%#010x" % value
             elif name == "flags":
                 value = "%#x" % value
-            elif name in getattr(self, '_offsets_in_data', []):
-                name = "%12s" % name
-                data = str(self.data)
-                value = "%s (offset %u)" %(data[:data.index('\0')], value)
             elif name == "sdk" and value == 0:
                 value = "n/a"
             elif name == "timestamp":
@@ -473,8 +486,8 @@ class segment_command(LoadCommand):
         if (padding < 0) : raise ValueError("segname is too long for the structure")
         self.pad_segname = name_to_bytes(val)+data_null*padding
     segname = property(get_segname, set_segname)
-    def otool(self):
-        res = LoadCommand.otool(self)
+    def otool(self, llvm=False):
+        res = LoadCommand.otool(self, llvm=llvm)
         e = self.parent.parent
         self.sectionsToAdd(e.content)
         for s in self.sect:
@@ -486,7 +499,7 @@ class segment_command(LoadCommand):
             if self.cmd == LC_SEGMENT_64: fmt = "%#018x"
             else:                         fmt = "%#010x"
             res.append(("      addr "+fmt) %s.parent.addr)
-            if s.parent.offset + s.parent.size > len(e.content):
+            if (not llvm or llvm >= 8) and s.parent.offset + s.parent.size > len(e.content):
                 fmt += " (past end of file)"
             res.append(("      size "+fmt) %s.parent.size)
             res.append("    offset %u" %s.parent.offset)
@@ -676,7 +689,7 @@ class sub_library_command(LoadCommand):
 # (linked_modules[N/8] >> N%8) & 1
 class prebound_dylib_command(LoadCommand):
     lc_types = (LC_PREBOUND_DYLIB,)
-    _offsets_in_data = ("name",)
+    _offsets_in_data = ("name","linked_modules")
     _fields = [
         ("name","u32"),           # library's path name
         ("nmodules","u32"),       # number of modules in library
@@ -805,8 +818,8 @@ class thread_command(LoadCommand):
         else:                         return self.parent.parent.Mhdr.cputype
     cputype = property(cputype)
     flavorname = property(lambda _:threadStatus.get(_.cputype,{}).get(_.flavor,''))
-    def otool(self):
-        res = LoadCommand.otool(self)
+    def otool(self, llvm=False):
+        res = LoadCommand.otool(self, llvm=llvm)
         if False:
             # We may want to build the output automatically
             """
@@ -1196,8 +1209,8 @@ class linkeroption_command(LoadCommand):
         ("count","u32"), # number of strings
         ("linker_options",CData(lambda _:_.cmdsize-12)),
         ]
-    def otool(self):
-        res = LoadCommand.otool(self)
+    def otool(self, llvm=False):
+        res = LoadCommand.otool(self, llvm=llvm)
         # linker_options is a concatenation of zero terminated UTF8 strings,
         # zero filled at end to align.
         data = self.linker_options.pack()

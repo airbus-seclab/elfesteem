@@ -25,30 +25,44 @@ elf_small.o
 elf_small.out
 pe_mingw.exe
 pe_vstudio.dll
+macho/macho_32.o
+macho/macho_32.out
+macho/macho_64.o
+macho/macho_64.out
+macho/macho_fat.out
     Built by Louis Granboulan for elfesteem non-regression tests
 
-libPrintServiceQuota.1.dylib
+macho/libPrintServiceQuota.1.dylib
     An example of big-endian Mach-O (from an old MacOSX for PowerPC)
 
-Decibels
+macho/Decibels
     An example of iPhone app, with two ARM architectures and Encryption
 
-LyonMetro
+macho/LyonMetro
     An other example of iPhone app, with a LC_VERSION_MIN_IPHONEOS
 
-TelephonyUtil.o
+macho/TelephonyUtil.o
     An example of object file with a LC_LINKER_OPTION
     Extracted from /usr/lib/libATCommandStudio.a from a recent MacOSX
 
-libdns_services.dylib
+macho/libdns_services.dylib
     An example of file with a LC_SOURCE_VERSION
     Copied from /usr/lib/libdns_services.dylib from a recent MacOSX
 
-libecpg.6.5.dylib
+macho/libecpg.6.5.dylib
     An example of file with a section size "past end of file"
     Copied from /usr/lib/libecpg.6.5.dylib from a recent MacOSX
 
-OSXII
+macho/OSXII
     An example of old universal binary, ppc & i386, with LC_UNIXTHREAD
     The OSXII software has been discontinued, cf.
     https://www.macupdate.com/app/mac/10578/osxii
+
+macho/SweetHome3D
+    An example of universal binary, ppc, i386 & x86_64, with LC_UNIXTHREAD
+    SweetHome3D is open source and available at http://www.sweethome3d.com/
+
+macho/MacTheRipper
+    Another old Mach-O binary, with LC_PREBOUND_DYLIB
+    This is the version 2.6.6, downloadable at a link available at its
+    Wikipedia page
