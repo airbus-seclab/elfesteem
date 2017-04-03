@@ -216,27 +216,6 @@ CPU_SUBTYPE_ARM64_ALL  = 0
 CPU_SUBTYPE_ARM64_V8   = 1
 
 
-#### Source: /usr/include/mach-o/loader.h
-
-# The entries in the two-level namespace lookup hints table are twolevel_hint
-# structs.  These provide hints to the dynamic link editor where to start
-# looking for an undefined symbol in a two-level namespace image.  The
-# isub_image field is an index into the sub-images (sub-frameworks and
-# sub-umbrellas list) that made up the two-level image that the undefined
-# symbol was found in when it was built by the static link editor.  If
-# isub-image is 0 the the symbol is expected to be defined in library and not
-# in the sub-images.  If isub-image is non-zero it is an index into the array
-# of sub-images for the umbrella with the first index in the sub-images being
-# 1. The array of sub-images is the ordered list of sub-images of the umbrella
-# that would be searched for a symbol that has the umbrella recorded as its
-# primary library.  The table of contents index is an index into the
-# library's table of contents.  This is used as the starting point of the
-# binary search or a directed linear search.
-class twolevel_hint(CStruct):
-    _fields = [ ("hint","u32") ]
-    isub_image = property(lambda _:_.hint>>24)
-    itoc       = property(lambda _:_.hint&0x00ffffff)
-
 #### Source: /usr/include/mach-o/reloc.h
 
 # * In reloc.h, there are two data structures: relocation_info and scattered_relocation_info, which are merged in one structure below.

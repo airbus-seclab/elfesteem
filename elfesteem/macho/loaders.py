@@ -962,31 +962,21 @@ class dysymtab_command(LoadCommand):
         ("locreloff","u32"), # offset to local relocation entries
         ("nlocrel","u32"),   # number of local relocation entries
         ]
-    symbolsize = (
-        ('toc',         2*4),
-        ('modtab',      {32: 13*4, 64: 12*4+8}),
-        ('extrefsym',   4),
-        ('indirectsym', 4),
-        ('extrel',      2*4),
-        ('locrel',      2*4),
-        )
     def sectionsToAdd(self, raw):
-        from elfesteem.macho.sections import DySymbolTable
+        from elfesteem.macho.sections import DySymArray
         self.sect = []
-        for t, object_size in self.symbolsize:
-            if type(object_size) == dict: object_size = object_size[self.wsize]
-            object_count = 'n'+t
-            if t.endswith('sym'): object_count += 's'
-            size = getattr(self, object_count)*object_size
-            setattr(self, t+'size', size)
-            of = getattr(self, t+'off')
+        for object_offset, _ in self._fields:
+            if not object_offset.endswith('off'): continue
+            of = getattr(self, object_offset)
             if of != 0:
-                self.sect.append(DySymbolTable(parent=self, content=raw, start=of, type=t))
+                t = object_offset[:-3]
+                if not t in DySymArray: raise NotImplementedError
+                self.sect.append(DySymArray[t](parent=self, content=raw, start=of))
         return self.sect
     def changeOffsets(self, decalage, min_offset=None):
-        for t, _ in self.symbolsize:
-            object_offset = t+'off'
-            of = getattr(self,object_offset)
+        for object_offset, _ in self._fields:
+            if not object_offset.endswith('off'): continue
+            of = getattr(self, object_offset)
             if isOffsetChangeable(of, min_offset):
                 setattr(self, object_offset, of + decalage)
 
@@ -1002,7 +992,7 @@ class twolevel_hints_command(LoadCommand):
         from elfesteem.macho.sections import Hint
         self.sect = []
         if self.offset != 0:
-            self.sect.append(Hint(self,content=raw, start=self.offset))
+            self.sect.append(Hint(parent=self, content=raw, start=self.offset))
         return self.sect
     def changeOffsets(self, decalage, min_offset=None):
         if isOffsetChangeable(self.offset, min_offset):
@@ -1044,11 +1034,6 @@ class rpath_command(LoadCommand):
 
 # The linkedit_data_command contains the offsets and sizes of a blob
 # of data in the __LINKEDIT segment.
-class Xlinkedit_data_command(CStruct):
-    _fields = [
-        ("dataoff","u32"),  # file offset of data in __LINKEDIT segment
-        ("datasize","u32"), # file size of data in __LINKEDIT segment
-        ]
 class linkedit_data_command(LoadCommand):
     lc_types = (LC_FUNCTION_STARTS,LC_DATA_IN_CODE,LC_DYLIB_CODE_SIGN_DRS,LC_CODE_SIGNATURE,LC_LINKER_OPTIMIZATION_HINT,LC_SEGMENT_SPLIT_INFO)
     _fields = [

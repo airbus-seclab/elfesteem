@@ -60,12 +60,12 @@ def print_symbols(e, **fargs):
 def print_dysym(e, **fargs):
     # Display indirect symbol tables
     for sect in e.sect.sect:
-        if type(sect) != macho_init.DySymbolTable:
+        if getattr(sect, 'type', None) is None:
             continue
-        if sect.type == 'indirectsym':
-            print("Indirect symbols [%d entries]"%len(sect.entries))
+        elif sect.type == 'indirectsym':
+            print("Indirect symbols [%d entries]"%len(sect))
             print("%5s %s"%("index","name"))
-            for entry in sect.entries:
+            for entry in sect:
                 entry = entry.index
                 if   entry == macho.INDIRECT_SYMBOL_LOCAL:
                     print("%5s" % "LOCAL")
@@ -81,13 +81,6 @@ def print_dysym(e, **fargs):
             print("External relocations [%d entries]"%len(sect.entries))
             for entry in sect.entries:
                 print(repr(entry))
-        else:
-            raise ValueError("[%s] %d entries"%(sect.type,len(sect.entries)))
-            TODO
-            #      table of contents
-            #      module table
-            #      reference symbol table
-            #      indirect symbol table
 
 def print_indirect(e, **fargs):
     # Find section with indirect symbols and indirect symbols table

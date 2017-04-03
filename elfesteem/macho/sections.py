@@ -110,10 +110,139 @@ class SymbolTable(BaseSection,CArray):
             return self.symbols_from_name[idx.strip(data_null)]
         raise ValueError("Cannot find symbol with index %r"%idx)
 
+#### Source: /usr/include/mach-o/loader.h
+
+# The entries in the two-level namespace lookup hints table are twolevel_hint
+# structs.  These provide hints to the dynamic link editor where to start
+# looking for an undefined symbol in a two-level namespace image.  The
+# isub_image field is an index into the sub-images (sub-frameworks and
+# sub-umbrellas list) that made up the two-level image that the undefined
+# symbol was found in when it was built by the static link editor.  If
+# isub-image is 0 the the symbol is expected to be defined in library and not
+# in the sub-images.  If isub-image is non-zero it is an index into the array
+# of sub-images for the umbrella with the first index in the sub-images being
+# 1. The array of sub-images is the ordered list of sub-images of the umbrella
+# that would be searched for a symbol that has the umbrella recorded as its
+# primary library.  The table of contents index is an index into the
+# library's table of contents.  This is used as the starting point of the
+# binary search or a directed linear search.
+
+class twolevel_hint(CStruct):
+    _fields = [ ("hint","u32") ]
+    isub_image = property(lambda _:_.hint>>24)
+    itoc       = property(lambda _:_.hint&0x00ffffff)
+
 class Hint(BaseSection,CArray):
     type = None
     _cls = twolevel_hint
     count = lambda _:_.parent.nhints
+
+# NB: the following sections are used by LC_DYSYMTAB; dysymarray_register
+# registers these sections.
+DySymArray = {}
+def dysymarray_register(cls):
+    DySymArray[cls.type] = cls
+
+# An indirect symbol table entry is simply a 32bit index into the symbol table
+# to the symbol that the pointer or stub is refering to.  Unless it is for a
+# non-lazy symbol pointer section for a defined symbol which strip(1) as
+# removed.  In which case it has the value INDIRECT_SYMBOL_LOCAL.  If the
+# symbol was also absolute INDIRECT_SYMBOL_ABS is or'ed with that.
+INDIRECT_SYMBOL_LOCAL = 0x80000000
+INDIRECT_SYMBOL_ABS   = 0x40000000
+class dylib_indirect_entry(CStruct):
+    _fields = [ ("index","u32") ]
+
+class DySymIndirect(BaseSection,CArray):
+    type = 'indirectsym'
+    _cls = dylib_indirect_entry
+    count = lambda _:_.parent.nindirectsyms
+    entries = property(lambda _:_)
+dysymarray_register(DySymIndirect)
+
+# A table of contents entry
+class dylib_table_of_contents(CStruct):
+    _fields = [
+        ("symbol_index","u32"), # the defined external symbol (index into the symbol table)
+        ("module_index","u32"), # index into the module table this symbol is defined in
+        ]
+
+class DySymToc(BaseSection,CArray):
+    type = 'toc'
+    _cls = dylib_table_of_contents
+    count = lambda _:_.parent.ntoc
+dysymarray_register(DySymToc)
+
+# A module table entry
+# * In loader.h, there are two data structures: dylib_module and dylib_module_64, which are merged in one structure below.
+class dylib_module(CStruct):
+    _fields = [
+        ("module_name","u32"), # the module name (index into string table)
+        ("iextdefsym","u32"),  # index into externally defined symbols
+        ("nextdefsym","u32"),  # number of externally defined symbols
+        ("irefsym","u32"),     # index into reference symbol table
+        ("nrefsym","u32"),     # number of reference symbol table entries
+        ("ilocalsym","u32"),   # index into symbols for local symbols
+        ("nlocalsym","u32"),   # number of local symbols
+        ("iextrel","u32"),     # index into external relocation entries
+        ("nextrel","u32"),     # number of external relocation entries
+        ("iinit_iterm","u32"), # low 16 bits are the index into the init section, high 16 bits are the index into the term section 
+        ("ninit_nterm","u32"), # low 16 bits are the number of init section entries, high 16 bits are the number of term section entries
+        # for this module, address & size of the start of the (__OBJC,__module_info) section
+        ("objc_module_info_1","u32"),
+        ("objc_module_info_2","ptr"),
+        ]
+    def get_addr(self):
+        if self.wsize == 32: return self.objc_module_info_1
+        if self.wsize == 64: return self.objc_module_info_2
+    def set_addr(self, value):
+        if self.wsize == 32: self.objc_module_info_1 = value
+        if self.wsize == 64: self.objc_module_info_2 = value
+    def get_size(self):
+        if self.wsize == 32: return self.objc_module_info_2
+        if self.wsize == 64: return self.objc_module_info_1
+    def set_size(self, value):
+        if self.wsize == 32: self.objc_module_info_2 = value
+        if self.wsize == 64: self.objc_module_info_1 = value
+    objc_module_info_addr = property(get_addr, set_addr)
+    objc_module_info_size = property(get_size, set_size)
+
+class DySymModTab(BaseSection,CArray):
+    type = 'modtab'
+    _cls = dylib_module
+    count = lambda _:_.parent.nmodtab
+dysymarray_register(DySymModTab)
+
+# The entries in the reference symbol table are used when loading the module
+# (both by the static and dynamic link editors) and if the module is unloaded
+# or replaced.  Therefore all external symbols (defined and undefined) are
+# listed in the module's reference table.  The flags describe the type of
+# reference that is being made.  The constants for the flags are defined in
+# <mach-o/nlist.h> as they are also used for symbol table entries.
+class dylib_reference(CStruct):
+    _fields = [ ("index","u32") ]
+    isym  = property(lambda _:_.index>>8)
+    flags = property(lambda _:_.index&0x000000ff)
+
+class DySymExtref(BaseSection,CArray):
+    type = 'extrefsym'
+    _cls = dylib_reference
+    count = lambda _:_.parent.nextrefsyms
+dysymarray_register(DySymExtref)
+
+class DySymLocRel(BaseSection,CArray):
+    type = 'locrel'
+    _cls = relocation_info
+    count = lambda _:_.parent.nlocrel
+dysymarray_register(DySymLocRel)
+
+class DySymExtRel(BaseSection,CArray):
+    type = 'extrel'
+    _cls = relocation_info
+    count = lambda _:_.parent.nextrel
+dysymarray_register(DySymExtRel)
+
+#### Many other sections inside the __LINKEDIT segment
 
 class LinkEditSection(BaseSection):
     type = 'data'
@@ -193,7 +322,7 @@ class StringTable(LinkEditSection):
                     sh.sh.offset += dif
         return idx
 
-class LinkEditSectionWithType(LinkEditSection):
+class DynamicLoaderInfo(LinkEditSection):
     def unpack(self, c, o):
         self._off = o
         self.content = StrPatchwork(c)
@@ -201,10 +330,6 @@ class LinkEditSectionWithType(LinkEditSection):
         self.type = kargs['type']
         if self.parent is not None: assert self._off == self.offset
         self._parsecontent()
-    def _parsecontent(self):
-        pass
-
-class DynamicLoaderInfo(LinkEditSectionWithType):
     def _parsecontent(self):
         """
         if self.type == 'bind':
@@ -240,98 +365,6 @@ class DynamicLoaderInfo(LinkEditSectionWithType):
             return data
         else:
             return self.c
-
-#### Source: /usr/include/mach-o/loader.h
-
-# An indirect symbol table entry is simply a 32bit index into the symbol table
-# to the symbol that the pointer or stub is refering to.  Unless it is for a
-# non-lazy symbol pointer section for a defined symbol which strip(1) as
-# removed.  In which case it has the value INDIRECT_SYMBOL_LOCAL.  If the
-# symbol was also absolute INDIRECT_SYMBOL_ABS is or'ed with that.
-INDIRECT_SYMBOL_LOCAL = 0x80000000
-INDIRECT_SYMBOL_ABS   = 0x40000000
-class dylib_indirect_entry(CStruct):
-    _fields = [ ("index","u32") ]
-
-# A table of contents entry
-class dylib_table_of_contents(CStruct):
-    _fields = [
-        ("symbol_index","u32"), # the defined external symbol (index into the symbol table)
-        ("module_index","u32"), # index into the module table this symbol is defined in
-        ]
-
-# A module table entry
-# * In loader.h, there are two data structures: dylib_module and dylib_module_64, which are merged in one structure below.
-class dylib_module(CStruct):
-    _fields = [
-        ("module_name","u32"), # the module name (index into string table)
-        ("iextdefsym","u32"),  # index into externally defined symbols
-        ("nextdefsym","u32"),  # number of externally defined symbols
-        ("irefsym","u32"),     # index into reference symbol table
-        ("nrefsym","u32"),     # number of reference symbol table entries
-        ("ilocalsym","u32"),   # index into symbols for local symbols
-        ("nlocalsym","u32"),   # number of local symbols
-        ("iextrel","u32"),     # index into external relocation entries
-        ("nextrel","u32"),     # number of external relocation entries
-        ("iinit_iterm","u32"), # low 16 bits are the index into the init section, high 16 bits are the index into the term section 
-        ("ninit_nterm","u32"), # low 16 bits are the number of init section entries, high 16 bits are the number of term section entries
-        # for this module, address & size of the start of the (__OBJC,__module_info) section
-        ("objc_module_info_1","u32"),
-        ("objc_module_info_2","ptr"),
-        ]
-    def get_addr(self):
-        if self.wsize == 32: return self.objc_module_info_1
-        if self.wsize == 64: return self.objc_module_info_2
-    def set_addr(self, value):
-        if self.wsize == 32: self.objc_module_info_1 = value
-        if self.wsize == 64: self.objc_module_info_2 = value
-    def get_size(self):
-        if self.wsize == 32: return self.objc_module_info_2
-        if self.wsize == 64: return self.objc_module_info_1
-    def set_size(self, value):
-        if self.wsize == 32: self.objc_module_info_2 = value
-        if self.wsize == 64: self.objc_module_info_1 = value
-    objc_module_info_addr = property(get_addr, set_addr)
-    objc_module_info_size = property(get_size, set_size)
-
-# The entries in the reference symbol table are used when loading the module
-# (both by the static and dynamic link editors) and if the module is unloaded
-# or replaced.  Therefore all external symbols (defined and undefined) are
-# listed in the module's reference table.  The flags describe the type of
-# reference that is being made.  The constants for the flags are defined in
-# <mach-o/nlist.h> as they are also used for symbol table entries.
-class dylib_reference(CStruct):
-    _fields = [ ("index","u32") ]
-    isym  = property(lambda _:_.index>>8)
-    flags = property(lambda _:_.index&0x000000ff)
-
-#### Source: unknown
-
-class DySymbolTable(LinkEditSectionWithType):
-    def _parsecontent(self):
-        self.entries = []
-        of = self._off
-        object_count = 'n'+self.type
-        if self.type.endswith('sym'): object_count += 's'
-        count = getattr(self.parent, object_count)
-        one_sym_size = self.size//count
-        sym_type = {
-            'indirectsym': dylib_indirect_entry,
-            'extrefsym':   dylib_reference,
-            'locrel':      relocation_info,
-            'extrel':      relocation_info,
-            'toc':         dylib_table_of_contents,
-            'modtab':      dylib_module,
-            }[self.type]
-        for i in range(count):
-            symbol = sym_type(parent=self, content=self.content, start=of)
-            self.entries.append(symbol)
-            of += symbol.bytelen
-    def pack(self):
-        data = data_empty
-        for x in self.entries:
-            data += x.pack()
-        return data
 
 """
 class BindSymbolOpcode(object):
