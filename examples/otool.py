@@ -34,7 +34,7 @@ def print_lc(e, llvm=False, **fargs):
 
 
 def print_symbols(e, **fargs):
-    for sect in e.sect.sect:
+    for sect in e.sect:
         if type(sect) != macho_init.SymbolTable:
             continue
         print("%-35s %-15s %-4s %-10s %s"%("Symbol","Section","Type","Value","Description"))
@@ -54,12 +54,12 @@ def print_symbols(e, **fargs):
             if value.sectionindex == 0:
                 section = "NO_SECT"
             else:
-                section = e.sect.sect[value.sectionindex-1].parent.name
+                section = e.sect[value.sectionindex-1].parent.name
             print("%-35s %-15s %-4s 0x%08x %04x"%(value.name,section,n_type,value.value,desc))
 
 def print_dysym(e, **fargs):
     # Display indirect symbol tables
-    for sect in e.sect.sect:
+    for sect in e.sect:
         if getattr(sect, 'type', None) is None:
             continue
         elif sect.type == 'indirectsym':
@@ -86,7 +86,7 @@ def print_indirect(e, **fargs):
     # Find section with indirect symbols and indirect symbols table
     indirectsym_table = None
     indirectsym_section = []
-    for s in e.sect.sect:
+    for s in e.sect:
         if type(s) == macho_init.DySymbolTable and s.type == 'indirectsym':
             if indirectsym_table is not None:
                 raise ValueError("Only one IndirectSymbolTable per Mach-O file")
@@ -142,7 +142,7 @@ def print_indirect(e, **fargs):
             address += len(entry.content)
 
 def print_relocs(e, **fargs):
-    for s in e.sect.sect:
+    for s in e.sect:
         if not hasattr(s, 'reloclist'): continue
         print("Relocation information (%s,%s) %u entries"
            % (s.sh.segname, s.sh.sectname, s.sh.nreloc))
@@ -152,6 +152,77 @@ def print_relocs(e, **fargs):
             else:           xt, xn = x.extern, '%u' % x.symbolNumOrValue
             print("%08x %-5u %-6u %-6s %-7d %-9d %s" %
                 (x.address, x.pcrel, x.length, xt, x.type, x.scattered, xn))
+
+def print_opcodes(e, **fargs):
+    messages_and_values = (
+        ('rebase_', macho.REBASE_OPCODE_DONE,
+         'rebase opcodes:', 'no compressed rebase info'),
+        ('bind_', macho.BIND_OPCODE_DONE,
+         'binding opcodes:', 'no compressed binding info'),
+        ('weak_bind_', macho.BIND_OPCODE_DONE,
+         'weak binding opcodes:', 'no compressed weak binding info'),
+        ('lazy_bind_', -1,
+         'lazy binding opcodes:', 'no compressed lazy binding info'),
+        )
+    for t, v, ok, ko in messages_and_values:
+        s_list = [ _ for _ in e.sect if getattr(_, 'type', None) == t ]
+        if len(s_list) == 0:
+            print(ko)
+            continue
+        if len(s_list) > 1:
+            print("ERROR: many sections with %s"%t[:-1])
+        for s in s_list:
+            print(ok)
+            for x in s._array:
+                print(x)
+                if x.opcode == v:
+                    break
+
+def print_rebase(e, **fargs):
+    for s in e.sect:
+        if getattr(s, 'type', None) != 'rebase_': continue
+        print("rebase information (from compressed dyld info):")
+        print("segment section          address     type")
+        for x in s.info: print(x)
+
+def print_bind(e, **fargs):
+    for s in e.sect:
+        if getattr(s, 'type', None) != 'bind_': continue
+        print("bind information:")
+        print("segment section          address        type    addend dylib            symbol")
+        for x in s.info: print(x)
+        break
+    else:
+        print("no compressed binding info")
+
+def print_weak_bind(e, **fargs):
+    for s in e.sect:
+        if getattr(s, 'type', None) != 'weak_bind_': continue
+        print("weak binding information:")
+        print("segment section          address       type     addend symbol")
+        for x in s.info: print(x)
+        break
+    else:
+        print("no weak binding")
+
+def print_lazy_bind(e, **fargs):
+    for s in e.sect:
+        if getattr(s, 'type', None) != 'lazy_bind_': continue
+        print("lazy binding information (from lazy_bind part of dyld info):")
+        print("segment section          address    index  dylib            symbol")
+        for x in s.info: print(x)
+        break
+    else:
+        print("no compressed lazy binding info")
+
+def print_export(e, **fargs):
+    for s in e.sect:
+        if getattr(s, 'type', None) != 'export_': continue
+        print("export information (from trie):")
+        for x in sorted(s.info, key=lambda _:_.addr): print(x)
+        break
+    else:
+        print("no compressed export info")
 
 archi = {
     (macho.CPU_TYPE_MC680x0,   macho.CPU_SUBTYPE_MC680x0_ALL):  'm68k',
@@ -215,6 +286,7 @@ def arch_name(e):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(add_help=False)
+    # Simulates 'otool'
     parser.add_argument('-arch', dest='arch_type', action='append', help='select architecture')
     parser.add_argument('-h', dest='options', action='append_const', const='header', help='print the mach header')
     parser.add_argument('-l', dest='options', action='append_const', const='load', help='print the load commands')
@@ -223,6 +295,13 @@ if __name__ == '__main__':
     parser.add_argument('-r', dest='options', action='append_const', const='reloc', help='Display the relocation entries')
     parser.add_argument('-I', dest='options', action='append_const', const='indirect', help='Display the indirect symbol table')
     parser.add_argument('--llvm', dest='llvm_version', action='append', help='Simulate the output of a given version of llvm-otool')
+    # Simulates 'dyldinfo'
+    parser.add_argument('-opcodes', dest='options', action='append_const', const='opcodes', help='opcodes used to generate the rebase and binding information')
+    parser.add_argument('-rebase', dest='options', action='append_const', const='rebase', help='addresses dyld will adjust if file not loaded at preferred address')
+    parser.add_argument('-bind', dest='options', action='append_const', const='bind', help='addresses dyld will set based on symbolic lookups')
+    parser.add_argument('-weak_bind', dest='options', action='append_const', const='weak_bind', help='symbols which dyld must coalesce')
+    parser.add_argument('-lazy_bind', dest='options', action='append_const', const='lazy_bind', help='addresses dyld will lazily set on first use')
+    parser.add_argument('-export', dest='options', action='append_const', const='export', help='addresses of all symbols this file exports')
     parser.add_argument('file', nargs='*', help='object file')
     args = parser.parse_args()
     if args.options == None:
@@ -231,6 +310,7 @@ if __name__ == '__main__':
         parser.print_help()
     functions = []
     fargs = {}
+    dyldinfo_simulation = False
     if args.llvm_version:
         # Currently only two variants of llvm-otool are known, the one
         # shipped with Xcode 7, and the one shipped with Xcode 8.
@@ -251,6 +331,24 @@ if __name__ == '__main__':
         functions.append(print_relocs)
     if 'indirect' in args.options:
         functions.append(print_indirect)
+    if 'rebase' in args.options:
+        functions.append(print_rebase)
+        dyldinfo_simulation = True
+    if 'bind' in args.options:
+        functions.append(print_bind)
+        dyldinfo_simulation = True
+    if 'weak_bind' in args.options:
+        functions.append(print_weak_bind)
+        dyldinfo_simulation = True
+    if 'lazy_bind' in args.options:
+        functions.append(print_lazy_bind)
+        dyldinfo_simulation = True
+    if 'export' in args.options:
+        functions.append(print_export)
+        dyldinfo_simulation = True
+    if 'opcodes' in args.options:
+        functions.append(print_opcodes)
+        dyldinfo_simulation = True
 
     for file in args.file:
         raw = open(file, 'rb').read()
@@ -313,8 +411,10 @@ if __name__ == '__main__':
                 else:
                     e = []
 
+        if dyldinfo_simulation and len(args.file) > 1:
+            print("\n%s:" %file)
         if hasattr(e, 'Mhdr'):
-            if functions != [ print_header ]:
+            if not dyldinfo_simulation and functions != [ print_header ]:
                 print("%s:" %file)
             for f in functions:
                 f(e, **fargs)
@@ -322,7 +422,10 @@ if __name__ == '__main__':
             for _ in e:
                 t0 = _.Mhdr.cputype
                 t1 = _.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK)
-                if functions != [ print_header ]:
-                    print("%s (architecture %s):" %(file, arch_name(_)))
+                if dyldinfo_simulation:
+                    print("for arch %s:" % arch_name(_))
+                else:
+                    if functions != [ print_header ]:
+                        print("%s (architecture %s):" %(file, arch_name(_)))
                 for f in functions:
                     f(_, **fargs)

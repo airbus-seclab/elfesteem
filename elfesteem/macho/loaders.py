@@ -98,12 +98,27 @@ class LoadMetaclass(CStruct_metaclass):
         if '_fields' in dct:
             # Those fields are common to all commands, we insert them here.
             dct['_fields'][:0] = load_command._fields
-        o = CStruct_metaclass.__new__(cls, name, bases, dct)
         if '_offsets_in_data' in dct:
             # There is some additional data in a variable-length load command
-            fmt = ''.join([convert_size2type(t,None) for _, t in o._fields])
+            fmt = ''.join([convert_size2type(t,None) for _, t in dct['_fields']])
             s = struct.calcsize(fmt)
             dct['_fields'].append( ("data",CData(lambda _,s=s:_.cmdsize-s)) )
+            def get_in_data(self, f=None, s=0):
+                value = getattr(self, f)
+                if value < s:
+                    return None
+                data = self.data.pack()
+                if f == "linked_modules":
+                    data, = struct.unpack("B", data[value-s:value-s+1])
+                    data = [str((data&(1<<i))>>i) for i in range(min(8,self.nmodules))]
+                    return ''.join(data) + '...'
+                else:
+                    data = data[(value-s):data.index(data_null,value-s)]
+                    return data.decode('latin1')
+            for f in dct['_offsets_in_data']:
+                dct['str_'+f] = property(lambda _,f=f,s=s:
+                                    get_in_data(_,f=f,s=s))
+        o = CStruct_metaclass.__new__(cls, name, bases, dct)
         # Parse the list of load commands for this data structure.
         for cmd in dct.get('lc_types',()):
             assert not cmd in LoadCommand.registered
@@ -186,19 +201,9 @@ class LoadCommand(LoadBase):
             elif name == "cmdsize":
                 pass
             elif name in getattr(self, '_offsets_in_data', []):
-                base = struct.calcsize(''.join([convert_size2type(t,None) for _, t in self._fields[:-1]]))
-                if value >= base:
-                    data = self.data.pack()
-                    if name == "linked_modules":
-                        data, = struct.unpack("B", data[value-base:value-base+1])
-                        data = [str((data&(1<<i))>>i) for i in range(min(8,self.nmodules))]
-                        data = ''.join(data) + '...'
-                    else:
-                        data = data[(value-base):data.index(data_null,value-base)]
-                        data = data.decode('latin1')
-                    value = "%s (offset %u)" %(data, value)
-                else:
-                    value = "?(bad offset %u)" % value
+                data = getattr(self, 'str_'+name)
+                if data is None: value = "?(bad offset %u)" % value
+                else:            value = "%s (offset %u)" % (data, value)
                 name = "%12s" % name
             elif name in ["vmaddr", "vmsize"]:
                 if self.cmd == LC_SEGMENT_64: value = "%#018x" % value
@@ -339,7 +344,7 @@ class sectionHeader(CStruct):
     def get_type(self):
         return self.flags & SECTION_TYPE
     def set_type(self, val):
-        self.flags = (val & SECTION_TYPE) | self.YY_flags
+        self.flags = (val & SECTION_TYPE) | self.flags
     type = property(get_type, set_type)
     def get_attributes(self):
         return self.flags & SECTION_ATTRIBUTES
@@ -940,8 +945,10 @@ class symtab_command(LoadCommand):
 # The last two groups are used by the dynamic binding process to do the
 # binding (indirectly through the module table and the reference symbol
 # table when this is a dynamically linked shared library file).
+from elfesteem.macho.sections import DySymArray
 class dysymtab_command(LoadCommand):
     lc_types = (LC_DYSYMTAB,)
+    _sym = DySymArray
     _fields = [
         ("ilocalsym","u32"), # index to local symbols
         ("nlocalsym","u32"), # number of local symbols
@@ -963,15 +970,14 @@ class dysymtab_command(LoadCommand):
         ("nlocrel","u32"),   # number of local relocation entries
         ]
     def sectionsToAdd(self, raw):
-        from elfesteem.macho.sections import DySymArray
         self.sect = []
         for object_offset, _ in self._fields:
             if not object_offset.endswith('off'): continue
             of = getattr(self, object_offset)
             if of != 0:
                 t = object_offset[:-3]
-                if not t in DySymArray: raise NotImplementedError
-                self.sect.append(DySymArray[t](parent=self, content=raw, start=of))
+                if not t in self._sym: raise NotImplementedError
+                self.sect.append(self._sym[t](parent=self, content=raw, start=of))
         return self.sect
     def changeOffsets(self, decalage, min_offset=None):
         for object_offset, _ in self._fields:
@@ -1107,8 +1113,10 @@ class version_min_command(LoadCommand):
 # 10.6 and later.  All information pointed to by this command
 # is encoded using byte streams, so no endian swapping is needed
 # to interpret it.
-class dyld_info_command(LoadCommand):
+from elfesteem.macho.sections import DyldArray
+class dyld_info_command(dysymtab_command):
     lc_types = (LC_DYLD_INFO, LC_DYLD_INFO_ONLY)
+    _sym = DyldArray
     _fields = [
         ("rebase_off","u32"),     # file offset to rebase info
         ("rebase_size","u32"),    # size of rebase info
@@ -1121,71 +1129,6 @@ class dyld_info_command(LoadCommand):
         ("export_off","u32"),     # file offset to lazy binding info
         ("export_size","u32"),    # size of lazy binding info
         ]
-    def sectionsToAdd(self, raw):
-        from elfesteem.macho.sections import DynamicLoaderInfo
-        self.sect = []
-        for t, _ in self._fields:
-            if not t.endswith('_off'): continue
-            if getattr(self, t):
-                self.sect.append(DynamicLoaderInfo(parent=self, content=raw,
-                                 start=getattr(self, t), type=t[:-3]))
-        return self.sect
-    def changeOffsets(self, decalage, min_offset=None):
-        for t, _ in self._fields:
-            if not t.endswith('_off'): continue
-            off = getattr(self, t)
-            if isOffsetChangeable(off, min_offset):
-                setattr(self, t, off + decalage)
-
-# The following are used to encode rebasing information
-REBASE_IMMEDIATE_MASK                                   = 0x0F
-REBASE_TYPE_POINTER                                     = 1
-REBASE_TYPE_TEXT_ABSOLUTE32                             = 2
-REBASE_TYPE_TEXT_PCREL32                                = 3
-REBASE_OPCODE_MASK                                      = 0xF0
-REBASE_OPCODE_DONE                                      = 0x00
-REBASE_OPCODE_SET_TYPE_IMM                              = 0x10
-REBASE_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB               = 0x20
-REBASE_OPCODE_ADD_ADDR_ULEB                             = 0x30
-REBASE_OPCODE_ADD_ADDR_IMM_SCALED                       = 0x40
-REBASE_OPCODE_DO_REBASE_IMM_TIMES                       = 0x50
-REBASE_OPCODE_DO_REBASE_ULEB_TIMES                      = 0x60
-REBASE_OPCODE_DO_REBASE_ADD_ADDR_ULEB                   = 0x70
-REBASE_OPCODE_DO_REBASE_ULEB_TIMES_SKIPPING_ULEB        = 0x80
-
-# The following are used to encode binding information
-BIND_TYPE_POINTER                            =  1
-BIND_TYPE_TEXT_ABSOLUTE32                    =  2
-BIND_TYPE_TEXT_PCREL32                       =  3
-BIND_SPECIAL_DYLIB_SELF                      =  0
-BIND_SPECIAL_DYLIB_MAIN_EXECUTABLE           = -1
-BIND_SPECIAL_DYLIB_FLAT_LOOKUP               = -2
-BIND_IMMEDIATE_MASK                          = 0x0F
-BIND_SYMBOL_FLAGS_WEAK_IMPORT                = 0x01
-BIND_SYMBOL_FLAGS_NON_WEAK_DEFINITION        = 0x08
-BIND_OPCODE_MASK                             = 0xF0
-BIND_OPCODE_DONE                             = 0x00
-BIND_OPCODE_SET_DYLIB_ORDINAL_IMM            = 0x10
-BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB           = 0x20
-BIND_OPCODE_SET_DYLIB_SPECIAL_IMM            = 0x30
-BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM    = 0x40
-BIND_OPCODE_SET_TYPE_IMM                     = 0x50
-BIND_OPCODE_SET_ADDEND_SLEB                  = 0x60
-BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB      = 0x70
-BIND_OPCODE_ADD_ADDR_ULEB                    = 0x80
-BIND_OPCODE_DO_BIND                          = 0x90
-BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB            = 0xA0
-BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED      = 0xB0
-BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB = 0xC0
-
-# The following are used on the flags byte of a terminal node
-# in the export information.
-EXPORT_SYMBOL_FLAGS_KIND_MASK                = 0x03
-EXPORT_SYMBOL_FLAGS_KIND_REGULAR             = 0x00
-EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL        = 0x01
-EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION          = 0x04
-EXPORT_SYMBOL_FLAGS_REEXPORT                 = 0x08
-EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER        = 0x10
 
 # The linker_option_command contains linker options embedded in object files.
 class linkeroption_command(LoadCommand):

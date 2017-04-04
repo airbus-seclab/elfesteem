@@ -331,11 +331,12 @@ class MACHO(object):
             if s.addr <= ad < s.addr+s.size:
                 return s
         f = []
-        for s in self.sect:
-            if not hasattr(s, 'name'):
+        for lc in self.load:
+            if not lc.cmd in (LC_SEGMENT, LC_SEGMENT_64):
                 continue
-            if s.addr <= ad < s.addr+s.size:
-                f.append(s)
+            for s in lc.sh:
+                if s.addr <= ad < s.addr+s.size:
+                    f.append(s.sect)
         if len(f) == 0: return None
         return f[0]
 
@@ -470,14 +471,6 @@ class MACHO(object):
                     self.rawdata.append((pos,val))
                     result.remove((pos,val))
         return result
-
-    def get_lib(self, val):
-        for lc in self.load:
-            if lc.cmd == 0x0C:
-                val-=1
-                if val == 0 :
-                    return lc.name
-        raise ValueError('cannot find lib')
 
     def parse_dynamic_symbols(self):
         if not len(self.sect):

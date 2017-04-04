@@ -156,6 +156,59 @@ def run_test():
     assertion('7038d70ea2d7caf8b4a2adc3c9c01ef9',
               hashlib.md5(d).hexdigest(),
               'Otool-like output including section size "past end of file", llvm version 7')
+    macho_lib = open(__dir__+'libATCommandStudioDynamic.dylib', 'rb').read()
+    e = MACHO(macho_lib)
+    macho_lib_hash = hashlib.md5(macho_lib).hexdigest()
+    d = e.pack()
+    assertion(macho_lib_hash,
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading libATCommandStudioDynamic')
+    bind_s = [ _ for _ in e.sect if getattr(_, 'type', None)
+               in ('bind_','weak_bind_','lazy_bind_','rebase_','export_') ]
+    d = ('\n'.join([str(_) for s in bind_s for _ in s.info])).encode('latin1')
+    assertion('28aea32ae0bd5060345b51800163b9f4',
+              hashlib.md5(d).hexdigest(),
+              'dyldinfo-like output for all binding types (libATCommand...)')
+    bind_s = [ _ for _ in e.sect if getattr(_, 'type', None)
+               in ('bind_','weak_bind_','lazy_bind_','rebase_') ]
+    d = ('\n'.join([str(_) for s in bind_s for _ in s])).encode('latin1')
+    assertion('66bb196759c094c0c08d8159cf61d67f',
+              hashlib.md5(d).hexdigest(),
+              'dyldinfo-like output for dyld opcodes (libATCommand...)')
+    macho_lib = open(__dir__+'libSystem.B.dylib', 'rb').read()
+    e = MACHO(macho_lib)
+    macho_lib_hash = hashlib.md5(macho_lib).hexdigest()
+    d = e.pack()
+    assertion(macho_lib_hash,
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading libSystem')
+    bind_s = [ _ for a in e.arch for _ in a.sect if getattr(_, 'type', None)
+               in ('rebase_','export_') ]
+    d = ('\n'.join([str(_) for s in bind_s for _ in s.info])).encode('latin1')
+    assertion('81bc735570cb8f78099579fcf6a29f65',
+              hashlib.md5(d).hexdigest(),
+              'dyldinfo-like output for rebase and export (libSystem)')
+    bind_s = [ _ for a in e.arch for _ in a.sect if getattr(_, 'type', None)
+               == 'rebase_' ]
+    d = ('\n'.join([str(_) for s in bind_s for _ in s])).encode('latin1')
+    assertion('c71cebc604ba70bfd348a3e08f7ea20c',
+              hashlib.md5(d).hexdigest(),
+              'dyldinfo-like output for rebase opcodes (libSystem)')
+    macho_lib = open(__dir__+'libcoretls.dylib', 'rb').read()
+    e = MACHO(macho_lib)
+    macho_lib_hash = hashlib.md5(macho_lib).hexdigest()
+    d = e.pack()
+    assertion(macho_lib_hash,
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading libcoretls')
+    bind_s = [ _ for a in e.arch for _ in a.sect if getattr(_, 'type', None)
+               in ('rebase_','export_') ]
+    d = ('\n'.join([str(_) for s in bind_s for _ in s.info])).encode('latin1')
+    assertion('d7983c780f70e8c81d277ee0f7f8a27d',
+              hashlib.md5(d).hexdigest(),
+              'dyldinfo-like output for rebase and export (libcoretls)')
+    # print('HASH', hashlib.md5(d).hexdigest())
+
     macho_app = open(__dir__+'OSXII', 'rb').read()
     log.setLevel(logging.ERROR)
     e = MACHO(macho_app)

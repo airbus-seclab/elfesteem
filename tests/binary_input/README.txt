@@ -53,6 +53,18 @@ macho/libecpg.6.5.dylib
     An example of file with a section size "past end of file"
     Copied from /usr/lib/libecpg.6.5.dylib from a recent MacOSX
 
+macho/libATCommandStudioDynamic.dylib
+    An example of file with weak binding
+    Copied from /usr/lib/libATCommandStudioDynamic.dylib from a recent MacOSX
+
+macho/libcoretls.dylib
+    An example of file with no binding, no weak binding, no lazy binding
+    Copied from /usr/lib/libcoretls.dylib from a recent MacOSX
+
+macho/libSystem.B.dylib
+    An example of file BIND_OPCODE_SET_DYLIB_SPECIAL_IMM
+    Copied from /usr/lib/libSystem.B.dylib from a recent MacOSX
+
 macho/OSXII
     An example of old universal binary, ppc & i386, with LC_UNIXTHREAD
     The OSXII software has been discontinued, cf.
