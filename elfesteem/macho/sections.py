@@ -1,3 +1,4 @@
+import struct
 from elfesteem.macho.common import *
 from elfesteem.cstruct import CBase, CData, CString, CArray, CStructWithStrTable
 from elfesteem.strpatchwork import StrPatchwork
@@ -252,10 +253,12 @@ def dyldarray_register(cls):
     DyldArray[cls.type] = cls
 
 class Uleb128(CBase):
-    def unpack(self, c, o):
-        import struct
+    def _parent_parse(self, kargs):
+        pass # Independent of endianess and wordsize
+    def _initialize(self):
         self.value = 0
         self._size = 0
+    def unpack(self, c, o):
         pos = 0
         while True:
             val, = struct.unpack("B",c[o:o+1])
@@ -263,6 +266,16 @@ class Uleb128(CBase):
             self._size += 1; o += 1; pos += 7
             if not val & 0x80: break
         return val, pos
+    def pack(self):
+        if self.value == 0:
+            return struct.pack("B", 0)
+        v = self.value
+        c = struct.pack("")
+        while v:
+            if v > 0x7f: c += struct.pack("B", (v&0x7f)|0x80)
+            else:        c += struct.pack("B", v)
+            v >>= 7
+        return c
     def __int__(self):
         return self.value
 
@@ -271,6 +284,19 @@ class Sleb128(Uleb128):
         val, pos = Uleb128.unpack(self, c, o)
         if val & 0x40:
             self.value |= (-1) << pos
+    def pack(self):
+        if self.value == 0:
+            return struct.pack("B", 0)
+        v = self.value
+        c = struct.pack("")
+        while v:
+            w = v & 0x7f
+            if   v >  0x7f: c += struct.pack("B", w|0x80)
+            elif v < -0x7f: c += struct.pack("B", w|0x80)
+            else:           c += struct.pack("B", w)
+            v >>= 7
+            if v == -1: break
+        return c
 
 class DyldArrayGeneric(BaseSection,CArray):
     _cls = None
@@ -294,8 +320,12 @@ class DyldArrayGeneric(BaseSection,CArray):
         elif self.type == 'weak_bind_': self.cls = WeakBind
         elif self.type == 'lazy_bind_': self.cls = LazyBind
         elif self.type == 'rebase_':    self.cls = Rebase
-    info = property(lambda _:_._array)
-    info = property(lambda _:_._info+_._array)
+    def update(self, **kargs):
+        try:
+            for op in self:
+                op.apply()
+        except ValueError:
+            log.error("Invalid opcode %s", op)
     info = property(lambda _:_._info)
 
 #### Source: /usr/include/mach-o/loader.h
@@ -351,9 +381,12 @@ class Bind(object):
     _to_copy = ('sym', 'weak_import', 'seg', 'addr', 'libord', 'info_type', 'addend')
     def __init__(self, entry):
         for f in self._to_copy:
+            if not hasattr(entry.parent, f): raise ValueError
             setattr(self, f, getattr(entry.parent, f))
         e = entry.parent.parent.parent.parent
-        self.sec = e.getsectionbyvad(self.addr).parent.sectname
+        self.sec = e.getsectionbyvad(self.addr)
+        if self.sec is None: raise ValueError
+        self.sec = self.sec.parent.sectname
         if 'libord' in self._to_copy:
             self.libord = get_lib_name(e, self.libord)
     def __str__(self):
@@ -365,7 +398,7 @@ class Bind(object):
 class WeakBind(Bind):
     _to_copy = ('sym', 'weak_import', 'seg', 'addr', 'info_type', 'addend')
     def __str__(self):
-        return "%-7s %-16s 0x%08X    %-7s %6d %s%s" % (
+        return "%-7s %-16s 0x%08X    %-7s  %6d %s%s" % (
             self.seg, self.sec, self.addr,
             self.info_type, self.addend,
             self.sym, self.weak_import)
@@ -378,107 +411,171 @@ class LazyBind(Bind):
             self.index, self.libord,
             self.sym, self.weak_import)
 
-class bind_entry(CBase):
-    def unpack(self, c, o):
-        self._size = 0
-        import struct
+from elfesteem.cstruct import CStruct_metaclass
+class bind_metaclass(CStruct_metaclass):
+    registered = {}
+    def __new__(cls, name, bases, dct):
+        o = CStruct_metaclass.__new__(cls, name, bases, dct)
+        if 'opcode' in dct:
+            cls.registered[dct['opcode']] = o
+        return o
+    def __call__(cls, *args, **kargs):
+        c = kargs['content']
+        o = kargs.get('start',0)
         val, = struct.unpack("B",c[o:o+1])
-        self._size += 1
         opcode = val & BIND_OPCODE_MASK
-        imm = val & BIND_IMMEDIATE_MASK
-        self.opcode = opcode
-        self.imm    = imm   
-        self.index  = o - self.parent.offset
-        if opcode == BIND_OPCODE_DONE:
-            self._str = ''
-            self.parent.index = self.index + self.bytelen
-        elif opcode in (BIND_OPCODE_SET_DYLIB_ORDINAL_IMM,
-                        BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB,
-                        BIND_OPCODE_SET_DYLIB_SPECIAL_IMM):
-            if   opcode == BIND_OPCODE_SET_DYLIB_ORDINAL_IMM:
-                self.parent.libord = imm
-            elif opcode == BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB:
-                self.libord = Uleb128(parent=self, content=c, start=o+self._size)
-                self._size += self.libord.bytelen
-                self.parent.libord = int(self.libord)
-            elif opcode == BIND_OPCODE_SET_DYLIB_SPECIAL_IMM:
-                if imm: self.parent.libord = imm | BIND_OPCODE_MASK
-                else:   self.parent.libord = 0
-            self._str = '(%d)' % self.parent.libord
-        elif opcode == BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM:
-            self.sym = CString(parent=self, content=c, start=o+self._size)
-            self._size += self.sym.bytelen
-            self._str = '(0x%02X, %s)' % (imm, self.sym)
-            self.parent.sym = self.sym
-            if imm & BIND_SYMBOL_FLAGS_WEAK_IMPORT:
-                self.parent.weak_import = " (weak import)"
-            else:
-                self.parent.weak_import = ""
-        elif opcode == BIND_OPCODE_SET_TYPE_IMM:
-            self.info_type = imm
-            self._str = '(%d)' % imm
-            self.parent.info_type = {
-                BIND_TYPE_POINTER: "pointer",
-                BIND_TYPE_TEXT_ABSOLUTE32: "text abs32",
-                BIND_TYPE_TEXT_PCREL32: "text rel32",
-                }.get(imm,"!!unknown!!")
-        elif opcode == BIND_OPCODE_SET_ADDEND_SLEB:
-            self.addend = Sleb128(parent=self, content=c, start=o+self._size)
-            self._size += self.addend.bytelen
-            self._str = '(%d)' % int(self.addend)
-            self.parent.addend = self.addend
-        elif opcode == BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB:
-            self.addr = Uleb128(parent=self, content=c, start=o+self._size)
-            self._size += self.addr.bytelen
-            self._str = '(0x%02X, 0x%08X)' % (imm, int(self.addr))
-            from elfesteem.macho.loaders import LC_SEGMENT, LC_SEGMENT_64
-            e = self.parent.parent.parent.parent
-            lc = [ _ for _ in e.load if _.cmd in (LC_SEGMENT, LC_SEGMENT_64) ]
-            if len(lc) > imm:
-                self.parent.seg = lc[imm].segname
-                self.parent.addr = lc[imm].vmaddr + int(self.addr)
-            else:
-                self.parent.seg = None
-                self.parent.addr = None
-        elif opcode == BIND_OPCODE_ADD_ADDR_ULEB:
-            self.add_addr = Uleb128(parent=self, content=c, start=o+self._size)
-            self._size += self.add_addr.bytelen
-            self._str = '(0x%08X)' % (int(self.add_addr) & 0xFFFFFFFF)
-            self.parent.addr += int(self.add_addr)
-            self.parent.addr = self.parent.addr & 0xFFFFFFFFFFFFFFFF
-        elif opcode == BIND_OPCODE_DO_BIND:
-            self.parent._info.append(self.parent.cls(self))
-            self._str = '()'
-            self.parent.addr += self.wsize//8
-        elif opcode == BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB:
-            self.add_addr = Uleb128(parent=self, content=c, start=o+self._size)
-            self._size += self.add_addr.bytelen
-            self.parent._info.append(self.parent.cls(self))
-            self._str = '(0x%08X)' % (int(self.add_addr) & 0xFFFFFFFF)
-            self.parent.addr += self.wsize//8 + int(self.add_addr)
-            self.parent.addr = self.parent.addr & 0xFFFFFFFFFFFFFFFF
-        elif opcode == BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED:
-            self.parent._info.append(self.parent.cls(self))
-            self.scale = imm
-            self._str = '(0x%08X)' % ((imm+1)*(self.wsize//8))
-            self.parent.addr += (imm+1)*(self.wsize//8)
-        elif opcode == BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB:
-            self.count = Uleb128(parent=self, content=c, start=o+self._size)
-            self._size += self.count.bytelen
-            self.skip = Uleb128(parent=self, content=c, start=o+self._size)
-            self._size += self.skip.bytelen
-            self._str = '(%d, 0x%08X)' % (int(self.count), int(self.skip))
-            for i in range(int(self.count)):
-                self.parent._info.append(self.parent.cls(self))
-                self.parent.addr += int(self.skip) + self.wsize//8
+        if hasattr(cls, 'opcode'):
+            op = super(bind_metaclass,cls).__call__(*args, **kargs)
+        elif opcode in bind_metaclass.registered:
+            op = bind_metaclass.registered[opcode](*args, **kargs)
         else:
-            raise NotImplementedError
-        self.orig_data = c[o:o+self.bytelen]
-    def pack(self):
-        return self.orig_data
+            op = super(bind_metaclass,cls).__call__(*args, **kargs)
+        op.opcode = opcode
+        return op
+bind_base = bind_metaclass('bind_base', (CStruct,), {})
+
+class bind_entry(bind_base):
+    _fields = [ ("val", "u08") ]
+    imm = property(lambda _: _.val & BIND_IMMEDIATE_MASK)
+    def unpack(self, c, o):
+        CStruct.unpack(self, c, o)
+        self.index  = o - self.parent.offset
     def __str__(self):
-        return "0x%04X BIND_OPCODE_%s%s" % (self.index,
-            dyld_constants['BIND_OPCODE'][self.opcode], self._str)
+        return "0x%04X BIND_OPCODE_%s" % (self.index,
+            dyld_constants['BIND_OPCODE'].get(self.opcode, hex(self.opcode)))
+    def apply(self):
+        pass
+
+class bind_opcode(bind_entry):
+    opcode = BIND_OPCODE_DONE
+    _fields = [ ("val", "u08") ]
+    def apply(self):
+        self.parent.index = self.index + self.bytelen
+
+class bind_opcode(bind_entry):
+    opcode = BIND_OPCODE_SET_DYLIB_ORDINAL_IMM
+    _fields = [ ("val", "u08") ]
+    libord = property(lambda _: _.imm)
+    def __str__(self):
+        return bind_entry.__str__(self) + '(%d)' % self.libord
+    def apply(self):
+        self.parent.libord = int(self.libord)
+
+class bind_opcode(bind_opcode):
+    opcode = BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB
+    _fields = [ ("val", "u08"), ("libord", Uleb128) ]
+
+class bind_opcode(bind_opcode):
+    opcode = BIND_OPCODE_SET_DYLIB_SPECIAL_IMM
+    _fields = [ ("val", "u08") ]
+    def libord(self):
+        if self.imm: return self.imm | BIND_OPCODE_MASK
+        else:        return 0
+    libord = property(libord)
+
+class bind_opcode(bind_entry):
+    opcode = BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM
+    _fields = [ ("val", "u08"), ("sym", CString) ]
+    def __str__(self):
+        return bind_entry.__str__(self) + '(0x%02X, %s)' % (self.imm, self.sym)
+    def apply(self):
+        self.parent.sym = self.sym
+        if self.imm & BIND_SYMBOL_FLAGS_WEAK_IMPORT:
+            self.parent.weak_import = " (weak import)"
+        else:
+            self.parent.weak_import = ""
+
+class bind_opcode(bind_entry):
+    opcode = BIND_OPCODE_SET_TYPE_IMM
+    _fields = [ ("val", "u08") ]
+    info_type = property(lambda _: _.imm)
+    def __str__(self):
+        return bind_entry.__str__(self) + '(%d)' % self.imm
+    def apply(self):
+        self.parent.info_type = {
+            BIND_TYPE_POINTER: "pointer",
+            BIND_TYPE_TEXT_ABSOLUTE32: "text abs32",
+            BIND_TYPE_TEXT_PCREL32: "text rel32",
+            }.get(self.imm,"!!unknown!!")
+
+class bind_opcode(bind_entry):
+    opcode = BIND_OPCODE_SET_ADDEND_SLEB
+    _fields = [ ("val", "u08"), ("addend", Sleb128) ]
+    def __str__(self):
+        return bind_entry.__str__(self) + '(%d)' % int(self.addend)
+    def apply(self):
+        self.parent.addend = self.addend
+
+class bind_opcode(bind_entry):
+    opcode = BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB
+    _fields = [ ("val", "u08"), ("addr", Uleb128) ]
+    def __str__(self):
+        return bind_entry.__str__(self) + '(0x%02X, 0x%08X)' % (self.imm, int(self.addr))
+    def apply(self):
+        from elfesteem.macho.loaders import LC_SEGMENT, LC_SEGMENT_64
+        e = self.parent.parent.parent.parent
+        lc = [ _ for _ in e.load if _.cmd in (LC_SEGMENT, LC_SEGMENT_64) ]
+        if len(lc) > self.imm:
+            self.parent.seg = lc[self.imm].segname
+            self.parent.addr = lc[self.imm].vmaddr + int(self.addr)
+        else:
+            self.parent.seg = None
+            self.parent.addr = None
+
+class bind_opcode(bind_entry):
+    opcode = BIND_OPCODE_ADD_ADDR_ULEB
+    _fields = [ ("val", "u08"), ("addr", Uleb128) ]
+    def __str__(self):
+        return bind_entry.__str__(self) + '(0x%08X)' % (int(self.addr) & 0xFFFFFFFF)
+    def apply(self):
+        if not hasattr(self.parent, 'addr'): raise ValueError
+        self.parent.addr += int(self.addr)
+        self.parent.addr &= 0xFFFFFFFFFFFFFFFF
+
+class bind_opcode(bind_entry):
+    opcode = BIND_OPCODE_DO_BIND
+    _fields = [ ("val", "u08") ]
+    def __str__(self):
+        return bind_entry.__str__(self) + '()'
+    def apply(self):
+        if not hasattr(self.parent, 'addr'): raise ValueError
+        self.parent._info.append(self.parent.cls(self))
+        self.parent.addr += self.wsize//8
+
+class bind_opcode(bind_entry):
+    opcode = BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB
+    _fields = [ ("val", "u08"), ("addr", Uleb128) ]
+    def __str__(self):
+        return bind_entry.__str__(self) + '(0x%08X)' % (int(self.addr) & 0xFFFFFFFF)
+    def apply(self):
+        if not hasattr(self.parent, 'addr'): raise ValueError
+        self.parent._info.append(self.parent.cls(self))
+        self.parent.addr += self.wsize//8 + int(self.addr)
+        self.parent.addr &= 0xFFFFFFFFFFFFFFFF
+
+class bind_opcode(bind_entry):
+    opcode = BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED
+    _fields = [ ("val", "u08") ]
+    add_addr = property(lambda _: (_.imm+1)*(_.wsize//8))
+    def __str__(self):
+        return bind_entry.__str__(self) + '(0x%08X)' % self.add_addr
+    def apply(self):
+        self.parent._info.append(self.parent.cls(self))
+        self.parent.addr += self.add_addr
+
+class bind_opcode(bind_entry):
+    opcode = BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB
+    _fields = [ ("val", "u08"), ("count", Uleb128), ("skip", Uleb128) ]
+    def __str__(self):
+        return bind_entry.__str__(self) + '(%d, 0x%08X)' % (int(self.count), int(self.skip))
+    def apply(self):
+        if not hasattr(self.parent, 'addr'): raise ValueError
+        if int(self.count) > 0xffffffffffffffff: raise ValueError
+        for i in range(int(self.count)):
+            self.parent._info.append(self.parent.cls(self))
+            self.parent.addr += int(self.skip) + self.wsize//8
+
+del bind_opcode
 
 class DyldArrayBind(DyldArrayGeneric):
     type = 'bind_'
@@ -530,88 +627,140 @@ class Rebase(Bind):
             self.seg, self.sec, self.addr,
             self.info_type)
 
-class rebase_entry(CBase):
-    def unpack(self, c, o):
-        self._size = 0
-        import struct
+from elfesteem.cstruct import CStruct_metaclass
+class rebase_metaclass(CStruct_metaclass):
+    registered = {}
+    def __new__(cls, name, bases, dct):
+        o = CStruct_metaclass.__new__(cls, name, bases, dct)
+        if 'opcode' in dct:
+            cls.registered[dct['opcode']] = o
+        return o
+    def __call__(cls, *args, **kargs):
+        c = kargs['content']
+        o = kargs.get('start',0)
         val, = struct.unpack("B",c[o:o+1])
-        self._size += 1
         opcode = val & REBASE_OPCODE_MASK
-        imm = val & REBASE_IMMEDIATE_MASK
-        self.opcode = opcode
-        self.imm    = imm   
-        self.index  = o - self.parent.offset
-        if opcode == REBASE_OPCODE_DONE:
-            self._str = '()'
-            self.parent.index = self.index + self.bytelen
-        elif opcode == REBASE_OPCODE_SET_TYPE_IMM:
-            self.info_type = imm
-            self._str = '(%d)' % imm
-            self.parent.info_type = {
-                REBASE_TYPE_POINTER: "pointer",
-                REBASE_TYPE_TEXT_ABSOLUTE32: "text abs32",
-                REBASE_TYPE_TEXT_PCREL32: "text rel32",
-                }.get(imm,"!!unknown!!")
-        elif opcode == REBASE_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB:
-            self.addr = Uleb128(parent=self, content=c, start=o+self._size)
-            self._size += self.addr.bytelen
-            self._str = '(%d, 0x%08X)' % (imm, int(self.addr))
-            from elfesteem.macho.loaders import LC_SEGMENT, LC_SEGMENT_64
-            e = self.parent.parent.parent.parent
-            lc = [ _ for _ in e.load if _.cmd in (LC_SEGMENT, LC_SEGMENT_64) ]
-            if len(lc) > imm:
-                self.parent.seg = lc[imm].segname
-                self.parent.addr = lc[imm].vmaddr + int(self.addr)
-            else:
-                self.parent.seg = None
-                self.parent.addr = None
-        elif opcode == REBASE_OPCODE_ADD_ADDR_ULEB:
-            self.add_addr = Uleb128(parent=self, content=c, start=o+self._size)
-            self._size += self.add_addr.bytelen
-            self._str = '(0x%X)' % (int(self.add_addr) & 0xFFFFFFFF)
-            self.parent.addr += int(self.add_addr)
-            self.parent.addr = self.parent.addr & 0xFFFFFFFFFFFFFFFF
-        elif opcode == REBASE_OPCODE_ADD_ADDR_IMM_SCALED:
-            self.scale = imm
-            self._str = '(0x%X)' % (imm*(self.wsize//8))
-            self.parent.addr += imm*(self.wsize//8)
-        elif opcode == REBASE_OPCODE_DO_REBASE_IMM_TIMES:
-            self._str = '(%d)' % imm
-            for i in range(imm):
-                self.parent._info.append(self.parent.cls(self))
-                self.parent.addr += self.wsize//8
-        elif opcode == REBASE_OPCODE_DO_REBASE_ULEB_TIMES:
-            self.count = Uleb128(parent=self, content=c, start=o+self._size)
-            self._size += self.count.bytelen
-            self._str = '(%d)' % int(self.count)
-            for i in range(int(self.count)):
-                self.parent._info.append(self.parent.cls(self))
-                self.parent.addr += self.wsize//8
-        elif opcode == REBASE_OPCODE_DO_REBASE_ADD_ADDR_ULEB:
-            self.add_addr = Uleb128(parent=self, content=c, start=o+self._size)
-            self._size += self.add_addr.bytelen
-            self.parent._info.append(self.parent.cls(self))
-            add_addr = self.wsize//8 + int(self.add_addr)
-            self._str = '(%d)' % (add_addr & 0xFFFFFFFF)
-            self.parent.addr += add_addr
-            self.parent.addr = self.parent.addr & 0xFFFFFFFFFFFFFFFF
-        elif opcode == REBASE_OPCODE_DO_REBASE_ULEB_TIMES_SKIPPING_ULEB:
-            self.count = Uleb128(parent=self, content=c, start=o+self._size)
-            self._size += self.count.bytelen
-            self.skip = Uleb128(parent=self, content=c, start=o+self._size)
-            self._size += self.skip.bytelen
-            self._str = '(%d, %d)' % (int(self.count), int(self.skip))
-            for i in range(int(self.count)):
-                self.parent._info.append(self.parent.cls(self))
-                self.parent.addr += int(self.skip) + self.wsize//8
+        if hasattr(cls, 'opcode'):
+            op = super(rebase_metaclass,cls).__call__(*args, **kargs)
+        elif opcode in rebase_metaclass.registered:
+            op = rebase_metaclass.registered[opcode](*args, **kargs)
         else:
-            raise NotImplementedError
-        self.orig_data = c[o:o+self.bytelen]
-    def pack(self):
-        return self.orig_data
+            op = super(rebase_metaclass,cls).__call__(*args, **kargs)
+        op.opcode = opcode
+        return op
+rebase_base = rebase_metaclass('rebase_base', (CStruct,), {})
+
+class rebase_entry(rebase_base):
+    _fields = [ ("val", "u08") ]
+    imm = property(lambda _: _.val & REBASE_IMMEDIATE_MASK)
+    def unpack(self, c, o):
+        CStruct.unpack(self, c, o)
+        self.index  = o - self.parent.offset
     def __str__(self):
-        return "0x%04X REBASE_OPCODE_%s%s" % (self.index,
-            dyld_constants['REBASE_OPCODE'][self.opcode], self._str)
+        return "0x%04X REBASE_OPCODE_%s" % (self.index,
+            dyld_constants['REBASE_OPCODE'].get(self.opcode, hex(self.opcode)))
+    def apply(self):
+        pass
+
+class rebase_opcode(rebase_entry):
+    opcode = REBASE_OPCODE_DONE
+    _fields = [ ("val", "u08") ]
+    def __str__(self):
+        return rebase_entry.__str__(self) + '()'
+
+class rebase_opcode(rebase_entry):
+    opcode = REBASE_OPCODE_SET_TYPE_IMM
+    _fields = [ ("val", "u08") ]
+    info_type = property(lambda _: _.imm)
+    def __str__(self):
+        return rebase_entry.__str__(self) + '(%d)' % self.imm
+    def apply(self):
+        self.parent.info_type = {
+            REBASE_TYPE_POINTER: "pointer",
+            REBASE_TYPE_TEXT_ABSOLUTE32: "text abs32",
+            REBASE_TYPE_TEXT_PCREL32: "text rel32",
+            }.get(self.imm,"!!unknown!!")
+
+class rebase_opcode(rebase_entry):
+    opcode = REBASE_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB
+    _fields = [ ("val", "u08"), ("addr", Uleb128) ]
+    def __str__(self):
+        return rebase_entry.__str__(self) + '(%d, 0x%08X)' % (self.imm, int(self.addr))
+    def apply(self):
+        from elfesteem.macho.loaders import LC_SEGMENT, LC_SEGMENT_64
+        e = self.parent.parent.parent.parent
+        lc = [ _ for _ in e.load if _.cmd in (LC_SEGMENT, LC_SEGMENT_64) ]
+        if len(lc) > self.imm:
+            self.parent.seg = lc[self.imm].segname
+            self.parent.addr = lc[self.imm].vmaddr + int(self.addr)
+        else:
+            self.parent.seg = None
+            self.parent.addr = None
+
+class rebase_opcode(rebase_entry):
+    opcode = REBASE_OPCODE_ADD_ADDR_ULEB
+    _fields = [ ("val", "u08"), ("addr", Uleb128) ]
+    def __str__(self):
+        return rebase_entry.__str__(self) + '(0x%X)' % (int(self.addr) & 0xFFFFFFFF)
+    def apply(self):
+        if not hasattr(self.parent, 'addr'): raise ValueError
+        self.parent.addr += int(self.addr)
+
+class rebase_opcode(rebase_entry):
+    opcode = REBASE_OPCODE_ADD_ADDR_IMM_SCALED
+    _fields = [ ("val", "u08") ]
+    add_addr = property(lambda _: _.imm*(_.wsize//8))
+    def __str__(self):
+        return rebase_entry.__str__(self) + '(0x%X)' % self.add_addr
+    def apply(self):
+        if not hasattr(self.parent, 'addr'): raise ValueError
+        self.parent.addr += self.add_addr
+
+class rebase_opcode(rebase_entry):
+    opcode = REBASE_OPCODE_DO_REBASE_IMM_TIMES
+    _fields = [ ("val", "u08") ]
+    def __str__(self):
+        return rebase_entry.__str__(self) + '(%d)' % self.imm
+    def apply(self):
+        if not hasattr(self.parent, 'addr'): raise ValueError
+        for i in range(self.imm):
+            self.parent._info.append(self.parent.cls(self))
+            self.parent.addr += self.wsize//8
+
+class rebase_opcode(rebase_entry):
+    opcode = REBASE_OPCODE_DO_REBASE_ULEB_TIMES
+    _fields = [ ("val", "u08"), ("count", Uleb128) ]
+    def __str__(self):
+        return rebase_entry.__str__(self) + '(%d)' % int(self.count)
+    def apply(self):
+        if not hasattr(self.parent, 'addr'): raise ValueError
+        for i in range(int(self.count)):
+            self.parent._info.append(self.parent.cls(self))
+            self.parent.addr += self.wsize//8
+
+class rebase_opcode(rebase_entry):
+    opcode = REBASE_OPCODE_DO_REBASE_ADD_ADDR_ULEB
+    _fields = [ ("val", "u08"), ("value", Uleb128) ]
+    add_addr = property(lambda _: _.wsize//8 + int(_.value))
+    def __str__(self):
+        return rebase_entry.__str__(self) + '(%d)' % (self.add_addr & 0xFFFFFFFF)
+    def apply(self):
+        if not hasattr(self.parent, 'addr'): raise ValueError
+        self.parent._info.append(self.parent.cls(self))
+        self.parent.addr += self.add_addr
+
+class rebase_opcode(rebase_entry):
+    opcode = REBASE_OPCODE_DO_REBASE_ULEB_TIMES_SKIPPING_ULEB
+    _fields = [ ("val", "u08"), ("count", Uleb128), ("skip", Uleb128) ]
+    def __str__(self):
+        return rebase_entry.__str__(self) + '(%d, %d)' % (int(self.count), int(self.skip))
+    def apply(self):
+        if not hasattr(self.parent, 'addr'): raise ValueError
+        for i in range(int(self.count)):
+            self.parent._info.append(self.parent.cls(self))
+            self.parent.addr += int(self.skip) + self.wsize//8
+
+del rebase_opcode
 
 class DyldArrayRebase(DyldArrayGeneric):
     _cls = rebase_entry
@@ -706,7 +855,6 @@ class dyld_trie(CBase):
         if hasattr(self.parent, 'suffix'):
             self.prefix += str(self.parent.suffix)
         self._size = 0
-        import struct
         termSize, = struct.unpack("B",c[o:o+1])
         p.interval_add(o, o+1)
         self._size += 1

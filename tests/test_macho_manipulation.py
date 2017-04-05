@@ -28,6 +28,50 @@ def run_test():
     assertion('f71dbe52628a3f83a77ab494817525c6',
               hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
               'MD5')
+    # Testing some internals
+    from elfesteem.macho import Uleb128, Sleb128
+    f = struct.pack("B", 0x0)
+    v = Uleb128(parent=None,content=f)
+    assertion(v.value, 0x0, 'Reading Uleb128 %#x' % v.value)
+    assertion(v.pack(), f, 'Packing Uleb128 %#x' % v.value)
+    v = Sleb128(parent=None,content=f)
+    assertion(v.value, 0x0, 'Reading Sleb128 %#x' % v.value)
+    assertion(v.pack(), f, 'Packing Sleb128 %#x' % v.value)
+    f = struct.pack("B", 0x20)
+    v = Uleb128(parent=None,content=f)
+    assertion(v.value, 0x20, 'Reading Uleb128 %#x' % v.value)
+    assertion(v.pack(), f, 'Packing Uleb128 %#x' % v.value)
+    v = Sleb128(parent=None,content=f)
+    assertion(v.value, 0x20, 'Reading Sleb128 %#x' % v.value)
+    assertion(v.pack(), f, 'Packing Sleb128 %#x' % v.value)
+    f = struct.pack("B", 0x40)
+    v = Uleb128(parent=None,content=f)
+    assertion(v.value, 0x40, 'Reading Uleb128 %#x' % v.value)
+    assertion(v.pack(), f, 'Packing Uleb128 %#x' % v.value)
+    v = Sleb128(parent=None,content=f)
+    assertion(v.value, -0x40, 'Reading Sleb128 %#x' % v.value)
+    assertion(v.pack(), f, 'Packing Sleb128 %#x' % v.value)
+    f = struct.pack("B", 0x60)
+    v = Uleb128(parent=None,content=f)
+    assertion(v.value, 0x60, 'Reading Uleb128 %#x' % v.value)
+    assertion(v.pack(), f, 'Packing Uleb128 %#x' % v.value)
+    v = Sleb128(parent=None,content=f)
+    assertion(v.value, -0x20, 'Reading Sleb128 %#x' % v.value)
+    assertion(v.pack(), f, 'Packing Sleb128 %#x' % v.value)
+    f = struct.pack("BB", 0x80, 0x01)
+    v = Uleb128(parent=None,content=f)
+    assertion(v.value, 0x80, 'Reading Uleb128 %#x' % v.value)
+    assertion(v.pack(), f, 'Packing Uleb128 %#x' % v.value)
+    v = Sleb128(parent=None,content=f)
+    assertion(v.value, 0x80, 'Reading Sleb128 %#x' % v.value)
+    assertion(v.pack(), f, 'Packing Sleb128 %#x' % v.value)
+    f = struct.pack("BBB", 0x80, 0xff, 0x41)
+    v = Uleb128(parent=None,content=f)
+    assertion(v.value, 0x107f80, 'Reading Uleb128 %#x' % v.value)
+    assertion(v.pack(), f, 'Packing Uleb128 %#x' % v.value)
+    v = Sleb128(parent=None,content=f)
+    assertion(v.value, -0xf8080, 'Reading Sleb128 %#x' % v.value)
+    assertion(v.pack(), f, 'Packing Sleb128 %#x' % v.value)
     # Remove warnings
     import logging
     log.setLevel(logging.ERROR)
@@ -166,7 +210,7 @@ def run_test():
     bind_s = [ _ for _ in e.sect if getattr(_, 'type', None)
                in ('bind_','weak_bind_','lazy_bind_','rebase_','export_') ]
     d = ('\n'.join([str(_) for s in bind_s for _ in s.info])).encode('latin1')
-    assertion('28aea32ae0bd5060345b51800163b9f4',
+    assertion('8b29446352613fdb6c4a6142c7c476c3',
               hashlib.md5(d).hexdigest(),
               'dyldinfo-like output for all binding types (libATCommand...)')
     bind_s = [ _ for _ in e.sect if getattr(_, 'type', None)
@@ -207,8 +251,6 @@ def run_test():
     assertion('d7983c780f70e8c81d277ee0f7f8a27d',
               hashlib.md5(d).hexdigest(),
               'dyldinfo-like output for rebase and export (libcoretls)')
-    # print('HASH', hashlib.md5(d).hexdigest())
-
     macho_app = open(__dir__+'OSXII', 'rb').read()
     log.setLevel(logging.ERROR)
     e = MACHO(macho_app)
