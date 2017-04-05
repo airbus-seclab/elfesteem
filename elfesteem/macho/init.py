@@ -214,6 +214,7 @@ class MACHO(object):
         if interval is True:
             interval = intervals.Intervals().add(0,len(data))
         self.interval = interval
+        self.datasize = len(data)
         self.content = StrPatchwork(data)
         self.parse_content(parseSymbols=parseSymbols)
         self._virt = virt(self)

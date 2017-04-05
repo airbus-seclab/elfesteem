@@ -114,7 +114,7 @@ class LoadMetaclass(CStruct_metaclass):
                     return ''.join(data) + '...'
                 else:
                     data = data[(value-s):data.index(data_null,value-s)]
-                    return data.decode('latin1')
+                    return str(data.decode('latin1'))
             for f in dct['_offsets_in_data']:
                 dct['str_'+f] = property(lambda _,f=f,s=s:
                                     get_in_data(_,f=f,s=s))
@@ -141,6 +141,19 @@ class LoadMetaclass(CStruct_metaclass):
         sex = kargs.get('sex',getattr(p,'sex',''))
         if len(cmd) >= 4: cmd, = struct.unpack(sex+"I",cmd)
         else:             cmd = 0
+        if not 'cmd' in kargs:
+            # Early test that 'cmdsize' has a valid value
+            cmdsize = c[o+4:o+8]
+            if len(cmdsize) < 4:
+                raise ValueError("cmdsize after end of file")
+            cmdsize, = struct.unpack(sex+"I",cmdsize)
+            if cmdsize < 8:
+                log.error("load command %d with size less than 8 bytes", len(p))
+            if hasattr(p, 'parent'):
+                if o+cmdsize > p.offset+p.parent.Mhdr.sizeofcmds:
+                    log.error("load command %d bigger than sizeofcmds", len(p))
+                if p.parent.interval is not None and not p.parent.interval.contains(o,o+cmdsize):
+                    raise ValueError("Parsing cmd %d of size %d reads a part of the file that has already been parsed" % (cmd, cmdsize))
         if cmd in cls.lc_types:
             # A subclass of LoadCommand has been used
             lh = super(LoadMetaclass,cls).__call__(*args, **kargs)
@@ -197,7 +210,7 @@ class LoadCommand(LoadBase):
         for name, f_type in self._fields:
             value = getattr(self, name)
             if   name == "cmd":
-                value = "LC_"+constants['LC'][self.cmd]
+                value = "LC_"+constants['LC'].get(self.cmd, hex(self.cmd))
             elif name == "cmdsize":
                 pass
             elif name in getattr(self, '_offsets_in_data', []):
@@ -223,7 +236,7 @@ class LoadCommand(LoadBase):
                 value = "version " + split_integer(value, 8, 3)
             elif name == "pad_segname":
                 name = "segname"
-                value = value.rstrip(data_null).decode('latin1')
+                value = str(value.rstrip(data_null).decode('latin1'))
             elif name == "raw_uuid":
                 name = "uuid"
                 value = "%.8X-%.4X-%.4X-%.4X-%.4X%.8X" % self.uuid
@@ -1246,18 +1259,26 @@ def isOffsetChangeable(offset, min_offset):
 
 class LoadCommands(CBase):
     def unpack(self, c, o):
+        self.offset = o
         self.lhlist = []
+        if self.parent.Mhdr.sizeofcmds > self.parent.datasize:
+            log.error("LoadCommands longer than file length")
+            return
+        if self.parent.Mhdr.ncmds*8 > self.parent.Mhdr.sizeofcmds:
+            log.error("Too many load command: %d commands cannot fit in %d bytes", self.parent.Mhdr.ncmds, self.parent.Mhdr.sizeofcmds)
+            return
         for i in range(self.parent.Mhdr.ncmds):
             lh = LoadCommand(parent=self, content=self.parent.content, start=o)
-            assert lh.cmdsize == lh.bytelen
+            if lh.cmdsize > lh.bytelen:
+                log.warn("%s has %d bytes of additional padding", lh.__class__.__name__, lh.cmdsize-lh.bytelen)
+            elif 8 <= lh.cmdsize < lh.bytelen:
+                log.warn("%s is %d bytes too short", lh.__class__.__name__, lh.bytelen-lh.cmdsize)
             self.lhlist.append(lh)
-            assert lh.cmdsize == len(lh.pack())
             if self.parent.interval is not None :
-                if not self.parent.interval.contains(o,o+lh.bytelen):
-                    log.error("Parsing %r (%d,%d)" % (lh,o,lh.bytelen))
-                    raise ValueError("This part of file has already been parsed")
                 self.parent.interval.delete(o,o+lh.bytelen)
             o += lh.cmdsize
+        if self.parent.Mhdr.sizeofcmds > o-self.offset:
+            log.warn("LoadCommands have %d bytes of additional padding", self.parent.Mhdr.sizeofcmds-o+self.offset)
     def pack(self):
         data = data_empty
         for lc in self.lhlist:
