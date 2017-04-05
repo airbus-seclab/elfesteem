@@ -700,34 +700,44 @@ class dyld_trie(CBase):
         p = self.parent
         while not hasattr(p, 'info'):
             p = p.parent
+        if o >= p.offset + p.size:
+            raise ValueError
         self.prefix = self.parent.prefix
         if hasattr(self.parent, 'suffix'):
             self.prefix += str(self.parent.suffix)
         self._size = 0
         import struct
         termSize, = struct.unpack("B",c[o:o+1])
+        p.interval_add(o, o+1)
         self._size += 1
         if termSize:
             flags = Uleb128(parent=self, content=c, start=o+self._size)
+            p.interval_add(o+self._size, o+self._size+flags.bytelen)
             self._size += flags.bytelen
             addr = Uleb128(parent=self, content=c, start=o+self._size)
+            p.interval_add(o+self._size, o+self._size+addr.bytelen)
             self._size += addr.bytelen
             if   int(flags) & EXPORT_SYMBOL_FLAGS_REEXPORT:
                 name = CString(parent=self, content=c, start=o+self._size)
+                p.interval_add(o+self._size, o+self._size+name.bytelen)
                 other = 0
             elif int(flags) & EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER:
                 name = None
                 other = Uleb128(parent=self, content=c, start=o+self._size)
+                p.interval_add(o+self._size, o+self._size+other.bytelen)
             else:
                 name = None
                 other = 0
             p.info.append(export_entry(p, self.prefix, flags, addr, other, name))
         childCount, = struct.unpack("B",c[o+termSize+1:o+termSize+2])
+        p.interval_add(o+termSize+1, o+termSize+2)
         self._size = termSize+2
         for i in range(childCount):
             self.suffix = CString(parent=self, content=c, start=o+self._size)
+            p.interval_add(o+self._size, o+self._size+self.suffix.bytelen)
             self._size += self.suffix.bytelen
             offset = Uleb128(parent=self, content=c, start=o+self._size)
+            p.interval_add(o+self._size, o+self._size+offset.bytelen)
             self._size += offset.bytelen
             dyld_trie(parent=self, content=c, start=p.offset+int(offset))
 
@@ -739,12 +749,28 @@ class DyldTrieExport(BaseSection):
         setattr(self.parent, self.type + 'size', val)
     size = property(get_size, set_size)
     def unpack(self, c, o):
+        # The trie is a recursive structure with information stored at
+        # explicit offsets: malformed files can cause infinite loops.
+        # We use 'intervals' to detect such loops.
+        from elfesteem.intervals import Intervals
+        self.interval = Intervals()
         self.info = []
         self.prefix = ''
-        self.trie = dyld_trie(parent=self, content=c, start=o)
+        try:
+            self.trie = dyld_trie(parent=self, content=c, start=o)
+        except ValueError:
+            pass
         self.c = c[self.offset:self.offset+self.size]
+        # NB: even in well-formed files, not everything is parsed
+        #print("TARGET   [%d:%d]"%(self.offset,self.offset+self.size))
+        #print("INTERVAL %s"%self.interval)
     def pack(self):
         return self.c
+    def interval_add(self, start, stop):
+        if self.interval.contains(start, stop):
+            log.error('The export trie is malformed, there is a risk of infinite loop')
+            raise ValueError
+        self.interval.add(start, stop)
 dyldarray_register(DyldTrieExport)
 
 def enumerate_constants(constants, globs):
