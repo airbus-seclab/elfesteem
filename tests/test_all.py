@@ -34,6 +34,7 @@ for name in (
         'elf_manipulation',
         'macho_manipulation',
         'rprc_manipulation',
+        'intervals',
         ):
     module = import_by_name('test_' + name)
     print_colored.bold(name)

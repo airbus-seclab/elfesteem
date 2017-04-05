@@ -64,47 +64,18 @@ class Intervals(object):
         if len(self.ranges) == 0:
             self.ranges.append(slice(start, stop))
             return self
-        self._split(start, stop)
-        def _add_slice(l, s):
-            if len(l) and l[-1].start <= start < s.start:
-                if l[-1].start == start:
-                    l[-1] = slice(start, stop)
-                else:
-                    l.append(slice(start, stop))
-            if s.stop <= start or stop <= s.start:
-                l.append(s)
-            return l
-        self.ranges = reduce(_add_slice, self.ranges, [])
+        new_ranges = []
+        prev_stop = None
+        for l in self.ranges:
+            if start <= l.start:
+                if prev_stop is None:
+                    new_ranges.append(slice(start, min(stop,l.start)))
+                elif prev_stop < stop:
+                    new_ranges.append(slice(max(start,prev_stop), min(stop,l.start)))
+            new_ranges.append(l)
+            prev_stop = l.stop
+        if new_ranges[-1].stop < stop:
+            new_ranges.append(slice(max(start,new_ranges[-1].stop), stop))
+        self.ranges = new_ranges
         self._merge()
         return self
-
-if __name__ == "__main__":
-    i = Intervals()
-    i.add(0, 100)
-    print(i)
-    i.delete(8, 25)
-    print(i)
-    print(i.contains(18, 30))
-    print(i.contains(30, 50))
-    print(i.excludes(10, 20))
-    print(i.excludes(10, 30))
-    i.add(12, 16)
-    print(i)
-    i.add(11, 14)
-    print(i)
-    i.add(1, 11)
-    print(i)
-    i.delete(8, 15)
-    print(i)
-    i.add(10, 30)
-    print(i)
-    i.delete(0, 100)
-    print(i)
-    print(i.contains(18, 30))
-    print(i.excludes(10, 30))
-    i.add(10, 30)
-    print(i)
-    i.delete(14, 27)
-    print(i)
-    for k in i:
-        print(k)
