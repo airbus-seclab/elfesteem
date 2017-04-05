@@ -64,7 +64,7 @@ def run_test():
     # Parsing and modifying files
     macho_32 = open(__dir__+'macho_32.o', 'rb').read()
     macho_32_hash = hashlib.md5(macho_32).hexdigest()
-    e = MACHO(macho_32, interval=True)
+    e = MACHO(macho_32)
     d = e.pack()
     assertion(macho_32_hash,
               hashlib.md5(d).hexdigest(),
@@ -82,28 +82,28 @@ def run_test():
         break
     macho_32 = open(__dir__+'macho_32.out', 'rb').read()
     macho_32_hash = hashlib.md5(macho_32).hexdigest()
-    e = MACHO(macho_32, interval=True)
+    e = MACHO(macho_32)
     d = e.pack()
     assertion(macho_32_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading 32-bit Mach-O object')
     macho_64 = open(__dir__+'macho_64.o', 'rb').read()
     macho_64_hash = hashlib.md5(macho_64).hexdigest()
-    e = MACHO(macho_64, interval=True)
+    e = MACHO(macho_64)
     d = e.pack()
     assertion(macho_64_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading 64-bit Mach-O')
     macho_64 = open(__dir__+'macho_64.out', 'rb').read()
     macho_64_hash = hashlib.md5(macho_64).hexdigest()
-    e = MACHO(macho_64, interval=True)
+    e = MACHO(macho_64)
     d = e.pack()
     assertion(macho_64_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading 64-bit Mach-O')
     macho_fat = open(__dir__+'macho_fat.out', 'rb').read()
     macho_fat_hash = hashlib.md5(macho_fat).hexdigest()
-    e = MACHO(macho_fat, interval=True)
+    e = MACHO(macho_fat)
     d = e.pack()
     assertion(macho_fat_hash,
               hashlib.md5(d).hexdigest(),
@@ -288,18 +288,14 @@ def run_test():
               hashlib.md5(d).hexdigest(),
               'Otool-like output including LC_VERSION_MIN_IPHONEOS')
     macho_linkopt = open(__dir__+'TelephonyUtil.o', 'rb').read()
-    e = MACHO(macho_linkopt)
     macho_linkopt_hash = hashlib.md5(macho_linkopt).hexdigest()
-    d = e.pack()
-    assertion_warn(macho_linkopt_hash,
-              hashlib.md5(d).hexdigest(),
-              "Packing after reading object file with LC_LINKER_OPTION does not return the same value, because there is some nop padding at the end of __TEXT,__text; this is a bug in the way 'intervals' are updated")
-    e = MACHO(d)
-    macho_linkopt_hash = hashlib.md5(d).hexdigest()
+    log.setLevel(logging.ERROR)
+    e = MACHO(macho_linkopt)
+    log.setLevel(logging.WARN)
     d = e.pack()
     assertion(macho_linkopt_hash,
               hashlib.md5(d).hexdigest(),
-              'Fixed-point for object file with LC_LINKER_OPTION')
+              "Packing after reading object file with LC_LINKER_OPTION, 'interval' option is needed because there is some nop padding at the end of __TEXT,__text")
     d = ('\n'.join([_ for l in e.load for _ in l.otool()])).encode('latin1')
     assertion('984bf38084c14e435f30eebe36944b47',
               hashlib.md5(d).hexdigest(),

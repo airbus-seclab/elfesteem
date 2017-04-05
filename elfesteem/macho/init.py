@@ -210,7 +210,7 @@ class MACHO(object):
     #   fh       list of architectures
     #   arch     list of normal Mach-O files
     #   rawdata  Unanalyzed data
-    def __init__(self, data, interval=None, parseSymbols=True):
+    def __init__(self, data, interval=True, parseSymbols=True):
         if interval is True:
             interval = intervals.Intervals().add(0,len(data))
         self.interval = interval
