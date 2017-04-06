@@ -45,7 +45,7 @@ def print_symbols(e, **fargs):
                 macho.N_SECT: 'S',
                 macho.N_PBUD: 'P',
                 macho.N_INDR: 'I',
-                }[value.type & macho.N_TYPE]
+                }.get(value.type & macho.N_TYPE, hex(value.type & macho.N_TYPE))
             n_type += [ ' ', 'X' ] [value.type & macho.N_EXT]
             n_type += [ ' ', 'X' ] [(value.type & macho.N_PEXT)>>4]
             if value.type & macho.N_STAB:
@@ -53,8 +53,14 @@ def print_symbols(e, **fargs):
             desc = value.description
             if value.sectionindex == 0:
                 section = "NO_SECT"
+            elif 0 <= value.sectionindex-1 < len(e.sect):
+                section = e.sect[value.sectionindex-1].parent
+                if hasattr(section, 'name'):
+                    section = section.name
+                else:
+                    section = "INVALID(%d)" % value.sectionindex
             else:
-                section = e.sect[value.sectionindex-1].parent.name
+                section = "INVALID(%d)" % value.sectionindex
             print("%-35s %-15s %-4s 0x%08x %04x"%(value.name,section,n_type,value.value,desc))
 
 def print_dysym(e, **fargs):
@@ -71,15 +77,17 @@ def print_dysym(e, **fargs):
                     print("%5s" % "LOCAL")
                 elif entry == macho.INDIRECT_SYMBOL_ABS:
                     print("%5s" % "ABSOLUTE")
-                else:
+                elif 0 <= entry < len(e.symbols.symbols):
                     print("%5s %s" % (entry,e.symbols.symbols[entry].name))
+                else:
+                    print("INVALID(%d)" % entry)
         elif sect.type == 'locrel':
-            print("Local relocations [%d entries]"%len(sect.entries))
-            for entry in sect.entries:
+            print("Local relocations [%d entries]"%len(sect))
+            for entry in sect:
                 print(repr(entry))
         elif sect.type == 'extrel':
-            print("External relocations [%d entries]"%len(sect.entries))
-            for entry in sect.entries:
+            print("External relocations [%d entries]"%len(sect))
+            for entry in sect:
                 print(repr(entry))
 
 def print_indirect(e, **fargs):

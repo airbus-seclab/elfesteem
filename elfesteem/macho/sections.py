@@ -1058,6 +1058,8 @@ class Sections(object):
         return poslist
     def removepos(self, pos):
         self.sect.remove(self.sect[pos])
+    def __getitem__(self, pos):
+        return self.sect.__getitem__(pos)
     def __iter__(self):
         return self.sect.__iter__()
     def __len__(self):
