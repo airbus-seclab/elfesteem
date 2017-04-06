@@ -256,6 +256,12 @@ class StrTable(object):
 # PE object
 
 class PE(object):
+    # API shared by all/most binary containers
+    entrypoint = property(lambda _:_.rva2virt(_.Opthdr.AddressOfEntryPoint))
+    sections = property(lambda _:_.SHList.shlist)
+    symbols = property(lambda _:getattr(_, 'Symbols', ()))
+    dynsyms = property(lambda _:())
+
     Coffhdr = property(lambda self: self.COFFhdr) # Older API
     Doshdr  = property(lambda self: self.DOShdr) # Older API
     def __init__(self, pestr = None,
@@ -348,6 +354,9 @@ class PE(object):
                       parse_resources = True,
                       parse_delay = True,
                       parse_reloc = True):
+        h = struct.unpack("BB", self.content[:2])
+        if h != ( 0x4d,0x5a ): # magic number, MZ
+            raise ValueError("Not a PE, no MZ magic number")
         of = 0
         self.sex = '<'
         self.wsize = 32
@@ -621,7 +630,10 @@ class PE(object):
 
 # The COFF file format happens to have many variants,
 # quite different from the COFF embedded in PE files...
-class Coff(PE):
+class COFF(PE):
+    # API shared by all/most binary containers
+    entrypoint = property(lambda _:getattr(_.Opthdr, 'entry', -1))
+
     def parse_content(self,
                       parse_resources = True,
                       parse_delay = True,
@@ -754,3 +766,6 @@ class Coff(PE):
                 pe.constants['IMAGE_FILE_MACHINE'].get(
                       self.COFFhdr.machine, '%#x'%self.COFFhdr.machine))
             log.warn('%r', self.Opthdr)
+
+# Backward compatibility
+Coff = COFF

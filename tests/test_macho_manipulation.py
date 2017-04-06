@@ -189,6 +189,8 @@ def run_test():
               'Packing after reading 32-bit Mach-O executable')
     assertion(e.entrypoint, 8000,
               'entrypoint in a 32-bit Mach-O executable')
+    assertion(e.virt.max_addr(), 16384,
+              'Maximum address in a 32-bit Mach-O executable')
     e.entrypoint = 8010
     assertion(e.entrypoint, 8010,
               'Changing entrypoint in a 32-bit Mach-O executable')
@@ -220,6 +222,12 @@ def run_test():
     assertion(macho_fat_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading fat Mach-O')
+    assertion(e.virt.max_addr(), -1,
+              'No unique maximum address in a Mach-O fat')
+    assertion([('error', ('Not a unique memory mapping in Mach-O fat',), {})],
+              log_history,
+              'No unique maximum address in a Mach-O fat (logs)')
+    log_history = []
     assertion(e.entrypoint, -1,
               'Many entrypoints in a fat Mach-O')
     assertion([('error', ('Not a unique entrypoint in Mach-O fat',), {})],

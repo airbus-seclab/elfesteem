@@ -775,6 +775,12 @@ def elf_set_offsets(self):
 
 # ELF object
 class ELF(object):
+    # API shared by all/most binary containers
+    entrypoint = property(lambda _:_.Ehdr.entry)
+    sections = property(lambda _:_.sh)
+    symbols = property(lambda _:getattr(_.sh, 'symtab', ()))
+    dynsyms = property(lambda _:getattr(_.sh, 'dynsym', ()))
+
     def __init__(self, elfstr = None, **kargs):
         self._virt = virt(self)
         if elfstr is None:

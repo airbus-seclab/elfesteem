@@ -93,11 +93,7 @@ def print_sections(e):
     print("\nSECTIONS")
     print("No               Name     offset      rsize  vsize/paddr    vaddr      flags")
     for i, s in enumerate(e.SHList):
-        print("%2d %18s %#10x %#10x %#10x %#10x %#10x" %(i,
-               s.name.strip('\0'),
-               s.scnptr, s.rsize,
-               s.paddr, s.vaddr,
-               s.flags))
+        print("%2d %s" % (i, s))
     if hasattr(e, 'NThdr'):
         print("\nNT HEADERS")
         print("No          Name         addr      memsz")

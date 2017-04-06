@@ -315,7 +315,11 @@ def run_test():
     except ValueError:
         pass
     obj_mingw = open(__dir__+'/binary_input/coff_mingw.obj', 'rb').read()
-    e = PE(obj_mingw) # Warning 'ntsig after eof!'
+    try:
+        e = PE(obj_mingw)
+        ko.append('Not PE')
+    except ValueError:
+        pass
     e = Coff(obj_mingw)
     d = e.rva2off(0x10, section='.text')
     assertion(0x8c+0x10, d, 'rva2off in a .obj')
@@ -324,7 +328,6 @@ def run_test():
     d = e.virt2off(0x10)
     assertion(None, d, 'No virt for .obj')
     out_tms320 = open(__dir__+'/binary_input/C28346_Load_Program_to_Flash.out', 'rb').read()
-    e = PE(out_tms320) # Warning 'not a valid pe!'
     e = Coff(out_tms320)
     d = e.SHList.display().encode('latin1')
     assertion('a63cf686186105b83e49509f213b20ea',

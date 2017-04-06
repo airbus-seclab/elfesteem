@@ -38,30 +38,8 @@ def print_symbols(e, **fargs):
         if type(sect) != macho_init.SymbolTable:
             continue
         print("%-35s %-15s %-4s %-10s %s"%("Symbol","Section","Type","Value","Description"))
-        for value in sect.symbols:
-            n_type = {
-                macho.N_UNDF: 'U',
-                macho.N_ABS : 'A',
-                macho.N_SECT: 'S',
-                macho.N_PBUD: 'P',
-                macho.N_INDR: 'I',
-                }.get(value.type & macho.N_TYPE, hex(value.type & macho.N_TYPE))
-            n_type += [ ' ', 'X' ] [value.type & macho.N_EXT]
-            n_type += [ ' ', 'X' ] [(value.type & macho.N_PEXT)>>4]
-            if value.type & macho.N_STAB:
-                n_type += 'D'
-            desc = value.description
-            if value.sectionindex == 0:
-                section = "NO_SECT"
-            elif 0 <= value.sectionindex-1 < len(e.sect):
-                section = e.sect[value.sectionindex-1].parent
-                if hasattr(section, 'name'):
-                    section = section.name
-                else:
-                    section = "INVALID(%d)" % value.sectionindex
-            else:
-                section = "INVALID(%d)" % value.sectionindex
-            print("%-35s %-15s %-4s 0x%08x %04x"%(value.name,section,n_type,value.value,desc))
+        for symbol in sect.symbols:
+            print(symbol.otool())
 
 def print_dysym(e, **fargs):
     # Display indirect symbol tables

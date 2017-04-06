@@ -11,20 +11,6 @@ console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
 log.addHandler(console_handler)
 log.setLevel(logging.WARN)
 
-#### Source: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk/usr/include/mach-o/nlist.h
-# The 'n_type' aka. 'type' field
-N_STAB  = 0xe0  # if any of these bits set, a symbolic debugging entry
-N_PEXT  = 0x10  # private external symbol bit
-N_TYPE  = 0x0e  # mask for the type bits
-N_EXT   = 0x01  # external symbol bit, set for external symbols
-# Values for N_TYPE bits of the n_type field.
-N_UNDF  = 0x0   # undefined, n_sect == NO_SECT
-N_ABS   = 0x2   # absolute, n_sect == NO_SECT
-#         0x4   # (found in 'Decibels' for iOS, meaning unknown)
-N_SECT  = 0xe   # defined in section number n_sect
-N_PBUD  = 0xc   # prebound undefined (defined in a dylib)
-N_INDR  = 0xa   # indirect
-
 
 #### Main source: /usr/include/mach/machine.h
 # VEO is found on http://www.opensource.apple.com/source/cctools/cctools-809/include/mach/machine.h

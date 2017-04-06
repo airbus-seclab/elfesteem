@@ -113,6 +113,8 @@ class Sym32(CStructWithStrTable):
     ndx = property(ndx)
     def readelf_display(self):
         return self.format % self
+    def __str__(self):
+        return self.readelf_display()
 
 class Sym64(Sym32):
     _fields = [ ("name_idx","u32"),

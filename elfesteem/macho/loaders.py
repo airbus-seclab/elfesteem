@@ -354,6 +354,8 @@ class sectionHeader(CStruct):
         ("reserved1","u32"), # reserved (for offset or index)
         ("reserved2","ptr"), # reserved (for count or sizeof)
         ]
+    def __str__(self):
+        return "%-30s %#010x %#010x %#010x" % (self.name, self.addr, self.offset, self.size)
     def get_type(self):
         return self.flags & SECTION_TYPE
     def set_type(self, val):

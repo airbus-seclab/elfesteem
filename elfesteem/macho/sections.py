@@ -23,7 +23,7 @@ class BaseSection(CBase):
         else:                 setattr(self.parent, self.type + 'off', val)
     offset = property(get_offset, set_offset)
     def __str__(self):
-        raise AttributeError("Use pack() instead of str()")
+        return "%-30s %-10s %#010x %#010x" % (self.__class__.__name__, '', self.offset, len(self))
 
 class TrueSection(BaseSection):
     name = property(lambda _:_.parent.name)
@@ -33,6 +33,8 @@ class TrueSection(BaseSection):
     addr = property(lambda _:_.parent.addr)
     # 'sh' member should be obsolete, but is used to detect a true section.
     sh = property(lambda _:_.parent)
+    def __str__(self):
+        return str(self.parent)
 
 class Section(TrueSection):
     type = None
@@ -82,7 +84,24 @@ class Reloc(TrueSection,CArray):
     size = property(lambda _:_.parent.nreloc//8)
     addr = property(lambda _:_.parent.reloff)
     reloclist = property(lambda _:_._array)
+    def __str__(self):
+        p = self.parent
+        return "%-30s %-10s %#010x %#010x" % (p.name, 'relocs', p.reloff, p.nreloc)
     # TODO: update self.parent.nreloc when the array size changes
+
+#### Source: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk/usr/include/mach-o/nlist.h
+# The 'n_type' aka. 'type' field
+N_STAB  = 0xe0  # if any of these bits set, a symbolic debugging entry
+N_PEXT  = 0x10  # private external symbol bit
+N_TYPE  = 0x0e  # mask for the type bits
+N_EXT   = 0x01  # external symbol bit, set for external symbols
+# Values for N_TYPE bits of the n_type field.
+N_UNDF  = 0x0   # undefined, n_sect == NO_SECT
+N_ABS   = 0x2   # absolute, n_sect == NO_SECT
+#         0x4   # (found in 'Decibels' for iOS, meaning unknown)
+N_SECT  = 0xe   # defined in section number n_sect
+N_PBUD  = 0xc   # prebound undefined (defined in a dylib)
+N_INDR  = 0xa   # indirect
 
 class symbol(CStructWithStrTable):
     _fields = [ ("name_idx","u32"),
@@ -93,6 +112,33 @@ class symbol(CStructWithStrTable):
     def strtab(self):
         return self.parent.parent.strtab
     strtab = property(strtab)
+    def __str__(self):
+        return self.otool()
+    def otool(self):
+        n_type = {
+            N_UNDF: 'U',
+            N_ABS : 'A',
+            N_SECT: 'S',
+            N_PBUD: 'P',
+            N_INDR: 'I',
+            }.get(self.type & N_TYPE, hex(self.type & N_TYPE))
+        n_type += [ ' ', 'X' ] [self.type & N_EXT]
+        n_type += [ ' ', 'X' ] [(self.type & N_PEXT)>>4]
+        if self.type & N_STAB:
+            n_type += 'D'
+        desc = self.description
+        e = self.parent.parent.parent.parent
+        if self.sectionindex == 0:
+            section = "NO_SECT"
+        elif 0 <= self.sectionindex-1 < len(e.sect):
+            section = e.sect[self.sectionindex-1].parent
+            if hasattr(section, 'name'):
+                section = section.name
+            else:
+                section = "INVALID(%d)" % self.sectionindex
+        else:
+            section = "INVALID(%d)" % self.sectionindex
+        return "%-35s %-15s %-4s 0x%08x %04x"%(self.name,section,n_type,self.value,desc)
 
 class SymbolTable(BaseSection,CArray):
     type = 'sym'
@@ -919,6 +965,8 @@ class DyldTrieExport(BaseSection):
             log.error('The export trie is malformed, there is a risk of infinite loop')
             raise ValueError
         self.interval.add(start, stop)
+    def __str__(self):
+        return "%-30s %-10s %#010x %#010x" % (self.__class__.__name__, '', self.offset, len(self.info))
 dyldarray_register(DyldTrieExport)
 
 def enumerate_constants(constants, globs):
@@ -949,6 +997,8 @@ class LinkEditSection(BaseSection):
     addr = property(lambda _:0)
     def pack(self):
         return self.content.pack()
+    def __str__(self):
+        return "%-30s %-10s %#010x %#010x" % (self.__class__.__name__, '', self.offset, self.size)
 
 class FunctionStarts(LinkEditSection):
     pass
@@ -1013,6 +1063,8 @@ class StringTable(LinkEditSection):
                 if sh.sh.offset > self.sh.offset:
                     sh.sh.offset += dif
         return idx
+    def __str__(self):
+        return "%-30s %-10s %#010x %#010x" % ('StringTable', '', self.offset, self.size)
 
 class Sections(object):
     def __init__(self, parent):

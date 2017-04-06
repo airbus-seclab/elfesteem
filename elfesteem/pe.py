@@ -900,6 +900,12 @@ class Shdr(CStruct):
     def set_data(self, value):
         self.section_data.data = value
     data    = property(lambda _: _.section_data.data, set_data)
+    def __str__(self):
+        return "%18s %#10x %#10x %#10x %#10x %#10x" %(
+               self.name.strip('\0'),
+               self.scnptr, self.rsize,
+               self.paddr, self.vaddr,
+               self.flags)
 
 class ShdrTI(Shdr):
     # 48 bytes long, when the standard COFF is 40 bytes long
@@ -1927,6 +1933,8 @@ class CoffSymbol(CStruct):
     storage = property(storage)
     def __repr__(self):
         return "<CoffSymbol %r value=%#x section=%s type=%s storage=%s aux=%r>" % (self.name, self.value, self.section, self.type_str, self.storage, self.aux)
+    def __str__(self):
+        return '%-36r %-8s %-9s %#010x %s' % (self.name, self.type_str, self.storage, self.value, self.section)
 
 class CoffSymbols(CArray):
     _cls = CoffSymbol

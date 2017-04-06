@@ -123,6 +123,8 @@ class Section(CStruct):
             for r in self.res:
                 rep.append(r.display())
         return '\n'.join(rep)
+    def __str__(self):
+        return 'section %(type)d, address: %(da)#010x, size: %(len)#010x' % self
 
 class Layout(object):
     ''' This class manages the layout of the file when loaded in memory. '''
@@ -170,6 +172,8 @@ class Layout(object):
             _, data = self.layout[-1]
             res.append((slice(stop,item.stop),data))
         return res
+    def max_addr(self):
+        return self.layout[-1][0]
 
 class Virtual(object):
     # This class manages 'virtual addresses', i.e. the addresses when
@@ -209,8 +213,16 @@ class Virtual(object):
         for i, s in l:
             of = i.start-start
             s.data[i.start-s.da:i.stop-s.da] = data[i.start-s.da+of:i.stop-s.da+of]
+    def max_addr(self):
+        return self.layout.max_addr()
 
 class RPRC(object):
+    # API shared by all/most binary containers
+    entrypoint = property(lambda _:-1)
+    #sections = property(lambda _:_.SHList.shlist)
+    symbols = property(lambda _:())
+    dynsyms = property(lambda _:())
+
     sex = '<'
     wsize = 32
     virt = property(lambda _:_._virt)

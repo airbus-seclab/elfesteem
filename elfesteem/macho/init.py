@@ -190,6 +190,9 @@ class virt(object):
         log.warn("__len__ deprecated")
         return self.max_addr()
     def max_addr(self):
+        if not hasattr(self.parent, 'load'):
+            log.error("Not a unique memory mapping in Mach-O fat")
+            return -1
         l=0
         for lc in self.parent.load:
             if hasattr(lc, 'vmaddr'):
@@ -222,6 +225,7 @@ class MACHO(object):
         return self._virt
     virt = property(get_virt)
     
+    sections = property(lambda _:_.sect)
     def parse_content(self, parseSymbols=True):
         magic, = struct.unpack("<I",self.content[0:4])
         if  magic == FAT_MAGIC or magic == FAT_CIGAM:
@@ -234,6 +238,8 @@ class MACHO(object):
             self.fh.parseSymbols = parseSymbols
             self.arch = MachoList(parent=self, content=self.content)
             self.rawdata = []
+            self.symbols = () # or merge symbol tables of all architectures?
+            self.sect    = () # or merge sections of all architectures?
         elif  self.content[0:7] == '!<arch>':
             # a Mach-O FAT file may contain ar archives, called "Static
             # archive libraries",
@@ -488,6 +494,7 @@ class MACHO(object):
                     result.remove((pos,val))
         return result
 
+    dynsyms = property(lambda _:()) # TODO, cf. print_dysym from otool.py
     def parse_dynamic_symbols(self):
         if not len(self.sect):
             return
