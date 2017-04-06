@@ -825,6 +825,8 @@ class thread_command(LoadCommand):
     registerInstructionPointer = {
         CPU_TYPE_I386: 10,
         CPU_TYPE_X86_64: 16,
+        CPU_TYPE_ARM: 15,
+        CPU_TYPE_POWERPC: 0,
         }
     def get_entrypoint(self):
         return self.reg[self.registerInstructionPointer[self.cputype]]

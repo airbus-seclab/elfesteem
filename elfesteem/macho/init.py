@@ -309,14 +309,26 @@ class MACHO(object):
         raise AttributeError("Use pack() instead of str()")
     
     def entrypoint(self):
+        if not hasattr(self, 'load'):
+            log.error("Not a unique entrypoint in Mach-O fat")
+            return -1
         ep = [ _ for _ in self.load if _.cmd in (LC_MAIN, LC_UNIXTHREAD) ]
-        if len(ep) != 1: raise ValueError("Loader with entrypoint %s" % ep)
+        if len(ep) != 1:
+            log.error("Not a unique loader with entrypoint: %s" % ep)
+            return -1
         if ep[0].cmd == LC_MAIN: return self.off2ad(ep[0].entryoff)
         if ep[0].cmd == LC_UNIXTHREAD: return ep[0].entrypoint
     def set_entrypoint(self, val):
+        if not hasattr(self, 'load'):
+            log.error("Not a unique entrypoint in Mach-O fat")
+            return
         ep = [ _ for _ in self.load if _.cmd in (LC_MAIN, LC_UNIXTHREAD) ]
-        if len(ep) != 1: raise ValueError("Loader with entrypoint %s" % ep)
-        if ep[0].cmd == LC_MAIN: ep[0].entryoff = self.ad2off(val)
+        if len(ep) != 1:
+            log.error("Not a unique loader with entrypoint: %s" % ep)
+            return
+        if ep[0].cmd == LC_MAIN:
+            val = self.ad2off(val)
+            if val is not None: ep[0].entryoff = val
         if ep[0].cmd == LC_UNIXTHREAD: ep[0].entrypoint = val
     entrypoint = property(entrypoint, set_entrypoint)
 
@@ -351,6 +363,9 @@ class MACHO(object):
 
     def ad2off(self, ad):
         s = self.getsectionbyvad(ad)
+        if s is None:
+            log.error("Address %#x not mapped in memory", ad)
+            return
         return ad - s.addr + s.offset
     
     def off2ad(self, of):

@@ -84,6 +84,12 @@ def run_test():
               log_history,
               'Parsing a minimal data, with Mach-O magic number only (logs)')
     log_history = []
+    assertion(e.entrypoint, -1,
+              'No entrypoint in a truncated Mach-O header')
+    assertion([('error', ('Not a unique loader with entrypoint: []',), {})],
+              log_history,
+              'No entrypoint in a truncated Mach-O header (logs)')
+    log_history = []
     d = e.pack()
     assertion('37b830a1776346543c72ff53fbbe2b4a',
               hashlib.md5(d).hexdigest(),
@@ -152,6 +158,17 @@ def run_test():
     assertion(macho_32_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading 32-bit Mach-O object')
+    assertion(e.entrypoint, -1,
+              'No entrypoint in a Mach-O object')
+    assertion([('error', ('Not a unique loader with entrypoint: []',), {})],
+              log_history,
+              'No entrypoint in a Mach-O object (logs)')
+    log_history = []
+    e.entrypoint = 0
+    assertion([('error', ('Not a unique loader with entrypoint: []',), {})],
+              log_history,
+              'Cannot set entrypoint in a Mach-O object (logs)')
+    log_history = []
     for s in e.sect.sect:
         if not hasattr(s, 'reloclist'): continue
         d = s.reloclist[0].pack()
@@ -169,21 +186,33 @@ def run_test():
     d = e.pack()
     assertion(macho_32_hash,
               hashlib.md5(d).hexdigest(),
-              'Packing after reading 32-bit Mach-O object')
+              'Packing after reading 32-bit Mach-O executable')
+    assertion(e.entrypoint, 8000,
+              'entrypoint in a 32-bit Mach-O executable')
+    e.entrypoint = 8010
+    assertion(e.entrypoint, 8010,
+              'Changing entrypoint in a 32-bit Mach-O executable')
+    e.entrypoint = 9000
+    assertion(e.entrypoint, 8010,
+              'Changing entrypoint with an invalid address')
+    assertion([('error', ('Address %#x not mapped in memory', 9000), {})],
+              log_history,
+              'Changing entrypoint with an invalid address (logs)')
+    log_history = []
     macho_64 = open(__dir__+'macho_64.o', 'rb').read()
     macho_64_hash = hashlib.md5(macho_64).hexdigest()
     e = MACHO(macho_64)
     d = e.pack()
     assertion(macho_64_hash,
               hashlib.md5(d).hexdigest(),
-              'Packing after reading 64-bit Mach-O')
+              'Packing after reading 64-bit Mach-O object')
     macho_64 = open(__dir__+'macho_64.out', 'rb').read()
     macho_64_hash = hashlib.md5(macho_64).hexdigest()
     e = MACHO(macho_64)
     d = e.pack()
     assertion(macho_64_hash,
               hashlib.md5(d).hexdigest(),
-              'Packing after reading 64-bit Mach-O')
+              'Packing after reading 64-bit Mach-O executable')
     macho_fat = open(__dir__+'macho_fat.out', 'rb').read()
     macho_fat_hash = hashlib.md5(macho_fat).hexdigest()
     e = MACHO(macho_fat)
@@ -191,6 +220,17 @@ def run_test():
     assertion(macho_fat_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading fat Mach-O')
+    assertion(e.entrypoint, -1,
+              'Many entrypoints in a fat Mach-O')
+    assertion([('error', ('Not a unique entrypoint in Mach-O fat',), {})],
+              log_history,
+              'Many entrypoints in a fat Mach-O (logs)')
+    log_history = []
+    e.entrypoint = 0
+    assertion([('error', ('Not a unique entrypoint in Mach-O fat',), {})],
+              log_history,
+              'Cannot set entrypoint directly in a fat Mach-O (logs)')
+    log_history = []
     macho_32 = open(__dir__+'macho_32.out', 'rb').read()
     e = MACHO(macho_32)
     d = e.virt[0x1f9c:0x1fae]
@@ -215,6 +255,12 @@ def run_test():
               'Adding a section (32 bits)')
     macho_lib = open(__dir__+'libdns_services.dylib', 'rb').read()
     e = MACHO(macho_lib)
+    assertion(e.entrypoint, -1,
+              'No entrypoint in a Mach-O library')
+    assertion([('error', ('Not a unique loader with entrypoint: []',), {})],
+              log_history,
+              'No entrypoint in a Mach-O library (logs)')
+    log_history = []
     macho_lib_hash = hashlib.md5(macho_lib).hexdigest()
     d = e.pack()
     assertion(macho_lib_hash,
@@ -316,6 +362,8 @@ def run_test():
     assertion(macho_app_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading MacTheRipper app')
+    assertion(e.entrypoint, 0xa760,
+              'Entrypoint in MacTheRipper app')
     d = ('\n'.join([_ for l in e.load for _ in l.otool()])).encode('latin1')
     assertion('b10cd006c10906db3329e0dccd0babbe',
               hashlib.md5(d).hexdigest(),
@@ -383,6 +431,8 @@ def run_test():
     assertion(macho_ios_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading iOS application LyonMetro')
+    assertion(e.entrypoint, 0x2f50,
+              'Entrypoint in iOS application LyonMetro')
     d = ('\n'.join([_ for l in e.load for _ in l.otool()])).encode('latin1')
     assertion('7bac82cc00b5cce2cb96344d678508e5',
               hashlib.md5(d).hexdigest(),
