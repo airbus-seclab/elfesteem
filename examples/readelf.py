@@ -192,15 +192,16 @@ def display_symbols(e, table_name):
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-H', dest='options', action='append_const', const='headers',  help='Headers')
-    parser.add_argument('-S', dest='options', action='append_const', const='sections', help='Sections')
-    parser.add_argument('-r', dest='options', action='append_const', const='reltab',   help='Relocation sections')
-    parser.add_argument('-s', dest='options', action='append_const', const='symtab',   help='Symbol table')
-    parser.add_argument('-D', dest='options', action='append_const', const='dynsym',   help='Dynamic symbols')
-    parser.add_argument('-d', dest='options', action='append_const', const='dynamic',  help='Dynamic section')
-    parser.add_argument('-l', dest='options', action='append_const', const='program',  help='Program headers')
-    parser.add_argument('-g', dest='options', action='append_const', const='groups',   help='Section groups')
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('-H', '--help', action='help', default=argparse.SUPPRESS, help='Display this information')
+    parser.add_argument('-h', '--file-header', dest='options', action='append_const', const='headers',  help='Display the ELF file header')
+    parser.add_argument('-S', '--section-headers', '--sections', dest='options', action='append_const', const='sections', help="Display the sections' header")
+    parser.add_argument('-r', '--relocs', dest='options', action='append_const', const='reltab',   help='Display the relocations (if present)')
+    parser.add_argument('-s', '--syms', '--symbols', dest='options', action='append_const', const='symtab',   help='Display the symbol table')
+    parser.add_argument('--dyn-syms', dest='options', action='append_const', const='dynsym',   help='Display the dynamic symbol table')
+    parser.add_argument('-d', '--dynamic', dest='options', action='append_const', const='dynamic',  help='Display the dynamic section (if present)')
+    parser.add_argument('-l', '--program-headers', '--segments', dest='options', action='append_const', const='program',  help='Display the program headers')
+    parser.add_argument('-g', '--section-groups', dest='options', action='append_const', const='groups',   help='Display the section groups')
     parser.add_argument('file', nargs='+', help='ELF file(s)')
     args = parser.parse_args()
     if args.options == None:
