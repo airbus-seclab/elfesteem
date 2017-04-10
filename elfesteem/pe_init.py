@@ -257,6 +257,7 @@ class StrTable(object):
 
 class PE(object):
     # API shared by all/most binary containers
+    architecture = property(lambda _:pe.constants['IMAGE_FILE_MACHINE'].get(_.COFFhdr.machine,'UNKNOWN(%d)'%_.COFFhdr.machine))
     entrypoint = property(lambda _:_.rva2virt(_.Opthdr.AddressOfEntryPoint))
     sections = property(lambda _:_.SHList.shlist)
     symbols = property(lambda _:getattr(_, 'Symbols', ()))
@@ -363,15 +364,11 @@ class PE(object):
         self.DOShdr = pe.DOShdr(parent=self, content=self.content, start=of)
         of = self.DOShdr.lfanew
         if of > len(self.content):
-            log.warn('ntsig after eof!')
-            self.NTsig = None
-            return
+            raise ValueError('Not a PE, NTsig offset after eof %#x', of)
         self.NTsig = pe.NTsig(parent=self, content=self.content, start=of)
+        if self.NTsig.signature != 0x4550: # PE\0\0
+            raise ValueError('Not a PE, NTsig is %#x', self.NTsig.signature)
 
-
-        if self.NTsig.signature != 0x4550:
-            log.warn('not a valid pe!')
-            return
         of += self.NTsig.bytelen
         self.COFFhdr = pe.COFFhdr(parent=self, content=self.content, start=of)
         of += self.COFFhdr.bytelen
@@ -407,8 +404,7 @@ class PE(object):
         if self.COFFhdr.pointertosymboltable != 0:
             if self.COFFhdr.pointertosymboltable + 18 * self.COFFhdr.numberofsymbols > len(self.content):
                 log.warning('Too many symbols: %d', self.COFFhdr.numberofsymbols)
-            else:
-                self.Symbols = pe.CoffSymbols(**kargs)
+            self.Symbols = pe.CoffSymbols(**kargs)
         if hasattr(self, 'Symbols'):
             of = self.COFFhdr.pointertosymboltable + self.Symbols.bytelen
             sz, = struct.unpack(self.sex+'I',self.content[of:of+4])
@@ -731,7 +727,7 @@ class COFF(PE):
         if self.COFFhdr.numberofsections > 0x1000:
             raise ValueError("COFF too many sections %d"%self.COFFhdr.numberofsections)
         if of + self.COFFhdr.numberofsections * 40 > filesz:
-            raise ValueError("COFF too many sections %d"%self.COFFhdr.numberofsections)
+            raise ValueError("COFF too many sections %d, past end of file"%self.COFFhdr.numberofsections)
         if self.COFFhdr.pointertosymboltable > filesz:
             raise ValueError("COFF invalid ptr to symbol table")
         self.SHList = pe.SHList(parent=self, content=self.content, start=of)

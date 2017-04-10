@@ -181,12 +181,9 @@ def display_dynamic(e):
             print(output)
 
 
-def display_symbols(e, table_name):
-    # Output format similar to readelf -s or readelf --dyn-syms
-    if not table_name in e.sh.__dict__:
-        print("Symbol table '.%s' missing" % table_name)
-        return
-    print(e.sh.__dict__[table_name].readelf_display())
+def display_symbols(sections):
+    for s in sections:
+        print("\n"+s.readelf_display())
 
 
 
@@ -217,16 +214,13 @@ if __name__ == '__main__':
         if 'sections' in args.options:
             print(e.sh.readelf_display())
         if 'reltab' in args.options:
-            # Same output as readelf -r
             for sh in e.sh:
                 if not 'rel' in dir(sh): continue
                 print("\n" + sh.readelf_display())
+        if 'symtab' in args.options or 'dynsym' in args.options:
+            display_symbols(e.getsectionsbytype(elf.SHT_DYNSYM))
         if 'symtab' in args.options:
-            # Same output as readelf -s
-            display_symbols(e, 'symtab')
-        if 'dynsym' in args.options:
-            # Same output as readelf --dyn-syms
-            display_symbols(e, 'dynsym')
+            display_symbols(e.getsectionsbytype(elf.SHT_SYMTAB))
         if 'dynamic' in args.options:
             display_dynamic(e)
         if 'program' in args.options:

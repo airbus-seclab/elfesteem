@@ -218,6 +218,7 @@ class Virtual(object):
 
 class RPRC(object):
     # API shared by all/most binary containers
+    architecture = property(lambda _:'ARM')
     entrypoint = property(lambda _:-1)
     #sections = property(lambda _:_.SHList.shlist)
     symbols = property(lambda _:())

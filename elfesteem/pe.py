@@ -1211,6 +1211,11 @@ class ImportDescriptor(CStruct):
             # TODO: apply relocations before the decoding.
         else:
             self.name = CString(parent=self, content=c, start=of)
+        # NB: it is possible for a PE to have many Import descriptors
+        # pointing to the same IAT and ILT. elfesteem will take a
+        # long time because the IAT and ILT will be parsed each time.
+        # An example of such malformed file is
+        # https://github.com/radare/radare2-regressions/blob/master/bins/fuzzed/file-rs-bf838568
         of = self.rva2off(self.firstthunk)
         if of is None:
             log.error('IAT')
@@ -1708,7 +1713,11 @@ class ResourceDataDescription(CStruct):
         CStruct.unpack(self, c, o)
         # Follow the RVA
         of=self.parent.rva2off(self.rva)
-        self.data = c[of:of+self.size]
+        if of is None:
+            log.error("Invalid ResourceDataDescription with RVA %#x", self.rva)
+            raise ValueError
+        else:
+            self.data = c[of:of+self.size]
     def __repr__(self):
         return '<%s RVA=%#x size=%d codepage=%d zero=%d>' % (
             self.__class__.__name__,
@@ -1726,8 +1735,12 @@ class ResourceDirectoryEntry(CStruct):
         # The self.parent.parent.numberofnamedentries first ones are Named
         # and the MSB of their name is 1
         pos = len(self.parent._array)
-        assert (pos < self.parent.parent.numberofnamedentries) \
-            == (self.id & 0x80000000 != 0)
+        if (pos < self.parent.parent.numberofnamedentries) \
+            and (self.id & 0x80000000 == 0):
+            log.error("Named resource entries should be the first ones")
+        if (pos >= self.parent.parent.numberofnamedentries) \
+            and (self.id & 0x80000000 != 0):
+            log.error("Id resource entries should be the last ones")
         if self.id & 0x80000000:
             self.name = UString(parent=self, content=c,
                 start=self.base + (self.id & 0x7FFFFFFF))

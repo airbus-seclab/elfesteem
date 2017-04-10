@@ -261,7 +261,7 @@ class MACHO(object):
                     self.symbols = sect
                     break
             else:
-                self.symbols = None
+                self.symbols = ()
             if parseSymbols:
                 self.parse_symbols()
             # 'rawdata' is a list of pairs (position, byte) that is used by
@@ -314,6 +314,13 @@ class MACHO(object):
     def __str__(self):
         raise AttributeError("Use pack() instead of str()")
     
+    cpuname = property(lambda _:constants['CPU_TYPE'].get(_.Mhdr.cputype,
+                                'UNKNOWN(%d)'%_.Mhdr.cputype))
+    def architecture(self):
+        if hasattr(self, 'Mhdr'): return self.cpuname
+        else: return [ _.cpuname for _ in self.arch ]
+    architecture = property(architecture)
+    
     def entrypoint(self):
         if not hasattr(self, 'load'):
             log.error("Not a unique entrypoint in Mach-O fat")
@@ -365,6 +372,7 @@ class MACHO(object):
             if hasattr(lc,'fileoff'):
                 if lc.fileoff <= of < lc.fileoff + lc.filesize:
                     f.append(lc)
+        if len(f) == 0: return None
         return f[0]
 
     def ad2off(self, ad):

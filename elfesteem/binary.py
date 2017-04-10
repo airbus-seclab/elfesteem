@@ -13,6 +13,7 @@ from elfesteem.rprc import RPRC
 class UnknownFormat(object):
     def __init__(self, raw):
         self.raw = raw
+    architecture = 'UNKNOWN'
     entrypoint = -1
     sections   = ()
     symbols    = ()
@@ -31,27 +32,29 @@ class BINARY(object):
                 pass
         else:
             self.e = UnknownFormat(raw)
-    container  = property(lambda _:_.e.__class__.__name__)
-    entrypoint = property(lambda _:_.e.entrypoint)
-    max_addr   = property(lambda _:_.e.virt.max_addr())
-    sections   = property(lambda _:_.e.sections)
-    symbols    = property(lambda _:_.e.symbols)
-    dynsyms    = property(lambda _:_.e.dynsyms)
+    container    = property(lambda _:_.e.__class__.__name__)
+    architecture = property(lambda _:_.e.architecture)
+    entrypoint   = property(lambda _:_.e.entrypoint)
+    max_addr     = property(lambda _:_.e.virt.max_addr())
+    sections     = property(lambda _:_.e.sections)
+    symbols      = property(lambda _:_.e.symbols)
+    dynsyms      = property(lambda _:_.e.dynsyms)
 
 if __name__ == "__main__":
     for file in sys.argv[1:]:
         print("File: %s"%file)
         raw = open(file, 'rb').read()
         e = BINARY(raw)
-        print("  container   %s" % e.container)
-        print("  entrypoint  %#x" % e.entrypoint)
-        print("  max address %#x" % e.max_addr)
-        print("  sections:")
+        print("  container    %s" % e.container)
+        print("  architecture %s" % e.architecture)
+        print("  entrypoint   %#x" % e.entrypoint)
+        print("  max address  %#x" % e.max_addr)
+        print("  %d sections:" % len(e.sections))
         for sect in e.sections:
             print("    %s" % sect)
-        print("  symbols:")
+        print("  %d symbols:" % len(e.symbols))
         for symbol in e.symbols:
             print("    %s" % symbol)
-        print("  dynamic symbols:")
+        print("  %d dynamic symbols:" % len(e.dynsyms))
         for symbol in e.dynsyms:
             print("    %s" % symbol)

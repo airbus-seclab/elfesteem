@@ -140,6 +140,9 @@ class symbol(CStructWithStrTable):
             section = "INVALID(%d)" % self.sectionindex
         return "%-35s %-15s %-4s 0x%08x %04x"%(self.name,section,n_type,self.value,desc)
 
+class SymbolNotFound(object):
+    pass
+SymbolNotFound = SymbolNotFound()
 class SymbolTable(BaseSection,CArray):
     type = 'sym'
     _cls = symbol
@@ -150,12 +153,17 @@ class SymbolTable(BaseSection,CArray):
         for symbol in self.symbols:
             self.symbols_from_name[symbol.name] = symbol
     symbols = property(lambda _:_._array)
+    def __iter__(self):
+        return self.symbols.__iter__()
     def __getitem__(self, idx):
-        if type(idx) == int:
-            return self.symbols[idx]
-        else:
-            return self.symbols_from_name[idx.strip(data_null)]
-        raise ValueError("Cannot find symbol with index %r"%idx)
+        try:
+            if type(idx) == int:
+                return self.symbols[idx]
+            else:
+                return self.symbols_from_name[idx.strip(data_null)]
+        except IndexError:
+            log.error("Cannot find symbol with index %r", idx)
+            return SymbolNotFound
 
 #### Source: /usr/include/mach-o/loader.h
 
@@ -1070,25 +1078,27 @@ class Sections(object):
     def __init__(self, parent):
         self.parent = parent
         self.sect = []
-        for lc in parent.load:
-            if hasattr(lc, 'sectionsToAdd'):
-                lc.sectionsToAdd(self.parent.content)
-                self.sect.extend(lc.sect)
-                if not hasattr(lc,'segname'):
-                    for s in lc.sect:
-                        for loco in parent.load:
-                            if hasattr(loco,'segname'):# searching in parent.lh of LC_segment
-                                if loco.fileoff < s.offset and s.offset < loco.fileoff + loco.filesize :
-                                    loco.sect.append(s)# ajout a sect
-                if parent.interval is not None :
-                    for s in lc.sect:
-                        if s.__class__.__name__== 'Encryption':
-                            log.warn("Some encrypted text is not parsed with the section headers of LC_SEGMENT(__TEXT)")
-                            continue
-                        if not parent.interval.contains(s.offset,s.offset+len(s.pack())):
-                            #log.warn("This part of file has already been parsed")
-                            pass
-                        parent.interval.delete(s.offset,s.offset+len(s.pack()))
+        lc_list = [ _ for _ in parent.load if hasattr(_, 'sectionsToAdd') ]
+        # First, create all sections depending on each load command
+        for lc in lc_list:
+            lc.sectionsToAdd(self.parent.content)
+            self.sect.extend(lc.sect)
+            if parent.interval is not None :
+                for s in lc.sect:
+                    if s.__class__.__name__== 'Encryption':
+                        log.warn("Some encrypted text is not parsed with the section headers of LC_SEGMENT(__TEXT)")
+                        continue
+                    if not parent.interval.contains(s.offset,s.offset+len(s.pack())):
+                        #log.warn("This part of file has already been parsed")
+                        pass
+                    parent.interval.delete(s.offset,s.offset+len(s.pack()))
+        # Then if the load command is not a segment, add the section to the
+        # list of sections in the relevant segment.
+        for lc in lc_list:
+            if not hasattr(lc,'segname'):
+                for s in lc.sect:
+                    segm = parent.getsegment_byoffset(s.offset)
+                    if segm is not None: segm.sect.append(s)
     def add(self, s):
         # looking in s.lc to know where to insert
         pos = 0

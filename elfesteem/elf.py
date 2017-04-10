@@ -100,15 +100,19 @@ class Sym32(CStructWithStrTable):
                 ("info","u08"),
                 ("other","u08"),
                 ("shndx","u16") ]
-    format = '%(idx)06d: %(value)08x %(size)4d %(type)-7s %(bind)-6s %(visibility)-7s  %(ndx)-3s %(name)s'
+    format = '%(idx)6d: %(value)08x %(size)5d %(type)-7s %(bind)-6s %(visibility)-7s  %(ndx)-3s %(name)s'
     idx = property(lambda _: _.parent.symtab.index(_))
     strtab = property(lambda _: _.parent.linksection)
-    type = property(lambda _: constants['STT'][_.info&0xf])
-    bind = property(lambda _: constants['STB'][_.info>>4])
-    visibility = property(lambda _: constants['STV'][_.other])
+    type       = property(lambda _: constants['STT'].get(_.info&0xf,
+                          '<unknown>: %d'%(_.info&0xf)))
+    bind       = property(lambda _: constants['STB'].get(_.info>>4,
+                          '<unknown>: %d'%(_.info>>4)))
+    visibility = property(lambda _: constants['STV'].get(_.other,
+                          'DEFAULT [<other>: %x] '%_.other))
     def ndx(self):
-        if self.shndx>999:  return "ABS"
-        elif self.shndx==0: return "UND"
+        if   self.shndx==SHN_UNDEF:  return "UND"
+        elif self.shndx==SHN_ABS:    return "ABS"
+        elif self.shndx==SHN_COMMON: return "COM"
         else:               return "%3d"%self.shndx
     ndx = property(ndx)
     def readelf_display(self):
@@ -123,7 +127,7 @@ class Sym64(Sym32):
                 ("shndx","u16"),
                 ("value","u64"),
                 ("size","u64") ]
-    format = '%(idx)06d: %(value)016x %(size)4d %(type)-7s %(bind)-6s %(visibility)-7s  %(ndx)-3s %(name)s'
+    format = '%(idx)6d: %(value)016x %(size)5d %(type)-7s %(bind)-6s %(visibility)-7s  %(ndx)-3s %(name)s'
 
 class Dym(CStruct):
     _fields = [ ("tag","u32"),
@@ -131,7 +135,8 @@ class Dym(CStruct):
 
 class RelBase(CStruct):
     def symbol(self):
-        if not hasattr(self.parent.linksection, 'symtab'):
+        if not hasattr(self.parent.linksection, 'symtab') \
+                or self.sym_idx >= len(self.parent.linksection.symtab):
             # In some (invalid?) binaries, most sections are of
             # type NOBITS, including the symbols section, which
             # therefore has no symtab member
