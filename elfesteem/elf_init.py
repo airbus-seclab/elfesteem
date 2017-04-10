@@ -836,7 +836,7 @@ class ELF(object):
             # Report the exception message in a way compatible with most
             # versions of python.
             import sys
-            log.error(sys.exc_info()[1])
+            log.error(str(sys.exc_info()[1]))
 
     def get_virt(self):
         return self._virt

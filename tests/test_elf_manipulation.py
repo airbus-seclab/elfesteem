@@ -14,6 +14,7 @@ except ImportError:
             return oldpy_md5.new(data)
         md5 = classmethod(md5)
 
+from elfesteem.strpatchwork import StrPatchwork
 from elfesteem.elf_init import ELF, log
 from elfesteem import elf
 
@@ -35,6 +36,9 @@ def run_test():
     assertion('0ddf18391c150850c72257b3f3caa67b',
               hashlib.md5(d).hexdigest(),
               'Creation of a standard empty ELF')
+    assertion(0,
+              len(e.symbols),
+              'Empty ELF has no symbols')
     d = ELF(d).pack()
     assertion('0ddf18391c150850c72257b3f3caa67b',
               hashlib.md5(d).hexdigest(),
@@ -92,6 +96,10 @@ def run_test():
     assertion('     2: 00000000     0 FUNC    GLOBAL DEFAULT  UND __stack_chk_fail',
               e.getsectionbyname('.dynsym')[2].readelf_display(),
               'Get symbol by index, found')
+    d = e.getsectionbytype(elf.SHT_SYMTAB).pack()
+    assertion('4ed5a808faff1ca7c6a766ae45ebf377',
+              hashlib.md5(d).hexdigest(),
+              'Get existing section by type')
     d = e.getsectionbyname('.text').pack()
     assertion('7149c6e4b8baaab8beebfeb818585638',
               hashlib.md5(d).hexdigest(),
@@ -201,6 +209,62 @@ def run_test():
     assertion('ecf169c765d29175177528e24601f1be',
               hashlib.md5(d).hexdigest(),
               'Display Section Headers (TMP320C6x)')
+    # Some various ways for an ELF to be detected as invalid
+    e = ELF()
+    e.symbols.sh.entsize = 24
+    e = ELF(e.pack())
+    assertion([('error', ('SymTable has invalid entsize %d instead of %d', 24, 16), {})],
+              log_history,
+              'Invalid entsize for symbols (logs)')
+    log_history = []
+    e = ELF()
+    e.Ehdr.shstrndx = 20
+    e = ELF(e.pack())
+    assertion([('error', ('No section of index shstrndx=20',), {})],
+              log_history,
+              'Invalid shstrndx (logs)')
+    log_history = []
+    data = StrPatchwork(ELF().pack())
+    data[e.Ehdr.shoff+20] = struct.pack("<I", 0x1000)
+    e = ELF(data)
+    assertion([('error', ('Offset to end of section %d after end of file', 0), {})],
+              log_history,
+              'Section offset+size too far away (logs)')
+    log_history = []
+    data[e.Ehdr.shoff+16] = struct.pack("<I", 0x1000)
+    e = ELF(data)
+    assertion([('error', ('Offset to section %d after end of file', 0), {})],
+              log_history,
+              'Section offset very far away (logs)')
+    log_history = []
+    data[32] = struct.pack("<I", 100) # e.Ehdr.shoff
+    e = ELF(data)
+    assertion([('error', ('Offset to end of section headers after end of file',), {}),
+               ('error', ('No section of index shstrndx=2',), {})],
+              log_history,
+              'SH offset too far away (logs)')
+    log_history = []
+    data[32] = struct.pack("<I", 0x2000) # e.Ehdr.shoff
+    e = ELF(data)
+    assertion([('error', ('Offset to section headers after end of file',), {}),
+               ('error', ('No section of index shstrndx=2',), {})],
+              log_history,
+              'SH offset very far away (logs)')
+    log_history = []
+    data = StrPatchwork(ELF().pack())
+    data[4] = struct.pack("B", 4)
+    e = ELF(data)
+    assertion([('error', ('Invalid ELF, wordsize defined to %d', 128), {})],
+              log_history,
+              'Invalid ELF word size (logs)')
+    log_history = []
+    data = StrPatchwork(ELF().pack())
+    data[5] = struct.pack("B", 0)
+    e = ELF(data)
+    assertion([('error', ('Invalid ELF, endianess defined to %d', 0), {})],
+              log_history,
+              'Invalid ELF endianess (logs)')
+    log_history = []
     assertion([],
               log_history,
               'No non-regression test created unwanted log messages')
