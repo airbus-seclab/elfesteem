@@ -15,6 +15,17 @@ def import_by_name(name):
         if fp is not None: fp.close()
     return module
 
+try:
+    import hashlib
+except ImportError:
+    # Python 2.4 does not have hashlib
+    # but 'md5' is deprecated since python2.5
+    import md5 as oldpy_md5
+    class hashlib(object):
+        def md5(self, data):
+            return oldpy_md5.new(data)
+        md5 = classmethod(md5)
+
 class print_colored(object): # Namespace
     end = '\033[0m'
     def bold(self, txt):
@@ -27,23 +38,29 @@ class print_colored(object): # Namespace
         print('\033[92;1m'+txt+self.end)
     boldgreen = classmethod(boldgreen)
 
-exit_value = 0
-for name in (
-        'visual_studio_mangling',
-        'pe_manipulation',
-        'elf_manipulation',
-        'macho_manipulation',
-        'rprc_manipulation',
-        'minidump_manipulation',
-        'intervals',
-        ):
-    module = import_by_name('test_' + name)
-    print_colored.bold(name)
-    ko = module.run_test()
+def run_tests(run_test):
+    ko = run_test()
     if ko:
-        exit_value = 1
         for k in ko:
-            print_colored.boldred('Non-regression failure %r'%k)
+            print_colored.boldred('Non-regression failure for %r'%k)
+        return False
     else:
         print_colored.boldgreen('OK')
-sys.exit(exit_value)
+        return True
+
+if __name__ == "__main__":
+    exit_value = 0
+    for name in (
+            'visual_studio_mangling',
+            'pe_manipulation',
+            'elf_manipulation',
+            'macho_manipulation',
+            'rprc_manipulation',
+            'minidump_manipulation',
+            'intervals',
+            ):
+        module = import_by_name('test_' + name)
+        print_colored.bold(name)
+        if not run_tests(module.run_test):
+            exit_value = 1
+    sys.exit(exit_value)

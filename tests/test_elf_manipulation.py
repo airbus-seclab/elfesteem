@@ -3,17 +3,7 @@
 import os
 __dir__ = os.path.dirname(__file__)
 
-try:
-    import hashlib
-except ImportError:
-    # Python 2.4 does not have hashlib
-    # but 'md5' is deprecated since python2.5
-    import md5 as oldpy_md5
-    class hashlib(object):
-        def md5(self, data):
-            return oldpy_md5.new(data)
-        md5 = classmethod(md5)
-
+from test_all import run_tests, hashlib
 from elfesteem.strpatchwork import StrPatchwork
 from elfesteem.elf_init import ELF, log
 from elfesteem import elf
@@ -271,10 +261,4 @@ def run_test():
     return ko
 
 if __name__ == "__main__":
-    ko = run_test()
-    if ko:
-        for k in ko:
-            print('Non-regression failure for %r'%k)
-    else:
-        print('OK')
-
+    run_tests(run_test)

@@ -332,6 +332,7 @@ tests = [
 ("?_CxxThrowException@@$$J18YGXPAXPBU_s__ThrowInfo@@@Z", 'extern "C" void __stdcall _CxxThrowException(void *,struct _s__ThrowInfo const *)'),
 ]
 
+from test_all import run_tests
 from elfesteem.visual_studio_mangling import symbol_demangle
 
 def run_test():
@@ -343,9 +344,4 @@ def run_test():
     return ko
 
 if __name__ == "__main__":
-    ko = run_test()
-    if ko:
-        for k in ko:
-            print('Non-regression failure for %r'%k)
-    else:
-        print('OK')
+    run_tests(run_test)
