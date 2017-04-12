@@ -54,7 +54,8 @@ class MemorySegment(object):
         return mp.memProtect[self.protect]
 
     def dump(self):
-        return '0x' + ''.join(["%02x"%ord(_) for _ in self.content])
+        import struct
+        return '0x' + ''.join(["%02x"%_ for _ in struct.unpack("%dB"%len(self.content), self.content)])
 
 
 class Minidump(object):
@@ -124,7 +125,7 @@ class Minidump(object):
                                           )
         )
         streamdir_size = len(empty_stream)
-        for i in xrange(self.minidumpHDR.NumberOfStreams):
+        for i in range(self.minidumpHDR.NumberOfStreams):
             stream_offset = base_offset + i * streamdir_size
             stream = mp.StreamDirectory.unpack(self._content, stream_offset, self)
             self.streams.append(stream)

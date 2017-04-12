@@ -15,7 +15,7 @@ class Enumeration(object):
 
     def __getitem__(self, key):
         """Helper: assume that string is for key, integer is for value"""
-        if isinstance(key, (int, long)):
+        if key in self._inv_info:
             return self._inv_info[key]
         return self._enum_info[key]
 
@@ -262,7 +262,7 @@ class Module(CStruct):
         self.cv = CvRecord.unpack(self.parent_head._content,
                              off = self.CvRecord.Rva.rva,
                              parent_head = self.parent_head)
-        self.cv.filename = self.parent_head._content[self.CvRecord.Rva.rva+24:self.CvRecord.Rva.rva+self.CvRecord.DataSize-1] # last character is NULL
+        self.cv.filename = self.parent_head._content[self.CvRecord.Rva.rva+24:self.CvRecord.Rva.rva+self.CvRecord.DataSize-1].decode('latin1') # last character is NULL
         rva = self.MiscRecord.Rva.rva
         if rva == 0: self.misc_record = '(null)'
 
@@ -271,7 +271,8 @@ class Module(CStruct):
         name = MinidumpString.unpack(self.parent_head._content,
                                      off = self.ModuleNameRva.rva,
                                      parent_head = self.parent_head)
-        return "".join(chr(x) for x in name.Buffer).decode("utf-16")
+        import struct
+        return struct.pack("%dB"%len(name.Buffer), *name.Buffer).decode("utf-16")
 
     @property
     def Version(self):

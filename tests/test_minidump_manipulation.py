@@ -28,7 +28,7 @@ def run_test():
               hashlib.md5(md_windows).hexdigest(),
               'Reading windows.dmp')
     e = Minidump(md_windows)
-    d = e.dump()
+    d = e.dump().encode('latin1')
     assertion('48cae6cc782305b611f6e8b82049b9a0',
               hashlib.md5(d).hexdigest(),
               'Displaying the content of windows.dmp')
