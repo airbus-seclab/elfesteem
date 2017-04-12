@@ -78,3 +78,10 @@ macho/MacTheRipper
     Another old Mach-O binary, with LC_PREBOUND_DYLIB
     This is the version 2.6.6, downloadable at a link available at its
     Wikipedia page
+
+minidump-i386.dmp
+minidump-x86_64.dmp
+    Source https://github.com/OutOfOrder/BreakpadTest/tree/master/Samples
+
+windows.dmp
+    Source https://github.com/electron/node-minidump/tree/master/test/fixtures

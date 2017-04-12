@@ -62,6 +62,13 @@ minidumpType = Enumeration({
     "MiniDumpValidTypeFlags"                  : 0x001fffff,
 })
 
+def time_str(value):
+    if value == 0: return '0'
+    import time
+    return '%#x %s' % (value,
+               time.strftime('%Y-%m-%d %H:%M:%S',
+               time.gmtime(value))),
+
 class MinidumpHDR(CStruct):
     """MINIDUMP_HEADER
     https://msdn.microsoft.com/en-us/library/ms680378(VS.85).aspx
@@ -75,6 +82,17 @@ class MinidumpHDR(CStruct):
                ("TimeDateStamp", "u32"),
                ("Flags", "u32")
     ]
+    def dump(self):
+        return '\n'.join([
+            'MDRawHeader',
+            '  signature            = %#x' % self.Magic,
+            '  version              = %#x' % (self.Version+(self.ImplementationVersion<<16)),
+            '  stream_count         = %d' % self.NumberOfStreams,
+            '  stream_directory_rva = %#x' % self.StreamDirectoryRva.rva,
+            '  checksum             = %#x' % self.Checksum,
+            '  time_date_stamp      = %s' % time_str(self.TimeDateStamp),
+            '  flags                = %#x' % self.Flags,
+            ])
 
 class LocationDescriptor(CStruct):
     """MINIDUMP_LOCATION_DESCRIPTOR
@@ -110,6 +128,49 @@ streamType = Enumeration({
     "LastReservedStream"         : 0xffff,
 })
 
+MDminidumpType = Enumeration({
+    # MINIDUMP_STREAM_TYPE
+    # https://chromium.googlesource.com/breakpad/breakpad/+/master/src/google_breakpad/common/minidump_format.h
+    "MD_UNUSED_STREAM"               :  0,
+    "MD_RESERVED_STREAM_0"           :  1,
+    "MD_RESERVED_STREAM_1"           :  2,
+    "MD_THREAD_LIST_STREAM"          :  3, # MDRawThreadList
+    "MD_MODULE_LIST_STREAM"          :  4, # MDRawModuleList
+    "MD_MEMORY_LIST_STREAM"          :  5, # MDRawMemoryList
+    "MD_EXCEPTION_STREAM"            :  6, # MDRawExceptionStream
+    "MD_SYSTEM_INFO_STREAM"          :  7, # MDRawSystemInfo
+    "MD_THREAD_EX_LIST_STREAM"       :  8,
+    "MD_MEMORY_64_LIST_STREAM"       :  9,
+    "MD_COMMENT_STREAM_A"            : 10,
+    "MD_COMMENT_STREAM_W"            : 11,
+    "MD_HANDLE_DATA_STREAM"          : 12,
+    "MD_FUNCTION_TABLE_STREAM"       : 13,
+    "MD_UNLOADED_MODULE_LIST_STREAM" : 14,
+    "MD_MISC_INFO_STREAM"            : 15, # MDRawMiscInfo
+    "MD_MEMORY_INFO_LIST_STREAM"     : 16, # MDRawMemoryInfoList
+    "MD_THREAD_INFO_LIST_STREAM"     : 17,
+    "MD_HANDLE_OPERATION_LIST_STREAM" : 18,
+    "MD_TOKEN_STREAM"                : 19,
+    "MD_JAVASCRIPT_DATA_STREAM"      : 20,
+    "MD_SYSTEM_MEMORY_INFO_STREAM"   : 21,
+    "MD_PROCESS_VM_COUNTERS_STREAM"  : 22,
+    "MD_LAST_RESERVED_STREAM"        : 0x0000ffff,
+    # Breakpad extension types.  0x4767 = "Gg"
+    "MD_BREAKPAD_INFO_STREAM"        : 0x47670001,  # MDRawBreakpadInfo
+    "MD_ASSERTION_INFO_STREAM"       : 0x47670002,  # MDRawAssertionInfo
+    # These are additional minidump stream values which are specific to
+    # the linux breakpad implementation.
+    "MD_LINUX_CPU_INFO"              : 0x47670003,  # /proc/cpuinfo
+    "MD_LINUX_PROC_STATUS"           : 0x47670004,  # /proc/$x/status
+    "MD_LINUX_LSB_RELEASE"           : 0x47670005,  # /etc/lsb-release
+    "MD_LINUX_CMD_LINE"              : 0x47670006,  # /proc/$x/cmdline
+    "MD_LINUX_ENVIRON"               : 0x47670007,  # /proc/$x/environ
+    "MD_LINUX_AUXV"                  : 0x47670008,  # /proc/$x/auxv
+    "MD_LINUX_MAPS"                  : 0x47670009,  # /proc/$x/maps
+    "MD_LINUX_DSO_DEBUG"             : 0x4767000A,  # MDRawDebug{32,64}
+})
+
+
 class StreamDirectory(CStruct):
     """MINIDUMP_DIRECTORY
     https://msdn.microsoft.com/en-us/library/ms680365(VS.85).aspx
@@ -122,6 +183,18 @@ class StreamDirectory(CStruct):
     def pretty_name(self):
         return streamType[self.StreamType]
 
+    @property
+    def type_with_name(self):
+        return "%#x (%s)" % (self.StreamType,
+                MDminidumpType.from_value(self.StreamType) )
+
+    def dump(self):
+        return '\n'.join([
+            'MDRawDirectory',
+            '  stream_type        = %s' % self.type_with_name,
+            '  location.data_size = %d' % self.Location.DataSize,
+            '  location.rva       = %#x' % self.Location.Rva.rva,
+            ])
 
 class FixedFileInfo(CStruct):
     """VS_FIXEDFILEINFO
@@ -150,6 +223,23 @@ class MinidumpString(CStruct):
                ("Buffer", "u08", lambda string:string.Length),
     ]
 
+class CvRecord(CStruct):
+    _fields = [("CvSignature", "u32"),
+               ("Sign0", "u32"),
+               ("Sign1", "u16"),
+               ("Sign2", "u16"),
+               ("SignX", "u08", lambda _: 8),
+               ("Age", "u32"),
+    ]
+    @property
+    def signature_str(self):
+        return '%08x-%04x-%04x-' % (self.Sign0, self.Sign1, self.Sign2) \
+             + ('%02x%02x-'+'%02x'*6) % tuple(self.SignX)
+    @property
+    def signature_id(self):
+        return '%08X%04X%04X' % (self.Sign0, self.Sign1, self.Sign2) \
+             + ('%02X'*8) % tuple(self.SignX)
+
 class Module(CStruct):
     """MINIDUMP_MODULE
     https://msdn.microsoft.com/en-us/library/ms680392(v=vs.85).aspx
@@ -165,6 +255,74 @@ class Module(CStruct):
                ("Reserved0", "u64"),
                ("Reserved1", "u64"),
     ]
+
+    def parse_data(self):
+        self.cv = CvRecord.unpack(self.parent_head._content,
+                             off = self.CvRecord.Rva.rva,
+                             parent_head = self.parent_head)
+        self.cv.filename = self.parent_head._content[self.CvRecord.Rva.rva+24:self.CvRecord.Rva.rva+self.CvRecord.DataSize-1] # last character is NULL
+        rva = self.MiscRecord.Rva.rva
+        if rva == 0: self.misc_record = '(null)'
+
+    @property
+    def ModuleName(self):
+        name = MinidumpString.unpack(self.parent_head._content,
+                                     off = self.ModuleNameRva.rva,
+                                     parent_head = self.parent_head)
+        return "".join(chr(x) for x in name.Buffer).decode("utf-16")
+
+    @property
+    def Version(self):
+        if self.VersionInfo.dwFileVersionMS or self.VersionInfo.dwFileVersionLS:
+            return '%d.%d.%d.%d' % (
+                self.VersionInfo.dwFileVersionMS>>16,
+                self.VersionInfo.dwFileVersionMS&0xffff,
+                self.VersionInfo.dwFileVersionLS>>16,
+                self.VersionInfo.dwFileVersionLS&0xffff)
+        else:
+            return ''
+
+    def dump(self):
+        return '\n'.join([
+            'MDRawModule',
+            '  base_of_image                   = %#x' % self.BaseOfImage,
+            '  size_of_image                   = %#x' % self.SizeOfImage,
+            '  checksum                        = %#x' % self.CheckSum,
+            '  time_date_stamp                 = %s' % time_str(self.TimeDateStamp),
+            '  module_name_rva                 = %#x' % self.ModuleNameRva.rva,
+            '  version_info.signature          = %#x' % self.VersionInfo.dwSignature,
+            '  version_info.struct_version     = %#x' % self.VersionInfo.dwStrucVersion,
+            '  version_info.file_version       = %#x:%#x' % (self.VersionInfo.dwFileVersionMS, self.VersionInfo.dwFileVersionLS),
+            '  version_info.product_version    = %#x:%#x' % (self.VersionInfo.dwProductVersionMS, self.VersionInfo.dwProductVersionLS),
+            '  version_info.file_flags_mask    = %#x' % self.VersionInfo.dwFileFlagsMask,
+            '  version_info.file_flags         = %#x' % self.VersionInfo.dwFileFlags,
+            '  version_info.file_os            = %#x' % self.VersionInfo.dwFileOS,
+            '  version_info.file_type          = %#x' % self.VersionInfo.dwFileType,
+            '  version_info.file_subtype       = %#x' % self.VersionInfo.dwFileSubtype,
+            '  version_info.file_date          = %#x:%#x' % (self.VersionInfo.dwFileDateMS, self.VersionInfo.dwFileDateLS),
+            '  cv_record.data_size             = %d' % self.CvRecord.DataSize,
+            '  cv_record.rva                   = %#x' % self.CvRecord.Rva.rva,
+            '  misc_record.data_size           = %d' % self.MiscRecord.DataSize,
+            '  misc_record.rva                 = %#x' % self.MiscRecord.Rva.rva,
+            ])
+
+    def dump_other(self):
+        self.parse_data()
+        code_identifier = "%X%x" % (self.TimeDateStamp, self.SizeOfImage)
+        debug_identifier = self.cv.signature_id + '%d'%self.cv.Age
+        return '\n'.join([
+            '  (code_file)                     = "%s"' % self.ModuleName,
+            '  (code_identifier)               = "%s"' % code_identifier,
+            '  (cv_record).cv_signature        = %#x' % self.cv.CvSignature,
+            '  (cv_record).signature           = %s' % self.cv.signature_str,
+            '  (cv_record).age                 = %d' % self.cv.Age,
+            '  (cv_record).pdb_file_name       = "%s"' % self.cv.filename,
+            '  (misc_record)                   = %s' % self.misc_record,
+            '  (debug_file)                    = "%s"' % self.cv.filename,
+            '  (debug_identifier)              = "%s"' % debug_identifier,
+            '  (version)                       = "%s"' % self.Version,
+            ])
+
 
 
 class ModuleList(CStruct):
@@ -202,6 +360,13 @@ class MemoryDescriptor(CStruct):
     _fields = [("StartOfMemoryRange", "u64"),
                ("Memory", "LocationDescriptor"),
     ]
+    def dump(self):
+        return '\n'.join([
+            'MDMemoryDescriptor',
+            '  start_of_memory_range = %#x' % self.StartOfMemoryRange,
+            '  memory.data_size      = %#x' % self.Memory.DataSize,
+            '  memory.rva            = %#x' % self.Memory.Rva.rva,
+            ])
 
 class MemoryList(CStruct):
     """MINIDUMP_MEMORY_LIST
@@ -332,6 +497,43 @@ class Context_x86(CStruct):
                ("ExtendedRegisters", "%ds" % MAXIMUM_SUPPORTED_EXTENSION,
                 is_activated("CONTEXT_EXTENDED_REGISTERS")),
     ]
+    def dump(self):
+        return '\n'.join([
+            'MDRawContextX86',
+            '  context_flags                = %#x' % self.ContextFlags,
+            '  dr0                          = %#x' % self.Dr0[0],
+            '  dr1                          = %#x' % self.Dr1[0],
+            '  dr2                          = %#x' % self.Dr2[0],
+            '  dr3                          = %#x' % self.Dr3[0],
+            '  dr6                          = %#x' % self.Dr6[0],
+            '  dr7                          = %#x' % self.Dr7[0],
+            '  float_save.control_word      = %#x' % self.FloatSave.ControlWord,
+            '  float_save.status_word       = %#x' % self.FloatSave.StatusWord,
+            '  float_save.tag_word          = %#x' % self.FloatSave.TagWord,
+            '  float_save.error_offset      = %#x' % self.FloatSave.ErrorOffset,
+            '  float_save.error_selector    = %#x' % self.FloatSave.ErrorSelector,
+            '  float_save.data_offset       = %#x' % self.FloatSave.DataOffset,
+            '  float_save.data_selector     = %#x' % self.FloatSave.DataSelector,
+            '  float_save.register_area[80] = TODO',
+            '  float_save.cr0_npx_state     = %#x' % self.FloatSave.Cr0NpxState,
+            '  gs                           = %#x' % self.SegGs[0],
+            '  fs                           = %#x' % self.SegFs[0],
+            '  es                           = %#x' % self.SegEs[0],
+            '  ds                           = %#x' % self.SegDs[0],
+            '  edi                          = %#x' % self.Edi[0],
+            '  esi                          = %#x' % self.Esi[0],
+            '  ebx                          = %#x' % self.Ebx[0],
+            '  edx                          = %#x' % self.Edx[0],
+            '  ecx                          = %#x' % self.Ecx[0],
+            '  eax                          = %#x' % self.Eax[0],
+            '  ebp                          = %#x' % self.Ebp[0],
+            '  eip                          = %#x' % self.Eip[0],
+            '  cs                           = %#x' % self.SegCs[0],
+            '  eflags                       = %#x' % self.EFlags[0],
+            '  esp                          = %#x' % self.Esp[0],
+            '  ss                           = %#x' % self.SegSs[0],
+            '  extended_registers[512]      = TODO',
+            ])
 
 
 contextFlags_AMD64 = Enumeration({
@@ -454,6 +656,48 @@ class Context_AMD64(CStruct):
         ("LastExceptionToRip", "u64"),
         ("LastExceptionFromRip", "u64"),
     ]
+    def dump(self):
+        return '\n'.join([
+            'MDRawContextAMD64',
+            '  p1_home       = %#x' % self.P1Home,
+            '  p2_home       = %#x' % self.P2Home,
+            '  p3_home       = %#x' % self.P3Home,
+            '  p4_home       = %#x' % self.P4Home,
+            '  p5_home       = %#x' % self.P5Home,
+            '  p6_home       = %#x' % self.P6Home,
+            '  context_flags = %#x' % self.ContextFlags,
+            '  mx_csr        = %#x' % self.MxCsr,
+            '  cs            = %#x' % self.SegCs[0],
+            '  ds            = %#x' % self.SegDs[0],
+            '  es            = %#x' % self.SegEs[0],
+            '  fs            = %#x' % self.SegFs[0],
+            '  gs            = %#x' % self.SegGs[0],
+            '  ss            = %#x' % self.SegSs[0],
+            '  eflags        = %#x' % self.EFlags[0],
+            '  dr0           = %#x' % self.Dr0[0],
+            '  dr1           = %#x' % self.Dr1[0],
+            '  dr2           = %#x' % self.Dr2[0],
+            '  dr3           = %#x' % self.Dr3[0],
+            '  dr6           = %#x' % self.Dr6[0],
+            '  dr7           = %#x' % self.Dr7[0],
+            '  rax           = %#x' % self.Rax[0],
+            '  rcx           = %#x' % self.Rcx[0],
+            '  rdx           = %#x' % self.Rdx[0],
+            '  rbx           = %#x' % self.Rbx[0],
+            '  rsp           = %#x' % self.Rsp[0],
+            '  rbp           = %#x' % self.Rbp[0],
+            '  rsi           = %#x' % self.Rsi[0],
+            '  rdi           = %#x' % self.Rdi[0],
+            '  r8            = %#x' % self.R8[0],
+            '  r9            = %#x' % self.R9[0],
+            '  r10           = %#x' % self.R10[0],
+            '  r11           = %#x' % self.R11[0],
+            '  r12           = %#x' % self.R12[0],
+            '  r13           = %#x' % self.R13[0],
+            '  r14           = %#x' % self.R14[0],
+            '  r15           = %#x' % self.R15[0],
+            '  rip           = %#x' % self.Rip[0],
+            ])
 
 processorArchitecture = Enumeration({
     "PROCESSOR_ARCHITECTURE_X86"       :  0,
@@ -481,7 +725,7 @@ class Thread(CStruct):
     }
 
     def parse_context(self, content, offset):
-        loc_desc = LocationDescriptor.unpack(content, offset, self.parent_head)
+        self.loc_desc = LocationDescriptor.unpack(content, offset, self.parent_head)
 
         # Use the correct context depending on architecture
         systeminfo = self.parent_head.systeminfo
@@ -490,7 +734,7 @@ class Thread(CStruct):
         if context_cls is None:
             raise ValueError("Unsupported architecture: %s" % systeminfo.pretty_processor_architecture)
 
-        ctxt = context_cls.unpack(content, loc_desc.Rva.rva, self.parent_head)
+        ctxt = context_cls.unpack(content, self.loc_desc.Rva.rva, self.parent_head)
         fake_loc_descriptor = LocationDescriptor(DataSize=0, Rva=Rva(rva=0))
         return ctxt, offset + len(fake_loc_descriptor)
 
@@ -503,6 +747,20 @@ class Thread(CStruct):
                ("ThreadContext", (parse_context,
                                   lambda thread, value: NotImplemented)),
     ]
+    def dump(self):
+        return '\n'.join([
+            'MDRawThread',
+            '  thread_id                   = %#x' % self.ThreadId,
+            '  suspend_count               = %d' % self.SuspendCount,
+            '  priority_class              = %#x' % self.PriorityClass,
+            '  priority                    = %#x' % self.Priority,
+            '  teb                         = %#x' % self.Teb,
+            '  stack.start_of_memory_range = %#x' % self.Stack.StartOfMemoryRange,
+            '  stack.memory.data_size      = %#x' % self.Stack.Memory.DataSize,
+            '  stack.memory.rva            = %#x' % self.Stack.Memory.Rva.rva,
+            '  thread_context.data_size    = %#x' % self.loc_desc.DataSize,
+            '  thread_context.rva          = %#x' % self.loc_desc.Rva.rva,
+            ])
 
 class ThreadList(CStruct):
     """MINIDUMP_THREAD_LIST
@@ -513,6 +771,190 @@ class ThreadList(CStruct):
                 lambda mlist: mlist.NumberOfThreads),
     ]
 
+
+class Exception(Thread):
+    _fields = [("ThreadId", "u32"),
+               ("A", "u32"),
+               ("ExceptionCode", "u32"),
+               ("ExceptionFlags", "u32"),
+               ("ExceptionRecord", "u64"),
+               ("ExceptionAddress", "u64"),
+               ("NumberParameters", "u32"),
+               ("Align", "u32"),
+               ("ExceptionInformation", "u64", lambda _:15),
+               ("ThreadContext", (Thread.parse_context,
+                                  lambda thread, value: NotImplemented)),
+    ]
+    def dump(self):
+        res = [
+            'MDException',
+            '  thread_id                                  = %#x' % self.ThreadId,
+            '  exception_record.exception_code            = %#x' % self.ExceptionCode,
+            '  exception_record.exception_flags           = %#x' % self.ExceptionFlags,
+            '  exception_record.exception_record          = %#x' % self.ExceptionRecord,
+            '  exception_record.exception_address         = %#x' % self.ExceptionAddress,
+            '  exception_record.number_parameters         = %d' % self.NumberParameters,
+            ]
+        for i in range(self.NumberParameters):
+            res.append('  exception_record.exception_information[%2d] = %#x' % (i, self.ExceptionInformation[i]))
+        res.extend([
+            '  thread_context.data_size                   = %d' % self.loc_desc.DataSize,
+            '  thread_context.rva                         = %#x' % self.loc_desc.Rva.rva,
+            ])
+        return '\n'.join(res)
+
+class MDSystemTime(CStruct):
+    _fields = [("Year","u16"),
+               ("Month","u16"),
+               ("DayOfTheWeek","u16"),
+               ("Day","u16"),
+               ("Hour","u16"),
+               ("Minute","u16"),
+               ("Second","u16"),
+               ("Milliseconds","u16"),
+    ]
+    def dump(self):
+        return '%04d-%02d-%02d (%d) %02d:%02d:%02d.%03d' % (self.Year, self.Month, self.Day, self.DayOfTheWeek, self.Hour, self.Minute, self.Second, self.Milliseconds)
+
+class MDTimeZoneInformation(CStruct):
+    _fields = [("Bias","s32"),
+               ("StandardName","64s"), # utf-16
+               ("StandardDate","MDSystemTime"),
+               ("StandardBias","s32"),
+               ("DaylightTime","64s"), # utf-16
+               ("DaylightDate","MDSystemTime"),
+               ("DaylightBias","s32"),
+    ]
+
+class MDXStateFeature(CStruct):
+    _fields = [("Offset","u32"),
+               ("Size","u32"),
+    ]
+
+class MDXStateConfigFeatureMscInfo(CStruct):
+    _fields = [("SizeOfInfo","u32"),
+               ("ContextSize","u32"),
+               ("EnabledFeatures","u64"),
+               ("Features","MDXStateFeature",lambda _:64),
+    ]
+
+MD_MISCINFO_FLAGS1_PROCESS_ID            = 0x00000001
+MD_MISCINFO_FLAGS1_PROCESS_TIMES         = 0x00000002
+MD_MISCINFO_FLAGS1_PROCESSOR_POWER_INFO  = 0x00000004
+MD_MISCINFO_FLAGS1_PROCESS_INTEGRITY     = 0x00000010
+MD_MISCINFO_FLAGS1_PROCESS_EXECUTE_FLAGS = 0x00000020
+MD_MISCINFO_FLAGS1_TIMEZONE              = 0x00000040
+MD_MISCINFO_FLAGS1_PROTECTED_PROCESS     = 0x00000080
+MD_MISCINFO_FLAGS1_BUILDSTRING           = 0x00000100
+MD_MISCINFO_FLAGS1_PROCESS_COOKIE        = 0x00000200
+
+class MiscInfo(CStruct):
+    _fields = [("SizeOfInfo","u32"),
+               ("Flags1","u32"),
+               ("ProcessId","u32"),
+               ("ProcessCreateTime","u32"),
+               ("ProcessUserTime","u32"),
+               ("ProcessKernelTime","u32"),
+               ("ProcessorMaxMhz","u32"),
+               ("ProcessorCurrentMhz","u32"),
+               ("ProcessorMhzLimit","u32"),
+               ("ProcessorMaxIdleState","u32"),
+               ("ProcessorCurrentIdleState","u32"),
+               ("ProcessIntegrityLevel","u32"),
+               ("ProcessExecuteFlags","u32"),
+               ("ProtectedProcess","u32"),
+               ("TimeZoneId","u32"),
+               ("TimeZone","MDTimeZoneInformation"),
+               ("BuildString","520s"),
+               ("DbgBldStr","80s"),
+               ("XstateData","MDXStateConfigFeatureMscInfo"),
+               ("ProcessCookie","u32"),
+    ]
+    @property
+    def process_execute_flags(self):
+        if self.Flags1 & MD_MISCINFO_FLAGS1_PROCESS_EXECUTE_FLAGS:
+            return '%#x' % self.ProcessExecuteFlags
+        else:
+            return '(invalid)'
+    def dump(self):
+        res = [
+            'MDRawMiscInfo',
+            '  size_of_info                 = %d' % self.SizeOfInfo,
+            '  flags1                       = %#x' % self.Flags1,
+            '  process_id                   = %d' % self.ProcessId,
+            '  process_create_time          = %s' % time_str(self.ProcessCreateTime),
+            '  process_user_time            = %s' % time_str(self.ProcessUserTime),
+            '  process_kernel_time          = %s' % time_str(self.ProcessKernelTime),
+            '  processor_max_mhz            = %d' % self.ProcessorMaxMhz,
+            '  processor_current_mhz        = %d' % self.ProcessorCurrentMhz,
+            '  processor_mhz_limit          = %d' % self.ProcessorMhzLimit,
+            '  processor_max_idle_state     = %d' % self.ProcessorMaxIdleState,
+            '  processor_current_idle_state = %d' % self.ProcessorCurrentIdleState,
+            '  process_integrity_level      = %#x' % self.ProcessIntegrityLevel,
+            '  process_execute_flags        = %s' % self.process_execute_flags,
+            '  protected_process            = %d' % self.ProtectedProcess,
+            '  time_zone_id                 = %d' % self.TimeZoneId,
+            '  time_zone.bias               = %d' % self.TimeZone.Bias,
+            '  time_zone.standard_name      = %s' % self.TimeZone.StandardName.decode('utf-16').strip('\0'),
+            '  time_zone.standard_date      = %s' % self.TimeZone.StandardDate.dump(),
+            '  time_zone.standard_bias      = %d' % self.TimeZone.StandardBias,
+            '  time_zone.daylight_name      = %s' % self.TimeZone.DaylightTime.decode('utf-16').strip('\0'),
+            '  time_zone.daylight_date      = %s' % self.TimeZone.DaylightDate.dump(),
+            '  time_zone.daylight_bias      = %d' % self.TimeZone.DaylightBias,
+            '  build_string                 = %s' % self.BuildString.decode('utf-16').strip('\0'),
+            '  dbg_bld_str                  = %s' % self.DbgBldStr.decode('utf-16').strip('\0'),
+            '  xstate_data.size_of_info     = %d' % self.XstateData.SizeOfInfo,
+            '  xstate_data.context_size     = %d' % self.XstateData.ContextSize,
+            '  xstate_data.enabled_features = %#x' % self.XstateData.EnabledFeatures,
+            ]
+        if self.XstateData.EnabledFeatures == 0:
+            res.append('  xstate_data.features[]       = (empty)')
+        res.append('  process_cookie               = %d' % self.ProcessCookie)
+        return '\n'.join(res)
+
+class BreakpadAssertion(CStruct):
+    _fields = [("Expression","256s"),
+               ("Function","256s"),
+               ("File","256s"),
+               ("Line","u32"),
+               ("Type","u32"),
+    ]
+    def dump(self):
+        return '\n'.join([
+            'MDAssertion',
+            '  expression                                 = %s' % self.Expression.decode('utf-16').strip('\0'),
+            '  function                                   = %s' % self.Function.decode('utf-16').strip('\0'),
+            '  file                                       = %s' % self.File.decode('utf-16').strip('\0'),
+            '  line                                       = %d' % self.Line,
+            '  type                                       = %d' % self.Type,
+            ])
+
+MD_BREAKPAD_INFO_VALID_DUMP_THREAD_ID       = 0x0001
+MD_BREAKPAD_INFO_VALID_REQUESTING_THREAD_ID = 0x0002
+class BreakpadRawInfo(CStruct):
+    _fields = [("Validity","u32"),
+               ("DumpThreadId","u32"),
+               ("RequestingThreadId","u32"),
+    ]
+    @property
+    def dump_thread_id(self):
+        if self.Validity & MD_BREAKPAD_INFO_VALID_DUMP_THREAD_ID:
+            return '%#x' % self.DumpThreadId
+        else:
+            return '(invalid)'
+    @property
+    def requesting_thread_id(self):
+        if self.Validity & MD_BREAKPAD_INFO_VALID_REQUESTING_THREAD_ID:
+            return '%#x' % self.RequestingThreadId
+        else:
+            return '(invalid)'
+    def dump(self):
+        return '\n'.join([
+            'MDRawBreakpadInfo',
+            '  validity             = %#x' % self.Validity,
+            '  dump_thread_id       = %s' % self.dump_thread_id,
+            '  requesting_thread_id = %s' % self.requesting_thread_id,
+            ])
 
 class SystemInfo(CStruct):
     """MINIDUMP_SYSTEM_INFO
@@ -530,13 +972,54 @@ class SystemInfo(CStruct):
                ("CSDVersionRva", "Rva"),
                ("SuiteMask", "u16"),
                ("Reserved2", "u16"),
-               ("VendorId", "u32", lambda sinfo: 3),
-               ("VersionInformation", "u32"),
-               ("FeatureInformation", "u32"),
-               ("AMDExtendedCpuFeatures", "u32"),
+               ("ProcessorFeatures", "u64", lambda _: 3),
+               # The following four fields are x86-only; arm is different
+               #("VendorId", "u32", lambda sinfo: 3),
+               #("VersionInformation", "u32"),
+               #("FeatureInformation", "u32"),
+               #("AMDExtendedCpuFeatures", "u32"),
     ]
+    # The following fields are x86-only
+    VendorId = property(lambda _:[
+        _.ProcessorFeatures[0]&0xffffffff,
+        _.ProcessorFeatures[0]>>32,
+        _.ProcessorFeatures[1]&0xffffffff])
+    VersionInformation = property(lambda _:_.ProcessorFeatures[1]>>32)
+    FeatureInformation = property(lambda _:_.ProcessorFeatures[2]&0xffffffff)
+    AMDExtendedCpuFeatures = property(lambda _:_.ProcessorFeatures[2]>>32)
+    # The following fields are arm-only
+    Cpuid = property(lambda _:_.ProcessorFeatures[0]&0xffffffff)
+    ElfHwcaps = property(lambda _:_.ProcessorFeatures[0]>>32) # Linux-specific
 
     @property
     def pretty_processor_architecture(self):
         return processorArchitecture[self.ProcessorArchitecture]
+
+    def dump(self):
+        return '\n'.join([
+            'MDRawSystemInfo',
+            '  processor_architecture                     = %#x' % self.ProcessorArchitecture,
+            '  processor_level                            = %d' % self.ProcessorLevel,
+            '  processor_revision                         = %#x' % self.ProcessorRevision,
+            '  number_of_processors                       = %d' % self.NumberOfProcessors,
+            '  product_type                               = %d' % self.ProductType,
+            '  major_version                              = %d' % self.MajorVersion,
+            '  minor_version                              = %d' % self.MinorVersion,
+            '  build_number                               = %d' % self.BuildNumber,
+            '  platform_id                                = %#x' % self.PlatformId,
+            '  csd_version_rva                            = %#x' % self.CSDVersionRva.rva,
+            '  suite_mask                                 = %#x' % self.SuiteMask,
+            '  cpu.x86_cpu_info (invalid):',
+            '  cpu.x86_cpu_info.vendor_id[0]              = %#x' % self.VendorId[0],
+            '  cpu.x86_cpu_info.vendor_id[1]              = %#x' % self.VendorId[1],
+            '  cpu.x86_cpu_info.vendor_id[2]              = %#x' % self.VendorId[2],
+            '  cpu.x86_cpu_info.version_information       = %#x' % self.VersionInformation,
+            '  cpu.x86_cpu_info.feature_information       = %#x' % self.FeatureInformation,
+            '  cpu.x86_cpu_info.amd_extended_cpu_features = %#x' % self.AMDExtendedCpuFeatures,
+            '  cpu.other_cpu_info (valid):',
+            '  cpu.other_cpu_info.processor_features[0]   = %#x' % self.ProcessorFeatures[0],
+            '  cpu.other_cpu_info.processor_features[1]   = %#x' % self.ProcessorFeatures[1],
+            '  (csd_version)                              = ""',
+            '  (cpu_vendor)                               = (null)',
+            ])
 

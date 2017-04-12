@@ -7,6 +7,7 @@ sys.path.insert(1, os.path.abspath(sys.path[0]+'/..'))
 
 from elfesteem.elf_init import ELF
 from elfesteem.pe_init import PE, COFF
+from elfesteem.minidump_init import Minidump
 from elfesteem.macho import MACHO
 from elfesteem.rprc import RPRC
 
@@ -24,11 +25,13 @@ class UnknownFormat(object):
 
 class BINARY(object):
     def __init__(self, raw):
-        for container in ELF, PE, MACHO, RPRC, COFF:
+        for container in ELF, PE, Minidump, MACHO, RPRC, COFF:
             try:
                 self.e = container(raw)
                 break
             except ValueError:
+                pass
+            except AssertionError:
                 pass
         else:
             self.e = UnknownFormat(raw)
