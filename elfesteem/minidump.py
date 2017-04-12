@@ -395,12 +395,12 @@ class Context_AMD64(CStruct):
         ("EFlags", "u32", is_activated("CONTEXT_CONTROL")),
 
         # Debug registers
-        ("Dr0", "u32", is_activated("CONTEXT_DEBUG_REGISTERS")),
-        ("Dr1", "u32", is_activated("CONTEXT_DEBUG_REGISTERS")),
-        ("Dr2", "u32", is_activated("CONTEXT_DEBUG_REGISTERS")),
-        ("Dr3", "u32", is_activated("CONTEXT_DEBUG_REGISTERS")),
-        ("Dr6", "u32", is_activated("CONTEXT_DEBUG_REGISTERS")),
-        ("Dr7", "u32", is_activated("CONTEXT_DEBUG_REGISTERS")),
+        ("Dr0", "u64", is_activated("CONTEXT_DEBUG_REGISTERS")),
+        ("Dr1", "u64", is_activated("CONTEXT_DEBUG_REGISTERS")),
+        ("Dr2", "u64", is_activated("CONTEXT_DEBUG_REGISTERS")),
+        ("Dr3", "u64", is_activated("CONTEXT_DEBUG_REGISTERS")),
+        ("Dr6", "u64", is_activated("CONTEXT_DEBUG_REGISTERS")),
+        ("Dr7", "u64", is_activated("CONTEXT_DEBUG_REGISTERS")),
 
         # Integer registers
         # /!\ activation depends on multiple flags
