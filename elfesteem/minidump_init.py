@@ -54,8 +54,7 @@ class MemorySegment(object):
         return mp.memProtect[self.protect]
 
     def dump(self):
-        import struct
-        return '0x' + ''.join(["%02x"%_ for _ in struct.unpack("%dB"%len(self.content), self.content)])
+        return mp.data_str(self.content)
 
 
 class Minidump(object):
@@ -135,8 +134,12 @@ class Minidump(object):
             offset = stream.Location.Rva.rva
             if stream.StreamType == mp.streamType.ModuleListStream:
                 self.modulelist = mp.ModuleList.unpack(self._content, offset, self)
+                if datasize == 8+self.modulelist.NumberOfModules*108:
+                    self.modulelist = mp.ModuleListWithPadding.unpack(self._content, offset, self)
             elif stream.StreamType == mp.streamType.MemoryListStream:
                 self.memorylist = mp.MemoryList.unpack(self._content, offset, self)
+                if datasize == 8+self.memorylist.NumberOfMemoryRanges*16:
+                    self.memorylist = mp.MemoryListWithPadding.unpack(self._content, offset, self)
             elif stream.StreamType == mp.streamType.Memory64ListStream:
                 self.memory64list = mp.Memory64List.unpack(self._content, offset, self)
             elif stream.StreamType == mp.streamType.MemoryInfoListStream:
@@ -159,6 +162,8 @@ class Minidump(object):
             offset = stream.Location.Rva.rva
             if stream.StreamType == mp.streamType.ThreadListStream:
                 self.threads = mp.ThreadList.unpack(self._content, offset, self)
+                if datasize == 8+self.threads.NumberOfThreads*48:
+                    self.threads = mp.ThreadListWithPadding.unpack(self._content, offset, self)
             elif stream.StreamType == mp.streamType.ExceptionStream:
                 self.exception = mp.Exception.unpack(self._content, offset, self)
 
@@ -274,8 +279,8 @@ class Minidump(object):
                 self.exception.ThreadContext.dump(),
                 ])
         if hasattr(self, 'breakpad_assertion'):
-            res.extend(["",self.breakpad_assertion.dump(),""])
-        res.extend([self.systeminfo.dump(),""])
+            res.extend(["",self.breakpad_assertion.dump()])
+        res.extend(["",self.systeminfo.dump(),""])
         if hasattr(self, 'miscinfo'):
             res.extend([self.miscinfo.dump(),""])
         if hasattr(self, 'breakpad_info'):
