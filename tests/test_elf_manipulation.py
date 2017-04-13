@@ -3,35 +3,32 @@
 import os
 __dir__ = os.path.dirname(__file__)
 
-try:
-    import hashlib
-except ImportError:
-    # Python 2.4 does not have hashlib
-    # but 'md5' is deprecated since python2.5
-    import md5 as oldpy_md5
-    class hashlib(object):
-        def md5(self, data):
-            return oldpy_md5.new(data)
-        md5 = classmethod(md5)
+from test_all import run_tests, hashlib
+from elfesteem.strpatchwork import StrPatchwork
+from elfesteem.elf_init import ELF, log
+from elfesteem import elf
 
 def run_test():
     ko = []
+    # We want to be able to verify warnings in non-regression test
+    log_history = []
+    log.warn = lambda *args, **kargs: log_history.append(('warn',args,kargs))
+    log.warning = log.warn
+    log.error = lambda *args, **kargs: log_history.append(('error',args,kargs))
     def assertion(target, value, message):
         if target != value: ko.append(message)
     import struct
     assertion('f71dbe52628a3f83a77ab494817525c6',
               hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
               'MD5')
-    from elfesteem.elf_init import ELF, log
-    from elfesteem import elf
-    # Remove warnings
-    import logging
-    log.setLevel(logging.ERROR)
     e = ELF()
     d = e.pack()
     assertion('0ddf18391c150850c72257b3f3caa67b',
               hashlib.md5(d).hexdigest(),
               'Creation of a standard empty ELF')
+    assertion(0,
+              len(e.symbols),
+              'Empty ELF has no symbols')
     d = ELF(d).pack()
     assertion('0ddf18391c150850c72257b3f3caa67b',
               hashlib.md5(d).hexdigest(),
@@ -80,15 +77,19 @@ def run_test():
               hashlib.md5(d).hexdigest(),
               'Display Section Headers (readelf)')
     d = e.getsectionbyname('.symtab').readelf_display().encode('latin1')
-    assertion('067a9f91e9a33693dffca1e1ff3de023',
+    assertion('943434f4cde658b1659b7d8db39d9e60',
               hashlib.md5(d).hexdigest(),
               'Display Symbol Table')
-    assertion('000049: 0804a01c    0 NOTYPE  GLOBAL DEFAULT  ABS _edata',
+    assertion('    49: 0804a01c     0 NOTYPE  GLOBAL DEFAULT  ABS _edata',
               e.getsectionbyname('.symtab')['_edata'].readelf_display(),
               'Get symbol by name, found')
-    assertion('000002: 00000000    0 FUNC    GLOBAL DEFAULT  UND __stack_chk_fail',
+    assertion('     2: 00000000     0 FUNC    GLOBAL DEFAULT  UND __stack_chk_fail',
               e.getsectionbyname('.dynsym')[2].readelf_display(),
               'Get symbol by index, found')
+    d = e.getsectionbytype(elf.SHT_SYMTAB).pack()
+    assertion('4ed5a808faff1ca7c6a766ae45ebf377',
+              hashlib.md5(d).hexdigest(),
+              'Get existing section by type')
     d = e.getsectionbyname('.text').pack()
     assertion('7149c6e4b8baaab8beebfeb818585638',
               hashlib.md5(d).hexdigest(),
@@ -105,6 +106,9 @@ def run_test():
     assertion('5e94f899265a799826a46ec86a293e16',
               hashlib.md5(d).hexdigest(),
               'Extract chunk from raw data')
+    assertion(e[0x100:0x120],
+              e._content[0x100:0x120],
+              'Extract chunk from raw data, deprecated API')
     assertion(True,
               e.virt.is_addr_in(0x080483d0),
               'Address in mapped virtual memory')
@@ -127,9 +131,17 @@ def run_test():
     d = e.pack()
     assertion('d5284d5f438e25ef5502a0c1de97d84f',
               hashlib.md5(d).hexdigest(),
-              'Writing in memory')
-    # Warning: __len__ deprecated
+              'Writing in memory (interval)')
+    e.virt[0x080483d0] = e.virt[0x080483d0:0x080483e0]
+    d = e.pack()
+    assertion('d5284d5f438e25ef5502a0c1de97d84f',
+              hashlib.md5(d).hexdigest(),
+              'Writing in memory (address)')
     assertion(0x804a028, len(e.virt), 'Max virtual address')
+    assertion([('warn', ('__len__ deprecated',), {})],
+              log_history,
+              '__len__ deprecated (logs)')
+    log_history = []
     # Find leave; ret
     assertion(0x8048481,
               e.virt.find(struct.pack('BB', 0xc9, 0xc3)),
@@ -152,7 +164,7 @@ def run_test():
               hashlib.md5(d).hexdigest(),
               'Display Section Headers (readelf, 64bit)')
     d = e.getsectionbyname('.symtab').readelf_display().encode('latin1')
-    assertion('f51c09394daa3d77a872d514b7fac72d',
+    assertion('452e64fb0f2dad5c0e44d83e57b9d82b',
               hashlib.md5(d).hexdigest(),
               'Display Symbol Table (elf64)')
     d = e.getsectionbyname('.rela.dyn').readelf_display().encode('latin1')
@@ -187,13 +199,66 @@ def run_test():
     assertion('ecf169c765d29175177528e24601f1be',
               hashlib.md5(d).hexdigest(),
               'Display Section Headers (TMP320C6x)')
+    # Some various ways for an ELF to be detected as invalid
+    e = ELF()
+    e.symbols.sh.entsize = 24
+    e = ELF(e.pack())
+    assertion([('error', ('SymTable has invalid entsize %d instead of %d', 24, 16), {})],
+              log_history,
+              'Invalid entsize for symbols (logs)')
+    log_history = []
+    e = ELF()
+    e.Ehdr.shstrndx = 20
+    e = ELF(e.pack())
+    assertion([('error', ('No section of index shstrndx=20',), {})],
+              log_history,
+              'Invalid shstrndx (logs)')
+    log_history = []
+    data = StrPatchwork(ELF().pack())
+    data[e.Ehdr.shoff+20] = struct.pack("<I", 0x1000)
+    e = ELF(data)
+    assertion([('error', ('Offset to end of section %d after end of file', 0), {})],
+              log_history,
+              'Section offset+size too far away (logs)')
+    log_history = []
+    data[e.Ehdr.shoff+16] = struct.pack("<I", 0x1000)
+    e = ELF(data)
+    assertion([('error', ('Offset to section %d after end of file', 0), {})],
+              log_history,
+              'Section offset very far away (logs)')
+    log_history = []
+    data[32] = struct.pack("<I", 100) # e.Ehdr.shoff
+    e = ELF(data)
+    assertion([('error', ('Offset to end of section headers after end of file',), {}),
+               ('error', ('No section of index shstrndx=2',), {})],
+              log_history,
+              'SH offset too far away (logs)')
+    log_history = []
+    data[32] = struct.pack("<I", 0x2000) # e.Ehdr.shoff
+    e = ELF(data)
+    assertion([('error', ('Offset to section headers after end of file',), {}),
+               ('error', ('No section of index shstrndx=2',), {})],
+              log_history,
+              'SH offset very far away (logs)')
+    log_history = []
+    data = StrPatchwork(ELF().pack())
+    data[4] = struct.pack("B", 4)
+    e = ELF(data)
+    assertion([('error', ('Invalid ELF, wordsize defined to %d', 128), {})],
+              log_history,
+              'Invalid ELF word size (logs)')
+    log_history = []
+    data = StrPatchwork(ELF().pack())
+    data[5] = struct.pack("B", 0)
+    e = ELF(data)
+    assertion([('error', ('Invalid ELF, endianess defined to %d', 0), {})],
+              log_history,
+              'Invalid ELF endianess (logs)')
+    log_history = []
+    assertion([],
+              log_history,
+              'No non-regression test created unwanted log messages')
     return ko
 
 if __name__ == "__main__":
-    ko = run_test()
-    if ko:
-        for k in ko:
-            print('Non-regression failure for %r'%k)
-    else:
-        print('OK')
-
+    run_tests(run_test)

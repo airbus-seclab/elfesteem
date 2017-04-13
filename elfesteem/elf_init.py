@@ -12,16 +12,6 @@ console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
 log.addHandler(console_handler)
 log.setLevel(logging.WARN)
 
-class ContentManager(object):
-    def __get__(self, owner, x):
-        if hasattr(owner, '_content'):
-            return owner._content
-    def __set__(self, owner, new_content):
-        owner.resize(len(owner._content), len(new_content))
-        owner._content=StrPatchwork(new_content)
-        owner.parse_content()
-    def __delete__(self, owner):
-        self.__set__(owner, None)
 
 
 ### Sections
@@ -62,7 +52,6 @@ wsize = parent.wsize)
         return i
     create = classmethod(create)
 
-    content = ContentManager()
     def resize(self, old, new):
         self.sh.size += new-old
         self.parent.resize(self, new-old)
@@ -78,7 +67,7 @@ wsize = parent.wsize)
         try:
             linksection = self.parent[self.sh.link]
         except IndexError:
-            linksection = None
+            linksection = NoLinkSection
         return linksection
     def set_linksection(self, val):
         if isinstance(val, Section):
@@ -105,7 +94,7 @@ wsize = parent.wsize)
         if sh is None:
             sh = elf.Shdr(parent=self, type=self.sht, name_idx=0, **kargs)
         self.sh=sh
-        self._content=StrPatchwork()
+        self.content=StrPatchwork()
     def __repr__(self):
         return "%(name)-15s %(offset)08x %(size)06x %(addr)08x %(flags)x" % self.sh
     size = property(lambda _: _.sh.size)
@@ -248,10 +237,8 @@ class StrTable(Section):
         name = name_to_bytes(name)
         if data_null+name+data_null in self.content:
             return self.content.find(name)
-        data = self.content
-        if type(data) != str: data = data.pack()
-        idx = len(data)
-        self.content = data+name+data_null
+        idx = len(self.content)
+        self.content[idx] = name+data_null
         for sh in self.parent.shlist:
             if sh.sh.offset > self.sh.offset:
                 sh.sh.offset += len(name)+1
@@ -281,7 +268,10 @@ class SymTable(Section):
     def parse_content(self):
         Sym = { 32: elf.Sym32, 64: elf.Sym64 }[self.wsize]
         c = self.content
-        sz = self.sh.entsize
+        sz = Sym(self).bytelen
+        if sz != self.sh.entsize:
+            log.error("SymTable has invalid entsize %d instead of %d",
+                self.sh.entsize, sz)
         idx = 0
         while len(c) > sz*idx:
             s = c[sz*idx:sz*(idx+1)]
@@ -289,6 +279,8 @@ class SymTable(Section):
             sym = Sym(parent=self, content=s)
             self.symtab.append(sym)
             self.symbols[sym.name] = sym
+    def __len__(self):
+        return len(self.symtab)
     def __getitem__(self,item):
         if type(item) is str:
             return self.symbols[item]
@@ -369,46 +361,59 @@ class SHList(object):
         of1 = ehdr.shoff
         if not of1: # No SH table
             return
+        filesize = len(parent.content)
+        if of1 > filesize:
+            log.error("Offset to section headers after end of file")
+            return
+        if of1+ehdr.shnum*ehdr.shentsize > filesize:
+            log.error("Offset to end of section headers after end of file")
+            return
         for i in range(ehdr.shnum):
             of2 = of1+ehdr.shentsize
             shstr = parent[of1:of2]
             self.shlist.append( Section.create(self, shstr=shstr) )
             of1=of2
+        assert len(self.shlist) == ehdr.shnum
         # The shstrtab section is not always valid :-(
-        self._shstrtab = self.shlist[ehdr.shstrndx]
+        if 0 <= ehdr.shstrndx < ehdr.shnum:
+            self._shstrtab = self.shlist[ehdr.shstrndx]
+        else:
+            self._shstrtab = None
         if not isinstance(self._shstrtab, StrTable):
             class NoStrTab(object):
                 def get_name(self, idx):
                     return "<no-name>"
             self._shstrtab = NoStrTab()
 
+        if ehdr.shnum == 0: return
+
         for s in self.shlist:
             if not isinstance(s, NoBitsSection):
-                s._content = StrPatchwork(parent[s.sh.offset: s.sh.offset+s.sh.size])
+                if s.sh.offset > filesize:
+                    log.error("Offset to section %d after end of file",
+                              self.shlist.index(s))
+                    continue
+                if s.sh.offset+s.sh.size > filesize:
+                    log.error("Offset to end of section %d after end of file",
+                              self.shlist.index(s))
+                    continue
+                s.content = StrPatchwork(parent[s.sh.offset: s.sh.offset+s.sh.size])
         # Follow dependencies when initializing sections
         zero = self.shlist[0]
         todo = self.shlist[1:]
         done = []
         while todo:
             s = todo.pop(0)
-            if ( (s.linksection in done + [zero, None])
-                 and  (s.infosection in  [zero, None] or s.infosection in done)):
+            if ( (s.linksection in done + [zero, NoLinkSection]) and
+                 (s.infosection in done + [zero, None]) ):
                 done.append(s)
                 s.parse_content()
             else:
                 todo.append(s)
-        for s in self.shlist:
-            self.do_add_section(s)
-
-    def do_add_section(self, section):
-        n = section.sh.name
-        if n.startswith("."):
-            n = n[1:]
-        n = n.replace(".","_").replace("-","_")
-        setattr(self, n, section) #xxx
     def append(self, item):
-        self.do_add_section(item)
         self.shlist.append(item)
+    def __len__(self):
+        return len(self.shlist)
     def __getitem__(self, item):
         return self.shlist[item]
     def __repr__(self):
@@ -448,6 +453,12 @@ class SHList(object):
             self.parent.Ehdr.shoff += diff
         if self.parent.Ehdr.phoff > sec.sh.offset:
             self.parent.Ehdr.phoff += diff
+
+class NoLinkSection(object):
+    get_name = lambda s,i:None
+    add_name = lambda s,n:None
+    mod_name = lambda s,i,n:None
+NoLinkSection = NoLinkSection()
 
 ### Program Header List
 
@@ -636,8 +647,6 @@ class virt(object):
         if  self.parent.sh.shlist:
             for shdr in self.parent.sh.shlist:
                 l = max(l, shdr.sh.addr  + shdr.sh.size)
-        if  not l:
-            raise ValueError('maximum virtual address not found !')
         return l
 
     def is_addr_in(self, ad):
@@ -788,6 +797,13 @@ def elf_set_offsets(self):
 
 # ELF object
 class ELF(object):
+    # API shared by all/most binary containers
+    architecture = property(lambda _:elf.constants['EM'].get(_.Ehdr.machine,'UNKNOWN(%d)'%_.Ehdr.machine))
+    entrypoint = property(lambda _:_.Ehdr.entry)
+    sections = property(lambda _:_.sh)
+    symbols = property(lambda _:_.getsectionbytype(elf.SHT_SYMTAB))
+    dynsyms = property(lambda _:_.getsectionbytype(elf.SHT_DYNSYM))
+
     def __init__(self, elfstr = None, **kargs):
         self._virt = virt(self)
         if elfstr is None:
@@ -812,21 +828,31 @@ class ELF(object):
             self.ph = PHList(self)
             elf_default_content(self, **kargs)
             return
-        self._content = elfstr
+        self.content = StrPatchwork(elfstr)
         self.parse_content()
-        self.check_coherency()
+        try:
+            self.check_coherency()
+        except ValueError:
+            # Report the exception message in a way compatible with most
+            # versions of python.
+            import sys
+            log.error(str(sys.exc_info()[1]))
 
     def get_virt(self):
         return self._virt
     virt = property(get_virt)
 
-    content = ContentManager()
     def parse_content(self):
         h = struct.unpack("B"*8, self.content[:8])
         if h[:4] != ( 0x7f,0x45,0x4c,0x46 ): # magic number, \x7fELF
             raise ValueError("Not an ELF")
         self.wsize = h[4]*32
-        self.sex   = {1:'<', 2:'>'} [h[5]]
+        self.sex   = {1:'<', 2:'>'} .get(h[5], '')
+        if self.sex == '':
+            log.error("Invalid ELF, endianess defined to %d", h[5])
+        if not self.wsize in (32, 64):
+            log.error("Invalid ELF, wordsize defined to %d", self.wsize)
+            self.wsize = 32
         self.Ehdr = elf.Ehdr(parent=self, content=self.content)
         self.sh = SHList(self)
         self.ph = PHList(self)
@@ -866,16 +892,24 @@ class ELF(object):
         if self.Ehdr.shstrndx == elf.SHN_UNDEF:
             log.warn("No section (e.g. core file)")
         else:
-            if self.sh[self.Ehdr.shstrndx].sh.type != elf.SHT_STRTAB:
-                log.error("Section of index shstrndx is of type %d instead of %d"%(self.sh[self.Ehdr.shstrndx].sh.type, elf.SHT_STRTAB))
+            if self.Ehdr.shstrndx >= len(self.sh):
+                raise ValueError("No section of index shstrndx=%d"%self.Ehdr.shstrndx)
+            elif self.sh[self.Ehdr.shstrndx].sh.type != elf.SHT_STRTAB:
+                raise ValueError("Section of index shstrndx is of type %d instead of %d"%(self.sh[self.Ehdr.shstrndx].sh.type, elf.SHT_STRTAB))
             elif self.sh[self.Ehdr.shstrndx].sh.name != '.shstrtab':
-                log.error("Section of index shstrndx is of name '%s' instead of '%s'"%(self.sh[self.Ehdr.shstrndx].sh.name, '.shstrtab'))
+                raise ValueError("Section of index shstrndx is of name '%s' instead of '%s'"%(self.sh[self.Ehdr.shstrndx].sh.name, '.shstrtab'))
 
     def __str__(self):
         raise AttributeError("Use pack() instead of str()")
     def pack(self):
         return self.build_content()
 
+    def getsectionsbytype(self, sectiontype):
+        return [s for s in self.sh if s.sh.type == sectiontype]
+    def getsectionbytype(self, sectiontype):
+        s = self.getsectionsbytype(sectiontype)
+        if len(s) == 0: return ()
+        return s[0]
     def getsectionsbyname(self, name):
         if ',' in name: name = name[:name.index(',')]
         return [s for s in self.sh if s.sh.name.strip('\x00') == name]
@@ -926,6 +960,7 @@ class ELF(object):
 
     # Old API, needed by miasm2
     size = property(lambda _:_.wsize)
+    _content = property(lambda _:_.content)
 
 if __name__ == "__main__":
     import rlcompleter,readline,pdb

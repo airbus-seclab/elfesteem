@@ -592,9 +592,33 @@ class OpthdrClipper(CStruct):
                 ("c1","u32"),    # Clipper specific?
                 ]
 
-# Specs of COFF for Tru64 aka. OSF1 found at
+# 32-bit eCOFF (for MIPS)
+# The only source of information found is binutils' include/coff/mips.h
+class OpthdrECOFF32(CStruct):
+    _fields = [ ("magic","u16"),
+                ("vstamp","u16"),
+                ("tsize","u32"),
+                ("dsize","u32"),
+                ("bsize","u32"),
+                ("entry","u32"),
+                ("text_start","u32"),
+                ("data_start","u32"),
+                ("bss_start","u32"),
+                ("gprmask","u32"),
+                ("cprmask0","u32"),
+                ("cprmask1","u32"),
+                ("cprmask2","u32"),
+                ("cprmask3","u32"),
+                ("gp_value","u32"),
+                ]
+    majorlinkerversion = property(lambda _:_.vstamp>>8)
+    minorlinkerversion = property(lambda _:_.vstamp&0xff)
+
+# Specs of eCOFF for Tru64 aka. OSF1 found at
 # http://h41361.www4.hpe.com/docs/base_doc/DOCUMENTATION/V50A_ACRO_SUP/OBJSPEC.PDF
-class OpthdrOSF1(CStruct):
+# Not fully consistent with binutils' include/coff/alpha.h
+# Looking at sample files, it seems that binutils is right
+class OpthdrECOFF64(CStruct):
     _fields = [ ("magic","u16"),
                 ("vstamp","u16"),
                 ("bldrev","u16"),
@@ -607,8 +631,10 @@ class OpthdrOSF1(CStruct):
                 ("data_start","u64"),
                 ("bss_start","u64"),
                 ("gprmask","u32"),
-                ("fprmask","u64"),
-                ("gp_value","u32"),
+                ("fprmask","u32"),  # As with binutils
+                ("gp_value","u64"), # As with binutils
+                #("fprmask","u64"),  # As with OBJSPEC.PDF
+                #("gp_value","u32"), # As with OBJSPEC.PDF
                 ]
     majorlinkerversion = property(lambda _:_.vstamp>>8)
     minorlinkerversion = property(lambda _:_.vstamp&0xff)
@@ -753,6 +779,8 @@ class SectionData(CBase):
         if self.parent.scn_baseoff+raw_sz > len(c):
             raw_sz = len(c) - self.parent.scn_baseoff
         self.data[0] = c[self.parent.scn_baseoff:self.parent.scn_baseoff+raw_sz]
+        if self.parent.relptr >= len(c):
+            raise ValueError("COFF invalid relptr")
         self.relocs = COFFRelocations(parent=self.parent,
                                       content=c,
                                       start=self.parent.relptr)
@@ -872,6 +900,12 @@ class Shdr(CStruct):
     def set_data(self, value):
         self.section_data.data = value
     data    = property(lambda _: _.section_data.data, set_data)
+    def __str__(self):
+        return "%18s %#10x %#10x %#10x %#10x %#10x" %(
+               self.name.strip('\0'),
+               self.scnptr, self.rsize,
+               self.paddr, self.vaddr,
+               self.flags)
 
 class ShdrTI(Shdr):
     # 48 bytes long, when the standard COFF is 40 bytes long
@@ -966,6 +1000,9 @@ class SHList(CArray):
             scnptr += self.parent.COFFhdr.sizeofoptionalheader
             # space for 10 sections
             scnptr += Shdr(parent=self).bytelen * 10
+            if scnptr > self.parent.NThdr.sizeofheaders:
+               log.error('xxx')
+            scnptr = max(scnptr, self.parent.NThdr.sizeofheaders)
         # alignment
         s_align = self.parent.NThdr.sectionalignment
         s_align = max(0x1000, s_align)
@@ -999,9 +1036,11 @@ class SHList(CArray):
             # When created with the old elfesteem API
             s.rsize = args['rawsize']
             s.paddr = args['rawsize']
+            data = data+data_null*(s.rawsize-len(data))
         if 'size' in args:
             # When created with the old elfesteem API
             s.paddr = args['size']
+        s.paddr = max(s.paddr, s_align)
         s.section_data = SectionData(parent=s, data=data)
     
         self.append(s)
@@ -1165,12 +1204,18 @@ class ImportDescriptor(CStruct):
         # Follow the RVAs
         of = self.rva2off(self.name_rva)
         if of is None:
-            self.name = '<invalid_dll_name>'
+            name = '<invalid_dll_name>\0'.encode('latin1')
+            self.name = CString(parent=self, content=name)
             # e.g. Ange Albertini's imports_relocW7.exe where relocation
             # is modifying the import table.
             # TODO: apply relocations before the decoding.
         else:
             self.name = CString(parent=self, content=c, start=of)
+        # NB: it is possible for a PE to have many Import descriptors
+        # pointing to the same IAT and ILT. elfesteem will take a
+        # long time because the IAT and ILT will be parsed each time.
+        # An example of such malformed file is
+        # https://github.com/radare/radare2-regressions/blob/master/bins/fuzzed/file-rs-bf838568
         of = self.rva2off(self.firstthunk)
         if of is None:
             log.error('IAT')
@@ -1668,7 +1713,11 @@ class ResourceDataDescription(CStruct):
         CStruct.unpack(self, c, o)
         # Follow the RVA
         of=self.parent.rva2off(self.rva)
-        self.data = c[of:of+self.size]
+        if of is None:
+            log.error("Invalid ResourceDataDescription with RVA %#x", self.rva)
+            raise ValueError
+        else:
+            self.data = c[of:of+self.size]
     def __repr__(self):
         return '<%s RVA=%#x size=%d codepage=%d zero=%d>' % (
             self.__class__.__name__,
@@ -1686,8 +1735,12 @@ class ResourceDirectoryEntry(CStruct):
         # The self.parent.parent.numberofnamedentries first ones are Named
         # and the MSB of their name is 1
         pos = len(self.parent._array)
-        assert (pos < self.parent.parent.numberofnamedentries) \
-            == (self.id & 0x80000000 != 0)
+        if (pos < self.parent.parent.numberofnamedentries) \
+            and (self.id & 0x80000000 == 0):
+            log.error("Named resource entries should be the first ones")
+        if (pos >= self.parent.parent.numberofnamedentries) \
+            and (self.id & 0x80000000 != 0):
+            log.error("Id resource entries should be the last ones")
         if self.id & 0x80000000:
             self.name = UString(parent=self, content=c,
                 start=self.base + (self.id & 0x7FFFFFFF))
@@ -1893,6 +1946,8 @@ class CoffSymbol(CStruct):
     storage = property(storage)
     def __repr__(self):
         return "<CoffSymbol %r value=%#x section=%s type=%s storage=%s aux=%r>" % (self.name, self.value, self.section, self.type_str, self.storage, self.aux)
+    def __str__(self):
+        return '%-36r %-8s %-9s %#010x %s' % (self.name, self.type_str, self.storage, self.value, self.section)
 
 class CoffSymbols(CArray):
     _cls = CoffSymbol

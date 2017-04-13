@@ -14,30 +14,6 @@ else:
     bytes_to_name = lambda s: s.decode(encoding="latin1")
     name_to_bytes = lambda s: s.encode(encoding="latin1")
 
-type_size = {}
-size2type = {}
-size2type_s = {}
-
-for t in 'B', 'H', 'I', 'Q':
-    s = struct.calcsize(t)
-    type_size[t] = s*8
-    size2type[s*8] = t
-
-for t in 'b', 'h', 'i', 'q':
-    s = struct.calcsize(t)
-    type_size[t] = s*8
-    size2type_s[s*8] = t
-
-type_size['u08'] = size2type[8]
-type_size['u16'] = size2type[16]
-type_size['u32'] = size2type[32]
-type_size['u64'] = size2type[64]
-
-type_size['s08'] = size2type_s[8]
-type_size['s16'] = size2type_s[16]
-type_size['s32'] = size2type_s[32]
-type_size['s64'] = size2type_s[64]
-
 class CBase(object):
     """
     This is the base class, used to define CString, CStruct, CArray
@@ -127,6 +103,65 @@ class CString(CBase):
     def pprint(self):
         return self.X
 
+from elfesteem.strpatchwork import StrPatchwork
+class CData(object):
+    # Generic class to be used at the end of a CStruct, to implement common
+    # cases implemented in C as     struct s { ...; char data[]; }
+    # We use StrPatchwork because the data may be very long, and we want to
+    # be able to modify it very efficiently.
+    def __new__(self, f):
+        class CDataInstance(CBase):
+            def _initialize(self, f=f):
+                self._size = f(self.parent)
+                self._data = StrPatchwork()
+            def unpack(self, c, o):
+                self._data[0] = c[o:o+self._size]
+            def pack(self):
+                return self._data.pack()
+            def __str__(self):
+                return self.pack().decode('latin1')
+            def __getitem__(self, item):
+                return self._data[item]
+            def __setitem__(self, item, value):
+                self._data[item] = value
+        return CDataInstance
+
+type_size = {}
+size2type = {}
+size2type_s = {}
+
+for t in 'B', 'H', 'I', 'Q':
+    s = struct.calcsize(t)
+    type_size[t] = s*8
+    size2type[s*8] = t
+
+for t in 'b', 'h', 'i', 'q':
+    s = struct.calcsize(t)
+    type_size[t] = s*8
+    size2type_s[s*8] = t
+
+type_size['u08'] = size2type[8]
+type_size['u16'] = size2type[16]
+type_size['u32'] = size2type[32]
+type_size['u64'] = size2type[64]
+
+type_size['s08'] = size2type_s[8]
+type_size['s16'] = size2type_s[16]
+type_size['s32'] = size2type_s[32]
+type_size['s64'] = size2type_s[64]
+
+def convert_size2type(ftype, wsize):
+    if not isinstance(ftype, str):
+        return ''
+    elif re.match(r'\d+s', ftype):
+        return ftype
+    elif ftype == "ptr":
+        return size2type[wsize]
+    elif ftype in type_size:
+        return type_size[ftype]
+    else:
+        raise ValueError("unkown CStruct type", ftype)
+
 class CStruct_metaclass(type):
     """
     metaclass, with a syntax compatible with python2 and python3
@@ -177,16 +212,7 @@ class CStruct(CStruct_base):
         self._format = {}
         pstr = []
         for fname, ftype in self._fields:
-            if not isinstance(ftype, str):
-                ftype = ''
-            elif re.match(r'\d+s', ftype):
-                pass
-            elif ftype == "ptr":
-                ftype = size2type[self.wsize]
-            elif ftype in type_size:
-                ftype = type_size[ftype]
-            else:
-                raise ValueError("unkown CStruct type", ftype)
+            ftype = convert_size2type(ftype, self.wsize)
             self._format[fname] = ftype
             pstr.append(ftype)
         self._packstring =  self.sex + self._packformat+"".join(pstr)

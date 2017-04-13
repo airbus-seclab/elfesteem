@@ -18,16 +18,6 @@ log.setLevel(logging.WARN)
 def gensapce(lvl):
     return '    '*lvl
 
-class ContentManager(object):
-    def __get__(self, owner, x):
-        if hasattr(owner, '_content'):
-            return owner._content
-    def __set__(self, owner, new_content):
-        owner.resize(len(owner._content), len(new_content))
-        owner._content=new_content
-    def __delete__(self, owner):
-        self.__set__(owner, None)
-
 def out_attrs(o, lvl =  None):
     if lvl == None:
         lvl = 0
@@ -507,8 +497,6 @@ class Jclass_description(CStruct):
 
 
 class JCLASS(object):
-    content = ContentManager()
-
     def __getitem__(self, item):
         return self.content[item]
     def __setitem__(self, item, data):
@@ -518,7 +506,7 @@ class JCLASS(object):
     def __init__(self, pestr = None):
         self._sex = 0
         self._wsize = 32
-        self._content = pestr
+        self.content = pestr
         self.parse_content()
 
     def get_constant_pool_by_index(self, index):

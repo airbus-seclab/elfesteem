@@ -1,8 +1,12 @@
+#! /usr/bin/env python
 """
 High-level abstraction of Minidump file
 """
-from strpatchwork import StrPatchwork
-import minidump as mp
+import sys, os
+sys.path.insert(1, os.path.abspath(sys.path[0]+'/..'))
+
+from elfesteem.strpatchwork import StrPatchwork
+from elfesteem import minidump as mp
 
 
 class MemorySegment(object):
@@ -30,10 +34,7 @@ class MemorySegment(object):
     @property
     def name(self):
         if self.module:
-            name = mp.MinidumpString.unpack(self.minidump._content,
-                                            self.module.ModuleNameRva.rva,
-                                            self.minidump)
-            return "".join(chr(x) for x in name.Buffer).decode("utf-16")
+            return self.module.ModuleName
         return ""
 
     @property
@@ -52,6 +53,9 @@ class MemorySegment(object):
             return "UNKNOWN"
         return mp.memProtect[self.protect]
 
+    def dump(self):
+        return mp.data_str(self.content)
+
 
 class Minidump(object):
     """Stand for a Minidump file
@@ -66,6 +70,23 @@ class Minidump(object):
 
     _sex = 0
     _wsize = 32
+
+    def entrypoint(self):
+        if not len(self.threads.Threads): return -1
+        pc_reg = ()
+        if self.systeminfo.ProcessorArchitecture == \
+                mp.processorArchitecture.PROCESSOR_ARCHITECTURE_X86:
+            pc_reg = self.threads.Threads[0].ThreadContext.Eip
+        if self.systeminfo.ProcessorArchitecture == \
+                mp.processorArchitecture.PROCESSOR_ARCHITECTURE_AMD64:
+            pc_reg = self.threads.Threads[0].ThreadContext.Rip
+        if not len(pc_reg): return -1
+        return pc_reg[0]
+    architecture = property(lambda _:_.systeminfo.pretty_processor_architecture[23:])
+    entrypoint = property(entrypoint)
+    sections = property(lambda _:_.memory.values())
+    symbols = ()
+    dynsyms = ()
 
     def __init__(self, minidump_str):
         self._content = StrPatchwork(minidump_str)
@@ -85,6 +106,7 @@ class Minidump(object):
         # Memory information
         self.memory = {} # base address (virtual) -> Memory information
         self.build_memory()
+        self.virt = ContentVirtual(self)
 
     def parse_content(self):
         """Build structures corresponding to current content"""
@@ -102,7 +124,7 @@ class Minidump(object):
                                           )
         )
         streamdir_size = len(empty_stream)
-        for i in xrange(self.minidumpHDR.NumberOfStreams):
+        for i in range(self.minidumpHDR.NumberOfStreams):
             stream_offset = base_offset + i * streamdir_size
             stream = mp.StreamDirectory.unpack(self._content, stream_offset, self)
             self.streams.append(stream)
@@ -112,34 +134,52 @@ class Minidump(object):
             offset = stream.Location.Rva.rva
             if stream.StreamType == mp.streamType.ModuleListStream:
                 self.modulelist = mp.ModuleList.unpack(self._content, offset, self)
+                if datasize == 8+self.modulelist.NumberOfModules*108:
+                    self.modulelist = mp.ModuleListWithPadding.unpack(self._content, offset, self)
             elif stream.StreamType == mp.streamType.MemoryListStream:
                 self.memorylist = mp.MemoryList.unpack(self._content, offset, self)
+                if datasize == 8+self.memorylist.NumberOfMemoryRanges*16:
+                    self.memorylist = mp.MemoryListWithPadding.unpack(self._content, offset, self)
             elif stream.StreamType == mp.streamType.Memory64ListStream:
                 self.memory64list = mp.Memory64List.unpack(self._content, offset, self)
             elif stream.StreamType == mp.streamType.MemoryInfoListStream:
                 self.memoryinfolist = mp.MemoryInfoList.unpack(self._content, offset, self)
             elif stream.StreamType == mp.streamType.SystemInfoStream:
                 self.systeminfo = mp.SystemInfo.unpack(self._content, offset, self)
+            elif stream.StreamType == mp.streamType.MiscInfoStream:
+                self.miscinfo = mp.MiscInfo.unpack(self._content, offset, self)
+            # Breakpad extension types
+            elif stream.StreamType == mp.MDminidumpType.MD_ASSERTION_INFO_STREAM:
+                self.breakpad_assertion = mp.BreakpadAssertion.unpack(self._content, offset, self)
+            elif stream.StreamType == mp.MDminidumpType.MD_BREAKPAD_INFO_STREAM:
+                self.breakpad_info = mp.BreakpadRawInfo.unpack(self._content, offset, self)
 
         # Some streams need the SystemInfo stream to work
+        if self.systeminfo is None:
+            return
         for stream in self.streams:
             datasize = stream.Location.DataSize
             offset = stream.Location.Rva.rva
-            if (self.systeminfo is not None and
-                stream.StreamType == mp.streamType.ThreadListStream):
+            if stream.StreamType == mp.streamType.ThreadListStream:
                 self.threads = mp.ThreadList.unpack(self._content, offset, self)
+                if datasize == 8+self.threads.NumberOfThreads*48:
+                    self.threads = mp.ThreadListWithPadding.unpack(self._content, offset, self)
+            elif stream.StreamType == mp.streamType.ExceptionStream:
+                self.exception = mp.Exception.unpack(self._content, offset, self)
 
 
     def build_memory(self):
         """Build an easier to use memory view based on ModuleList and
         Memory64List streams"""
 
-        addr2module = {module.BaseOfImage: module
-                       for module in (self.modulelist.Modules if
-                                      self.modulelist else [])}
-        addr2meminfo = {memory.BaseAddress: memory
-                        for memory in (self.memoryinfolist.MemoryInfos if
-                                       self.memoryinfolist else [])}
+        addr2module = {}
+        if self.modulelist:
+            for module in self.modulelist.Modules:
+                addr2module[module.BaseOfImage] = module
+        addr2meminfo = {}
+        if self.memoryinfolist:
+            for memory in self.memoryinfolist.MemoryInfos:
+                addr2meminfo[memory.BaseAddress] = memory
 
         mode64 = self.minidumpHDR.Flags & mp.minidumpType.MiniDumpWithFullMemory
 
@@ -185,3 +225,81 @@ class Minidump(object):
             raise RuntimeError("Multi-page not implemented")
 
         return self._content[memory.offset + shift:memory.offset + last]
+
+    def dump(self):
+        """
+        Same output as minidump_dump from
+        https://chromium.googlesource.com/breakpad/breakpad
+        """
+        res = [ self.minidumpHDR.dump() ]
+        streams_by_type = {} # Duplicates will not be shown
+        for i, s in enumerate(self.streams):
+            streams_by_type[s.StreamType] = (i, s)
+            res.extend(["", "mDirectory[%d]"%i, s.dump()])
+        res.append("\nStreams:")
+        for t in sorted(streams_by_type.keys()):
+            i, s = streams_by_type[t]
+            res.append("  stream type %s at index %d" % (s.type_with_name, i))
+        res.extend(["",
+            "MinidumpThreadList",
+            "  thread_count = %d" % self.threads.NumberOfThreads])
+        for i, t in enumerate(self.threads.Threads):
+            res.extend(["",
+                "thread[%d]"%i,
+                t.dump(),
+                "",
+                t.ThreadContext.dump(),
+                "",
+                "Stack",
+                self.memory[t.Stack.StartOfMemoryRange].dump(),
+                ])
+        res.extend(["",
+            "MinidumpModuleList",
+            "  module_count = %d" % self.modulelist.NumberOfModules])
+        for i, m in enumerate(self.modulelist.Modules):
+            res.extend(["",
+                "module[%d]"%i,
+                m.dump(),
+                m.dump_other(),
+                ])
+        res.extend(["",
+            "MinidumpMemoryList",
+            "  region_count = %d" % self.memorylist.NumberOfMemoryRanges])
+        for i, m in enumerate(self.memorylist.MemoryRanges):
+            res.extend(["",
+                "region[%d]"%i,
+                m.dump(),
+                "Memory",
+                self.memory[m.StartOfMemoryRange].dump(),
+                ])
+        if hasattr(self, 'exception'):
+            res.extend(["",
+                self.exception.dump(),
+                "",
+                self.exception.ThreadContext.dump(),
+                ])
+        if hasattr(self, 'breakpad_assertion'):
+            res.extend(["",self.breakpad_assertion.dump()])
+        res.extend(["",self.systeminfo.dump(),""])
+        if hasattr(self, 'miscinfo'):
+            res.extend([self.miscinfo.dump(),""])
+        if hasattr(self, 'breakpad_info'):
+            res.extend([self.breakpad_info.dump(),""])
+        return '\n'.join(res)
+
+class ContentVirtual(object):
+    """ Stub for binary.py """
+    def __init__(self, minidump):
+        self.parent = minidump
+    def max_addr(self):
+        ad = -1
+        for memory in self.parent.memory.values():
+            ad = max(ad, memory.address+memory.size)
+        return ad
+
+if __name__ == "__main__":
+    for file in sys.argv[1:]:
+        if len(sys.argv) > 2: print("File: %s"%file)
+        raw = open(file, 'rb').read()
+        e = Minidump(raw)
+        print(e.dump())

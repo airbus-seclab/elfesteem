@@ -1,0 +1,23 @@
+language: python
+python:
+  - '3.6'
+  - '3.5'
+  - '3.4'
+  - '3.3'
+  - '3.2'
+  - '2.7'
+  - '2.6'
+  # elfesteem works with 2.4 and 2.5 too, but they are not available in travis
+install:
+  - pip install coverage codecov
+before_script:
+  export PYTHONPATH=$PYTHONPATH:$(pwd)
+script:
+  - if [[ $TRAVIS_PYTHON_VERSION == 3.2 ]]; then ./tests/test_all.py; else coverage run ./tests/test_all.py; fi
+  # We don't use e.g. tox for non-regression tests, because we want to have
+  # a script that works with python 2.4 too...
+  # python2.4 ./tests/test_all.py will work fine :-)
+  # Note that coverage is incompatible with python 3.2, cf.
+  # https://github.com/menegazzo/travispy/issues/20
+after_success:
+  - codecov

@@ -5,13 +5,13 @@ import time
 import platform
 
 sys.path.insert(1, os.path.abspath(sys.path[0]+'/..'))
-from elfesteem import macho_init, macho, intervals
-from elfesteem.cstruct import data_null
+from elfesteem import macho_init, macho
+from elfesteem.cstruct import data_null, CBase
 
-def print_header(e):
+def print_header(e, **fargs):
     print("Mach header")
     print("      magic cputype cpusubtype  caps    filetype ncmds sizeofcmds      flags")
-    print(" 0x%08x %7d %10d  0x%02x %10u %5u %10u 0x%08x" %(e.Mhdr.magic,e.Mhdr.cputype ,e.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK),(e.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK) >> 24,e.Mhdr.filetype,e.Mhdr.ncmds,e.Mhdr.sizeofcmds,e.Mhdr.flags))
+    print(" 0x%08x %7d %10d  0x%02x  %10u %5u %10u 0x%08x" %(e.Mhdr.magic,e.Mhdr.cputype ,e.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK),(e.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK) >> 24,e.Mhdr.filetype,e.Mhdr.ncmds,e.Mhdr.sizeofcmds,e.Mhdr.flags))
 
 def split_integer(v, nbits, ndigits, truncate=None):
     mask = (1<<nbits)-1
@@ -26,219 +26,53 @@ def split_integer(v, nbits, ndigits, truncate=None):
             res = res[:-1]
     return ".".join(["%u"%_ for _ in res])
 
-def print_lc(e):
-    for i,lc in enumerate(e.lh.lhlist):
+def print_lc(e, llvm=False, **fargs):
+    for i, lc in enumerate(e.load):
         print("Load command %u" %i)
-        lc_value = [
-            ("cmd",     "LC_%s" %macho.constants['LC'][lc.cmd]),
-            ("cmdsize", lc.cmdsize),
-            ]
-        shift = 1
-        for name, _ in getattr(lc.lhc, '_fields', []):
-            value = getattr(lc, name)
-            if name in ["vmaddr", "vmsize"]:
-                if lc.cmd == macho.LC_SEGMENT_64: value = "0x%016x" % value
-                else:                             value = "0x%08x" % value
-            elif name in ["maxprot", "initprot", "cksum", "header addr"]:
-                value = "0x%08x" % value
-            elif name == "flags":
-                value = "0x%x" % value
-            elif name == "stroffset":
-                name = "        name"
-                value = "%s (offset %u)" %(lc.name, value)
-            elif name == "timestamp":
-                name = "time stamp"
-                value = "%u %s" %(value, time.ctime(value))
-            elif name in ["current_version", "compatibility_version"]:
-                shift = 0
-                name = name[:-8]
-                value = "version " + split_integer(value, 8, 3)
-            elif name == "pad_segname":
-                name = "segname"
-                value = value.rstrip(data_null)
-            elif lc.cmd == macho.LC_VERSION_MIN_MACOSX:
-                shift = 2
-                value = split_integer(value, 8, 3, truncate=1)
-            elif lc.cmd == macho.LC_VERSION_MIN_IPHONEOS:
-                shift = 2
-                value = split_integer(value, 8, 3, truncate=2)
-            elif lc.cmd == macho.LC_SOURCE_VERSION:
-                shift = 2
-                value = split_integer(value, 10, 5, truncate=2)
-            elif lc.cmd == macho.LC_UNIXTHREAD:
-                shift = 4
-                break
-
-            lc_value.append((name, value))
-        if lc.cmd == macho.LC_UUID:
-            lc_value.append(("uuid", "%.8X-%.4X-%.4X-%.4X-%.4X%.8X" % lc.uuid))
-
-        # otool displays lc_value with a nice alignment
-        name_max_len = 0
-        for name, _ in lc_value:
-            if name_max_len < len(name):
-                name_max_len = len(name)
-        format = "%%%ds %%s" % (name_max_len+shift)
-        for pair in lc_value:
-            print(format % pair)
-        # for some load command, additional information is displayed
-
-        if lc.cmd == macho.LC_SEGMENT or lc.cmd == macho.LC_SEGMENT_64:
-            if hasattr(lc,'sectionsToAdd'):
-                for s in lc.sectionsToAdd(e):
-                    if not hasattr(s, 'reloclist') :
-                        #PRINT SECTION
-                        print("Section")
-                        print("  sectname %.16s" %s.sh.sectname)
-                        print("   segname %.16s" %s.sh.segname)
-                        if lc.cmd == macho.LC_SEGMENT_64:
-                            print("      addr 0x%016x" %s.sh.addr)
-                            print("      size 0x%016x" %s.sh.size)
-                        else:
-                            print("      addr 0x%08x" %s.sh.addr)
-                            print("      size 0x%08x" %s.sh.size)
-                        print("    offset %u" %s.sh.offset)
-                        print("     align 2^%u (%d)" %(s.sh.align, 1 << s.sh.align))
-                        print("    reloff %u" %s.sh.reloff)
-                        print("    nreloc %u" %s.sh.nreloc)
-                        print("     flags 0x%08x" %s.sh.all_flags)
-                        comment1 = ""
-                        if s.sh.type == macho.S_SYMBOL_STUBS or s.sh.type == macho.S_LAZY_SYMBOL_POINTERS or s.sh.type == macho.S_NON_LAZY_SYMBOL_POINTERS :
-                            comment1 = " (index into indirect symbol table)"
-                        print(" reserved1 %u%s" %(s.sh.reserved1,comment1))
-                        comment2 = ""
-                        if s.sh.type == macho.S_SYMBOL_STUBS:
-                            comment2 = " (size of stubs)"
-                        print(" reserved2 %u%s" %(s.sh.reserved2,comment2))
-
-        elif lc.cmd == macho.LC_UNIXTHREAD:
-            if e.Mhdr.cputype == macho.CPU_TYPE_POWERPC:
-                print("     flavor PPC_THREAD_STATE")
-                print("      count PPC_THREAD_STATE_COUNT")
-                print("    r0  0x%08x r1  0x%08x r2  0x%08x r3   0x%08x r4   0x%08x" %(lc.data[2], lc.data[3], lc.data[4], lc.data[5], lc.data[6]))
-                print("    r5  0x%08x r6  0x%08x r7  0x%08x r8   0x%08x r9   0x%08x" %(lc.data[7], lc.data[8], lc.data[9], lc.data[10], lc.data[11]))
-                print("    r10 0x%08x r11 0x%08x r12 0x%08x r13  0x%08x r14  0x%08x" %(lc.data[12], lc.data[13], lc.data[14], lc.data[15], lc.data[16]))
-                print("    r15 0x%08x r16 0x%08x r17 0x%08x r18  0x%08x r19  0x%08x" %(lc.data[17], lc.data[18], lc.data[19], lc.data[20], lc.data[21]))
-                print("    r20 0x%08x r21 0x%08x r22 0x%08x r23  0x%08x r24  0x%08x" %(lc.data[22], lc.data[23], lc.data[24], lc.data[25], lc.data[26]))
-                print("    r25 0x%08x r26 0x%08x r27 0x%08x r28  0x%08x r29  0x%08x" %(lc.data[27], lc.data[28], lc.data[29], lc.data[30], lc.data[31]))
-                print("    r30 0x%08x r31 0x%08x cr  0x%08x xer  0x%08x lr   0x%08x" %(lc.data[32], lc.data[33], lc.data[34], lc.data[35], lc.data[36]))
-                print("    ctr 0x%08x mq  0x%08x vrsave 0x%08x srr0 0x%08x srr1 0x%08x" %(lc.data[37], lc.data[38], lc.data[39], lc.data[0], lc.data[1]))
-            elif e.Mhdr.cputype == macho.CPU_TYPE_POWERPC64:
-                print("     flavor PPC_THREAD_STATE64")
-                print("      count PPC_THREAD_STATE64_COUNT")
-                print("    r0  0x%016x r1  0x%016x r2   0x%016x" %(lc.data[2], lc.data[3],lc.data[4]))
-                print("    r3  0x%016x r4  0x%016x r5   0x%016x" %(lc.data[5], lc.data[6], lc.data[7]))
-                print("    r6  0x%016x r7  0x%016x r8   0x%016x" %(lc.data[8], lc.data[9], lc.data[10]))
-                print("    r9  0x%016x r10 0x%016x r11  0x%016x" %(lc.data[11], lc.data[12], lc.data[13]))
-                print("   r12  0x%016x r13 0x%016x r14  0x%016x" %(lc.data[14], lc.data[15], lc.data[16]))
-                print("   r15  0x%016x r16 0x%016x r17  0x%016x" %(lc.data[17], lc.data[18], lc.data[19]))
-                print("   r18  0x%016x r19 0x%016x r20  0x%016x" %(lc.data[20], lc.data[21], lc.data[22]))
-                print("   r21  0x%016x r22 0x%016x r23  0x%016x" %(lc.data[23], lc.data[24], lc.data[25]))
-                print("   r24  0x%016x r25 0x%016x r26  0x%016x" %(lc.data[26], lc.data[27], lc.data[28]))
-                print("   r27  0x%016x r28 0x%016x r29  0x%016x" %(lc.data[29], lc.data[30], lc.data[31]))
-                print("   r30  0x%016x r31 0x%016x cr   0x%08x" %(lc.data[32], lc.data[33], lc.data[34]))
-                print("   xer  0x%016x lr  0x%016x ctr  0x%016x" %(lc.data[35], lc.data[36], lc.data[37]))
-                print("vrsave  0x%08x        srr0 0x%016x srr1 0x%016x" %(lc.data[38], lc.data[0], lc.data[1]))
-            elif e.Mhdr.cputype == macho.CPU_TYPE_I386 and lc.flavor == 1:
-                print("     flavor i386_THREAD_STATE")
-                print("      count i386_THREAD_STATE_COUNT")
-                print("\t    eax 0x%08x ebx    0x%08x ecx 0x%08x edx 0x%08x" %(lc.data[0], lc.data[1],lc.data[2], lc.data[3]))
-                print("\t    edi 0x%08x esi    0x%08x ebp 0x%08x esp 0x%08x" %(lc.data[4], lc.data[5],lc.data[6], lc.data[7]))
-                print("\t    ss  0x%08x eflags 0x%08x eip 0x%08x cs  0x%08x" %(lc.data[8], lc.data[9],lc.data[10], lc.data[11]))
-                print("\t    ds  0x%08x es     0x%08x fs  0x%08x gs  0x%08x" %(lc.data[12], lc.data[13],lc.data[14], lc.data[15]))
-            elif e.Mhdr.cputype == macho.CPU_TYPE_X86_64:
-                print("     flavor x86_THREAD_STATE64")
-                print("      count x86_THREAD_STATE64_COUNT")
-                print("   rax  0x%016x rbx 0x%016x rcx  0x%016x" %(lc.data[0], lc.data[1],lc.data[2]))
-                print("   rdx  0x%016x rdi 0x%016x rsi  0x%016x" %(lc.data[3], lc.data[4],lc.data[5]))
-                print("   rbp  0x%016x rsp 0x%016x r8   0x%016x" %(lc.data[6], lc.data[7],lc.data[8]))
-                print("    r9  0x%016x r10 0x%016x r11  0x%016x" %(lc.data[9], lc.data[10],lc.data[11]))
-                print("   r12  0x%016x r13 0x%016x r14  0x%016x" %(lc.data[12], lc.data[13],lc.data[14]))
-                print("   r15  0x%016x rip 0x%016x" %(lc.data[15], lc.data[16]))
-                print("rflags  0x%016x cs  0x%016x fs   0x%016x" %(lc.data[17], lc.data[18],lc.data[19]))
-                print("    gs  0x%016x" %(lc.data[20]))
-            elif e.Mhdr.cputype == macho.CPU_TYPE_ARM:
-                print("     flavor ARM_THREAD_STATE")
-                print("      count ARM_THREAD_STATE_COUNT")
-                print("\t    r0  0x%08x r1     0x%08x r2  0x%08x r3  0x%08x" %(lc.data[0], lc.data[1],lc.data[2],lc.data[3]))
-                print("\t    r4  0x%08x r5     0x%08x r6  0x%08x r7  0x%08x" %(lc.data[4], lc.data[5],lc.data[6],lc.data[7]))
-                print("\t    r8  0x%08x r9     0x%08x r10 0x%08x r11 0x%08x" %(lc.data[8], lc.data[9],lc.data[10],lc.data[11]))
-                print("\t    r12 0x%08x sp     0x%08x lr  0x%08x pc  0x%08x" %(lc.data[12], lc.data[13],lc.data[14],lc.data[15]))
-                print("\t   cpsr 0x%08x" %lc.data[16])
-            else:
-                print("     flavor %d (unknown)" % lc.flavor)
-                print("      count %d" % lc.count)
-                print("      state:")
-                for k in range(lc.count//8):
-                    print("".join(["%08x "%_ for _ in lc.data[8*k:8*(k+1)]]))
-
-        elif lc.cmd == macho.LC_LINKER_OPTION:
-            for i, s in enumerate(lc.strings):
-                print("  string #%d %s" % (i+1, s))
+        print("\n".join(lc.otool(llvm=llvm)))
 
 
 
-def print_symbols(e):
-    for sect in e.sect.sect:
+def print_symbols(e, **fargs):
+    for sect in e.sect:
         if type(sect) != macho_init.SymbolTable:
             continue
         print("%-35s %-15s %-4s %-10s %s"%("Symbol","Section","Type","Value","Description"))
-        for value in sect.symbols:
-            n_type = {
-                macho.N_UNDF: 'U',
-                macho.N_ABS : 'A',
-                macho.N_SECT: 'S',
-                macho.N_PBUD: 'P',
-                macho.N_INDR: 'I',
-                }[value.type & macho.N_TYPE]
-            n_type += [ ' ', 'X' ] [value.type & macho.N_EXT]
-            n_type += [ ' ', 'X' ] [(value.type & macho.N_PEXT)>>4]
-            if value.type & macho.N_STAB:
-                n_type += 'D'
-            desc = value.description
-            if value.sectionindex == 0:
-                section = "NO_SECT"
-            else:
-                section = e.sect.sect[value.sectionindex-1]
-                section = "%s,%s"%(section.sh.segname,section.sh.sectname)
-            print("%-35s %-15s %-4s 0x%08x %04x"%(value.name,section,n_type,value.value,desc))
+        for symbol in sect.symbols:
+            print(symbol.otool())
 
-def print_dysym(e):
+def print_dysym(e, **fargs):
     # Display indirect symbol tables
-    for sect in e.sect.sect:
-        if type(sect) != macho_init.DySymbolTable:
+    for sect in e.sect:
+        if getattr(sect, 'type', None) is None:
             continue
-        if sect.type == 'indirectsym':
-            print("Indirect symbols [%d entries]"%len(sect.entries))
+        elif sect.type == 'indirectsym':
+            print("Indirect symbols [%d entries]"%len(sect))
             print("%5s %s"%("index","name"))
-            for entry in sect.entries:
+            for entry in sect:
+                entry = entry.index
                 if   entry == macho.INDIRECT_SYMBOL_LOCAL:
                     print("%5s" % "LOCAL")
                 elif entry == macho.INDIRECT_SYMBOL_ABS:
                     print("%5s" % "ABSOLUTE")
-                else:
+                elif 0 <= entry < len(e.symbols.symbols):
                     print("%5s %s" % (entry,e.symbols.symbols[entry].name))
+                else:
+                    print("INVALID(%d)" % entry)
         elif sect.type == 'locrel':
-            print("Local relocations [%d entries]"%len(sect.entries))
-            for entry in sect.entries:
+            print("Local relocations [%d entries]"%len(sect))
+            for entry in sect:
                 print(repr(entry))
         elif sect.type == 'extrel':
-            print("External relocations [%d entries]"%len(sect.entries))
-            for entry in sect.entries:
+            print("External relocations [%d entries]"%len(sect))
+            for entry in sect:
                 print(repr(entry))
-        else:
-            raise ValueError("[%s] %d entries"%(sect.type,len(sect.entries)))
-            TODO
-            #      table of contents
-            #      module table
-            #      reference symbol table
-            #      indirect symbol table
 
-def print_indirect(e):
+def print_indirect(e, **fargs):
     # Find section with indirect symbols and indirect symbols table
     indirectsym_table = None
     indirectsym_section = []
-    for s in e.sect.sect:
+    for s in e.sect:
         if type(s) == macho_init.DySymbolTable and s.type == 'indirectsym':
             if indirectsym_table is not None:
                 raise ValueError("Only one IndirectSymbolTable per Mach-O file")
@@ -293,8 +127,8 @@ def print_indirect(e):
             idx += 1
             address += len(entry.content)
 
-def print_relocs(e):
-    for s in e.sect.sect:
+def print_relocs(e, **fargs):
+    for s in e.sect:
         if not hasattr(s, 'reloclist'): continue
         print("Relocation information (%s,%s) %u entries"
            % (s.sh.segname, s.sh.sectname, s.sh.nreloc))
@@ -304,6 +138,77 @@ def print_relocs(e):
             else:           xt, xn = x.extern, '%u' % x.symbolNumOrValue
             print("%08x %-5u %-6u %-6s %-7d %-9d %s" %
                 (x.address, x.pcrel, x.length, xt, x.type, x.scattered, xn))
+
+def print_opcodes(e, **fargs):
+    messages_and_values = (
+        ('rebase_', macho.REBASE_OPCODE_DONE,
+         'rebase opcodes:', 'no compressed rebase info'),
+        ('bind_', macho.BIND_OPCODE_DONE,
+         'binding opcodes:', 'no compressed binding info'),
+        ('weak_bind_', macho.BIND_OPCODE_DONE,
+         'weak binding opcodes:', 'no compressed weak binding info'),
+        ('lazy_bind_', -1,
+         'lazy binding opcodes:', 'no compressed lazy binding info'),
+        )
+    for t, v, ok, ko in messages_and_values:
+        s_list = [ _ for _ in e.sect if getattr(_, 'type', None) == t ]
+        if len(s_list) == 0:
+            print(ko)
+            continue
+        if len(s_list) > 1:
+            print("ERROR: many sections with %s"%t[:-1])
+        for s in s_list:
+            print(ok)
+            for x in s._array:
+                print(x)
+                if x.opcode == v:
+                    break
+
+def print_rebase(e, **fargs):
+    for s in e.sect:
+        if getattr(s, 'type', None) != 'rebase_': continue
+        print("rebase information (from compressed dyld info):")
+        print("segment section          address     type")
+        for x in s.info: print(x)
+
+def print_bind(e, **fargs):
+    for s in e.sect:
+        if getattr(s, 'type', None) != 'bind_': continue
+        print("bind information:")
+        print("segment section          address        type    addend dylib            symbol")
+        for x in s.info: print(x)
+        break
+    else:
+        print("no compressed binding info")
+
+def print_weak_bind(e, **fargs):
+    for s in e.sect:
+        if getattr(s, 'type', None) != 'weak_bind_': continue
+        print("weak binding information:")
+        print("segment section          address       type     addend symbol")
+        for x in s.info: print(x)
+        break
+    else:
+        print("no weak binding")
+
+def print_lazy_bind(e, **fargs):
+    for s in e.sect:
+        if getattr(s, 'type', None) != 'lazy_bind_': continue
+        print("lazy binding information (from lazy_bind part of dyld info):")
+        print("segment section          address    index  dylib            symbol")
+        for x in s.info: print(x)
+        break
+    else:
+        print("no compressed lazy binding info")
+
+def print_export(e, **fargs):
+    for s in e.sect:
+        if getattr(s, 'type', None) != 'export_': continue
+        print("export information (from trie):")
+        for x in sorted(s.info, key=lambda _:_.addr): print(x)
+        break
+    else:
+        print("no compressed export info")
 
 archi = {
     (macho.CPU_TYPE_MC680x0,   macho.CPU_SUBTYPE_MC680x0_ALL):  'm68k',
@@ -367,6 +272,7 @@ def arch_name(e):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(add_help=False)
+    # Simulates 'otool'
     parser.add_argument('-arch', dest='arch_type', action='append', help='select architecture')
     parser.add_argument('-h', dest='options', action='append_const', const='header', help='print the mach header')
     parser.add_argument('-l', dest='options', action='append_const', const='load', help='print the load commands')
@@ -374,6 +280,14 @@ if __name__ == '__main__':
     parser.add_argument('--dysym', dest='options', action='append_const', const='dysym', help='print dynamic symbols')
     parser.add_argument('-r', dest='options', action='append_const', const='reloc', help='Display the relocation entries')
     parser.add_argument('-I', dest='options', action='append_const', const='indirect', help='Display the indirect symbol table')
+    parser.add_argument('--llvm', dest='llvm_version', action='append', help='Simulate the output of a given version of llvm-otool')
+    # Simulates 'dyldinfo'
+    parser.add_argument('-opcodes', dest='options', action='append_const', const='opcodes', help='opcodes used to generate the rebase and binding information')
+    parser.add_argument('-rebase', dest='options', action='append_const', const='rebase', help='addresses dyld will adjust if file not loaded at preferred address')
+    parser.add_argument('-bind', dest='options', action='append_const', const='bind', help='addresses dyld will set based on symbolic lookups')
+    parser.add_argument('-weak_bind', dest='options', action='append_const', const='weak_bind', help='symbols which dyld must coalesce')
+    parser.add_argument('-lazy_bind', dest='options', action='append_const', const='lazy_bind', help='addresses dyld will lazily set on first use')
+    parser.add_argument('-export', dest='options', action='append_const', const='export', help='addresses of all symbols this file exports')
     parser.add_argument('file', nargs='*', help='object file')
     args = parser.parse_args()
     if args.options == None:
@@ -381,9 +295,19 @@ if __name__ == '__main__':
     if len(args.file) == 0:
         parser.print_help()
     functions = []
+    fargs = {}
+    dyldinfo_simulation = False
+    if args.llvm_version:
+        # Currently only two variants of llvm-otool are known, the one
+        # shipped with Xcode 7, and the one shipped with Xcode 8.
+        for llvm in args.llvm_version:
+            if '7' in llvm: fargs['llvm'] = 7
+            if '8' in llvm: fargs['llvm'] = 8
     if 'header' in args.options:
         functions.append(print_header)
     if 'load' in args.options:
+        if fargs.get('llvm',8) >= 8 and not 'header' in args.options:
+            functions.append(print_header)
         functions.append(print_lc)
     if 'symbols' in args.options:
         functions.append(print_symbols)
@@ -393,13 +317,35 @@ if __name__ == '__main__':
         functions.append(print_relocs)
     if 'indirect' in args.options:
         functions.append(print_indirect)
+    if 'rebase' in args.options:
+        functions.append(print_rebase)
+        dyldinfo_simulation = True
+    if 'bind' in args.options:
+        functions.append(print_bind)
+        dyldinfo_simulation = True
+    if 'weak_bind' in args.options:
+        functions.append(print_weak_bind)
+        dyldinfo_simulation = True
+    if 'lazy_bind' in args.options:
+        functions.append(print_lazy_bind)
+        dyldinfo_simulation = True
+    if 'export' in args.options:
+        functions.append(print_export)
+        dyldinfo_simulation = True
+    if 'opcodes' in args.options:
+        functions.append(print_opcodes)
+        dyldinfo_simulation = True
 
     for file in args.file:
         raw = open(file, 'rb').read()
         filesize = os.path.getsize(file)
-        e = macho_init.MACHO(raw,
-            interval=intervals.Intervals().add(0,filesize),
-            parseSymbols = False)
+        try:
+            e = macho_init.MACHO(raw,
+                parseSymbols = False)
+        except ValueError, err:
+            print("%s:" %file)
+            print("    %s" % err)
+            continue
         if args.arch_type is None:
             if hasattr(e, 'Fhdr'):
                 # Select the current architecture, if present
@@ -408,6 +354,9 @@ if __name__ == '__main__':
                     if current == arch_name(_):
                         e = _
                         break
+                else:
+                    # Display all architectures
+                    e = [ _ for _ in e.arch ]
         elif 'all' in args.arch_type:
             if hasattr(e, 'Fhdr'):
                 # Display all architectures
@@ -448,14 +397,21 @@ if __name__ == '__main__':
                 else:
                     e = []
 
+        if dyldinfo_simulation and len(args.file) > 1:
+            print("\n%s:" %file)
         if hasattr(e, 'Mhdr'):
-            print("%s:" %file)
+            if not dyldinfo_simulation and functions != [ print_header ]:
+                print("%s:" %file)
             for f in functions:
-                f(e)
+                f(e, **fargs)
         else:
             for _ in e:
                 t0 = _.Mhdr.cputype
                 t1 = _.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK)
-                print("%s (architecture %s):" %(file, arch_name(_)))
+                if dyldinfo_simulation:
+                    print("for arch %s:" % arch_name(_))
+                else:
+                    if functions != [ print_header ]:
+                        print("%s (architecture %s):" %(file, arch_name(_)))
                 for f in functions:
-                    f(_)
+                    f(_, **fargs)

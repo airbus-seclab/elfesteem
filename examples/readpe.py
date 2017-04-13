@@ -1,9 +1,9 @@
 #! /usr/bin/env python
 import sys, os
 
-if sys.version_info[0] == 2 and sys.version_info[1] < 5:
-    sys.stderr.write("python version older than 2.5 is not supported\n")
-    exit(1)
+if sys.version_info[0] == 2 and sys.version_info[1] < 4:
+    sys.stderr.write("python version older than 2.4 is not supported\n")
+    sys.exit(1)
 
 sys.path.insert(1, os.path.abspath(sys.path[0]+'/..'))
 from elfesteem import pe_init, pe
@@ -26,7 +26,7 @@ def print_petype(e):
     if hasattr(e, 'NThdr'):
         print("PE for %s (%s header)"%(machine,struct.pack("<H",e.DOShdr.magic)))
     else:
-        print("COFF for %s"%machine)
+        print("COFF %s endian for %s"%({'<':'little','>':'big'}[e.sex],machine))
     print("COFF: %d sections, %d symbols; flags %#x; szopthdr %#x" % (
         COFFhdr.numberofsections,
         COFFhdr.numberofsymbols,
@@ -75,16 +75,25 @@ def print_petype(e):
             e.NThdr.sizeofimage,
             e.NThdr.sizeofheaders,
             ))
+        print("  CheckSum %#x sz_sr %#x sz_sc %#x sz_hr %#x sz_hc %#x" % (
+            e.NThdr.CheckSum,
+            e.NThdr.sizeofstackreserve,
+            e.NThdr.sizeofstackcommit,
+            e.NThdr.sizeofheapreserve,
+            e.NThdr.sizeofheapcommit,
+            ))
+        print("  NbDir %d DLLchar %#x LoaderFlg %#x Reserved %#x" % (
+            e.NThdr.numberofrvaandsizes,
+            e.NThdr.dllcharacteristics,
+            e.NThdr.loaderflags,
+            e.NThdr.Reserved1,
+            ))
 
 def print_sections(e):
     print("\nSECTIONS")
     print("No               Name     offset      rsize  vsize/paddr    vaddr      flags")
     for i, s in enumerate(e.SHList):
-        print("%2d %18s %#10x %#10x %#10x %#10x %#10x" %(i,
-               s.name.strip('\0'),
-               s.scnptr, s.rsize,
-               s.paddr, s.vaddr,
-               s.flags))
+        print("%2d %s" % (i, s))
     if hasattr(e, 'NThdr'):
         print("\nNT HEADERS")
         print("No          Name         addr      memsz")
@@ -98,11 +107,9 @@ def print_sections(e):
                     name = '<no section>'
                 n = NoSection()
             dirname = pe.constants['DIRECTORY_ENTRY'].get(i, '<noname>')
-            print("%2d %15s %#10x %#10x %12s" %(i,
-                   dirname,
-                   s.rva, s.size,
-                   '' if s.size == 0 else n.name.strip('\0')
-                   ))
+            if s.size == 0: name = ''
+            else: name = n.name.strip('\0')
+            print("%2d %15s %#10x %#10x %12s"%(i, dirname, s.rva, s.size, name))
 
 def print_symtab(e):
     if hasattr(e, 'Symbols'):
@@ -203,12 +210,16 @@ def print_layout(e, filesz):
 
     if hasattr(e, 'NThdr'):
         for i, s in enumerate(e.NThdr.optentries):
-            if s.rva != 0 and s.size != 0:
+            if s.rva != 0:
                 if i == pe.DIRECTORY_ENTRY_SECURITY:
                     # SECURITY vaddr is an offset, not a RVA!
                     of = s.rva
+                    if of >= filesz: of = None
                 else:
                     of = e.rva2off(s.rva)
+                if of is None:
+                    # e.g. Ange Albertini's foldedhdr.exe
+                    continue
                 layout.append((of, s.size,
                                 'DirEnt '+pe.constants['DIRECTORY_ENTRY'][i]))
                 if i in (pe.DIRECTORY_ENTRY_IMPORT,
@@ -260,7 +271,9 @@ def print_layout(e, filesz):
                                 continue
                             if jdx < len(getattr(d, 'ILT', [])) \
                                and hasattr(d.ILT[jdx].obj, '_size'):
-                                assert t.rva == d.ILT[jdx].rva
+                                # assert t.rva == d.ILT[jdx].rva
+                                # Not true for some files,
+                                # e.g. Ange Albertini's imports_bogusIAT.exe
                                 continue
                             # Aligned to 2 bytes
                             size = t.obj.bytelen
@@ -348,6 +361,8 @@ def print_layout(e, filesz):
                                     'BASERELOC Block %d'%idx))
                         of += t.bytelen
     print("\nFILE CONTENT LAYOUT")
+    not_in_section = [l for l in layout if l[0] is None]
+    layout = [l for l in layout if l[0] is not None]
     def section_extract(x):
         s = x[2].split()[0]
         o = ['Section', 'DirEnt']
@@ -388,7 +403,7 @@ def print_layout(e, filesz):
                 context.pop()
             if context[-1][1] > filesz:
                 print(format % (context[-1][1], filesz, "", "(went after EOF!)"))
-    for l in [l for l in layout if l[0] == None]:
+    for l in not_in_section:
         print("Not in a section: %s" % (' '.join(l[2:])))
 
 def pe_dir_display(e):
@@ -399,20 +414,42 @@ def pe_dir_display(e):
     if hasattr(e, 'DirReloc'):  print(e.DirReloc.display())
 
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-H', dest='options', action='append_const', const='headers',  help='Headers')
-    parser.add_argument('-S', dest='options', action='append_const', const='sections', help='Sections')
-    parser.add_argument('-D', dest='options', action='append_const', const='directories',   help='Directories')
-    #parser.add_argument('-d', dest='options', action='append_const', const='dynsym',   help='Dynamic symbols')
-    parser.add_argument('-r', dest='options', action='append_const', const='reltab',   help='Relocation sections')
-    parser.add_argument('-s', dest='options', action='append_const', const='symtab',   help='Symbol table')
-    #parser.add_argument('-d', dest='options', action='append_const', const='dynsym',   help='Dynamic symbols')
-    parser.add_argument('-l', dest='options', action='append_const', const='layout',   help='File content layout')
-    parser.add_argument('file', nargs='+', help='ELF file(s)')
-    args = parser.parse_args()
-    if args.options == None:
-        args.options = []
+    arg_keys = {
+        'H': ('headers', 'Headers'),
+        'S': ('sections', 'Sections'),
+        'D': ('directories', 'Directories'),
+        'r': ('reltab', 'Relocation sections'),
+        's': ('symtab', 'Symbol table'),
+        'l': ('layout', 'File content layout'),
+        #'d': ('dynsym', 'Dynamic symbols'),
+        }
+    try:
+        import argparse
+        parser = argparse.ArgumentParser()
+        for key in arg_keys:
+            const, help = arg_keys[key]
+            parser.add_argument('-'+key,
+                dest='options',
+                action='append_const',
+                const=const,
+                help=help)
+        parser.add_argument('file', nargs='+', help='ELF file(s)')
+        args = parser.parse_args()
+        if args.options == None:
+            args.options = []
+    except ImportError:
+        # Emulate argparse for python < 2.7
+        # We miss e.g. the help
+        class Args(object):
+            file = []
+            options = []
+        args = Args()
+        for arg in sys.argv[1:]:
+            if arg.startswith('-'):
+                for key in arg_keys:
+                    if key in arg: args.options.append(arg_keys[key][0])
+            else:
+                args.file.append(arg)
 
     for file in args.file:
         if len(args.file) > 1:

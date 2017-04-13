@@ -7,18 +7,6 @@ log = pe.log
 
 
 
-class ContentManager(object):
-    def __get__(self, owner, x):
-        if hasattr(owner, '_content'):
-            return owner._content
-    def __set__(self, owner, new_content):
-        owner.resize(len(owner._content), len(new_content))
-        owner._content=new_content
-        #owner.parse_content()
-    def __delete__(self, owner):
-        self.__set__(owner, None)
-
-
 class ContentRVA(object):
     def __init__(self, x):
         self.parent = x
@@ -268,7 +256,13 @@ class StrTable(object):
 # PE object
 
 class PE(object):
-    content = ContentManager()
+    # API shared by all/most binary containers
+    architecture = property(lambda _:pe.constants['IMAGE_FILE_MACHINE'].get(_.COFFhdr.machine,'UNKNOWN(%d)'%_.COFFhdr.machine))
+    entrypoint = property(lambda _:_.rva2virt(_.Opthdr.AddressOfEntryPoint))
+    sections = property(lambda _:_.SHList.shlist)
+    symbols = property(lambda _:getattr(_, 'Symbols', ()))
+    dynsyms = property(lambda _:())
+
     Coffhdr = property(lambda self: self.COFFhdr) # Older API
     Doshdr  = property(lambda self: self.DOShdr) # Older API
     def __init__(self, pestr = None,
@@ -281,13 +275,12 @@ class PE(object):
         if pestr == None:
             self.sex = '<'
             self.wsize = wsize
-            self._content = StrPatchwork()
-            self.DOShdr = pe.DOShdr(parent=self)
-            self.NTsig = pe.NTsig(parent=self)
-            self.COFFhdr = pe.COFFhdr(parent=self)
+            self.DOShdr = pe.DOShdr(parent=self, wsize=32)
+            self.NTsig = pe.NTsig(parent=self, wsize=32)
+            self.COFFhdr = pe.COFFhdr(parent=self, wsize=32)
             self.Opthdr = {32: pe.Opthdr32, 64: pe.Opthdr64}[wsize](parent=self)
             self.NThdr = pe.NThdr(parent=self)
-            self.SHList = pe.SHList(parent=self)
+            self.SHList = pe.SHList(parent=self, wsize=32)
 
             self.DirImport = pe.DirImport(parent=self)
             self.DirExport = pe.DirExport(parent=self)
@@ -308,25 +301,26 @@ class PE(object):
                 self.COFFhdr.characteristics = 0x22
                 self.COFFhdr.sizeofoptionalheader = 0xf0
                 self.Opthdr.magic = pe.IMAGE_NT_OPTIONAL_HDR64_MAGIC
-            #self.Opthdr.majorlinkerversion = 0x7
-            #self.Opthdr.minorlinkerversion = 0x0
+            self.Opthdr.majorlinkerversion = 0x7
+            self.Opthdr.minorlinkerversion = 0x0
 
             self.NThdr.ImageBase = 0x400000
             self.NThdr.sectionalignment = 0x1000
             self.NThdr.filealignment = 0x200
-            #self.NThdr.majoroperatingsystemversion = 0x5
-            #self.NThdr.minoroperatingsystemversion = 0x1
-            #self.NThdr.MajorImageVersion = 0x5
-            #self.NThdr.MinorImageVersion = 0x1
-            #self.NThdr.majorsubsystemversion = 0x4
-            #self.NThdr.minorsubsystemversion = 0x0
-            #self.NThdr.subsystem = 0x3
-            #self.NThdr.dllcharacteristics = 0x8000
-            #self.NThdr.sizeofstackreserve = 0x200000
-            #self.NThdr.sizeofstackcommit = 0x1000
-            #self.NThdr.sizeofheapreserve = 0x100000
-            #self.NThdr.sizeofheapcommit = 0x1000
-            #self.NThdr.sizeofheaders = 0x1000
+            self.NThdr.filealignment = 0x1000 # previous versions of elfesteem
+            self.NThdr.majoroperatingsystemversion = 0x5
+            self.NThdr.minoroperatingsystemversion = 0x1
+            self.NThdr.MajorImageVersion = 0x5
+            self.NThdr.MinorImageVersion = 0x1
+            self.NThdr.majorsubsystemversion = 0x4
+            self.NThdr.minorsubsystemversion = 0x0
+            self.NThdr.subsystem = 0x3
+            self.NThdr.dllcharacteristics = 0x8000
+            self.NThdr.sizeofstackreserve = 0x200000
+            self.NThdr.sizeofstackcommit = 0x1000
+            self.NThdr.sizeofheapreserve = 0x100000
+            self.NThdr.sizeofheapcommit = 0x1000
+            self.NThdr.sizeofheaders = 0x1000
             self.NThdr.numberofrvaandsizes = 0x10
             self.NThdr.optentries = pe.OptNThdrs(parent=self.NThdr)
             for _ in range(self.NThdr.numberofrvaandsizes):
@@ -335,9 +329,10 @@ class PE(object):
             self.NThdr.CheckSum = 0
 
             self.NTsig.signature = 0x4550
+            self.content = StrPatchwork(self.pack())
 
         else:
-            self._content = StrPatchwork(pestr)
+            self.content = StrPatchwork(pestr)
             self.parse_content(parse_resources = parse_resources,
                                parse_delay = parse_delay,
                                parse_reloc = parse_reloc)
@@ -360,21 +355,20 @@ class PE(object):
                       parse_resources = True,
                       parse_delay = True,
                       parse_reloc = True):
+        h = struct.unpack("BB", self.content[:2])
+        if h != ( 0x4d,0x5a ): # magic number, MZ
+            raise ValueError("Not a PE, no MZ magic number")
         of = 0
         self.sex = '<'
         self.wsize = 32
         self.DOShdr = pe.DOShdr(parent=self, content=self.content, start=of)
         of = self.DOShdr.lfanew
         if of > len(self.content):
-            log.warn('ntsig after eof!')
-            self.NTsig = None
-            return
+            raise ValueError('Not a PE, NTsig offset after eof %#x', of)
         self.NTsig = pe.NTsig(parent=self, content=self.content, start=of)
+        if self.NTsig.signature != 0x4550: # PE\0\0
+            raise ValueError('Not a PE, NTsig is %#x', self.NTsig.signature)
 
-
-        if self.NTsig.signature != 0x4550:
-            log.warn('not a valid pe!')
-            return
         of += self.NTsig.bytelen
         self.COFFhdr = pe.COFFhdr(parent=self, content=self.content, start=of)
         of += self.COFFhdr.bytelen
@@ -410,8 +404,7 @@ class PE(object):
         if self.COFFhdr.pointertosymboltable != 0:
             if self.COFFhdr.pointertosymboltable + 18 * self.COFFhdr.numberofsymbols > len(self.content):
                 log.warning('Too many symbols: %d', self.COFFhdr.numberofsymbols)
-            else:
-                self.Symbols = pe.CoffSymbols(**kargs)
+            self.Symbols = pe.CoffSymbols(**kargs)
         if hasattr(self, 'Symbols'):
             of = self.COFFhdr.pointertosymboltable + self.Symbols.bytelen
             sz, = struct.unpack(self.sex+'I',self.content[of:of+4])
@@ -540,6 +533,7 @@ class PE(object):
 
     def build_content(self):
         c = StrPatchwork()
+        c[self.NThdr.sizeofheaders-1] = pe.data_null
         c[0] = self.DOShdr.pack()
 
         # fix image size
@@ -632,7 +626,10 @@ class PE(object):
 
 # The COFF file format happens to have many variants,
 # quite different from the COFF embedded in PE files...
-class Coff(PE):
+class COFF(PE):
+    # API shared by all/most binary containers
+    entrypoint = property(lambda _:getattr(_.Opthdr, 'entry', -1))
+
     def parse_content(self,
                       parse_resources = True,
                       parse_delay = True,
@@ -691,9 +688,17 @@ class Coff(PE):
         elif self.COFFhdr.sizeofoptionalheader == 44:
             assert self.COFFhdr.machine == pe.IMAGE_FILE_MACHINE_APOLLOM68K
             self.Opthdr = pe.OpthdrApollo(**kargs)
+        elif self.COFFhdr.sizeofoptionalheader == 56:
+            assert self.COFFhdr.machine in (
+                pe.IMAGE_FILE_MACHINE_MIPSIII,
+                pe.IMAGE_FILE_MACHINE_MIPSEB,
+                pe.IMAGE_FILE_MACHINE_R3000,
+                pe.IMAGE_FILE_MACHINE_R4000,
+                pe.IMAGE_FILE_MACHINE_R10000)
+            self.Opthdr = pe.OpthdrECOFF32(**kargs)
         elif self.COFFhdr.sizeofoptionalheader == 80:
             assert self.COFFhdr.machine == pe.IMAGE_FILE_MACHINE_ALPHA_O
-            self.Opthdr = pe.OpthdrOSF1(**kargs)
+            self.Opthdr = pe.OpthdrECOFF64(**kargs)
         elif self.COFFhdr.sizeofoptionalheader == 72:
             self.Opthdr = pe.OpthdrXCOFF32(**kargs)
         elif self.COFFhdr.sizeofoptionalheader == 110:
@@ -722,7 +727,7 @@ class Coff(PE):
         if self.COFFhdr.numberofsections > 0x1000:
             raise ValueError("COFF too many sections %d"%self.COFFhdr.numberofsections)
         if of + self.COFFhdr.numberofsections * 40 > filesz:
-            raise ValueError("COFF too many sections %d"%self.COFFhdr.numberofsections)
+            raise ValueError("COFF too many sections %d, past end of file"%self.COFFhdr.numberofsections)
         if self.COFFhdr.pointertosymboltable > filesz:
             raise ValueError("COFF invalid ptr to symbol table")
         self.SHList = pe.SHList(parent=self, content=self.content, start=of)
@@ -757,3 +762,6 @@ class Coff(PE):
                 pe.constants['IMAGE_FILE_MACHINE'].get(
                       self.COFFhdr.machine, '%#x'%self.COFFhdr.machine))
             log.warn('%r', self.Opthdr)
+
+# Backward compatibility
+Coff = COFF

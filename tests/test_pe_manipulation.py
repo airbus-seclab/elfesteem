@@ -3,38 +3,32 @@
 import os
 __dir__ = os.path.dirname(__file__)
 
-try:
-    import hashlib
-except ImportError:
-    # Python 2.4 does not have hashlib
-    # but 'md5' is deprecated since python2.5
-    import md5 as oldpy_md5
-    class hashlib(object):
-        def md5(self, data):
-            return oldpy_md5.new(data)
-        md5 = classmethod(md5)
+from test_all import run_tests, hashlib
+from elfesteem.pe_init import log, PE, COFF, Coff
+from elfesteem.strpatchwork import StrPatchwork
+from elfesteem import pe
 
 def run_test():
     ko = []
+    # We want to be able to verify warnings in non-regression test
+    log_history = []
+    log.warn = lambda *args, **kargs: log_history.append(('warn',args,kargs))
+    log.warning = log.warn
+    log.error = lambda *args, **kargs: log_history.append(('error',args,kargs))
     def assertion(target, value, message):
         if target != value: ko.append(message)
     import struct
     assertion('f71dbe52628a3f83a77ab494817525c6',
               hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
               'MD5')
-    from elfesteem.pe_init import PE, Coff
-    from elfesteem import pe
-    # Remove warnings
-    import logging
-    pe.log.setLevel(logging.ERROR)
     e = PE()
     d = e.pack()
-    assertion('4511fc7e7fe5ae5196b1d7e6780e0fff',
+    assertion('901e6383ee161b569af1d35d3f77b038',
               hashlib.md5(d).hexdigest(),
               'Creation of a standard empty PE')
     e.SHList.add_section(name = 'new', rawsize = 0x1000)
     d = e.pack()
-    assertion('6c3c99fb3ee0274daf6354f909947bfb',
+    assertion('15aefbcc8f4b39e9484df8b1ed277c75',
               hashlib.md5(d).hexdigest(),
               'Adding a section to an empty PE')
     e.SHList.add_section(name = 'nxt', rawsize = 0x1000)
@@ -42,16 +36,18 @@ def run_test():
     assertion('620f0b67a91f7f74151bc5be745b7110',
               hashlib.md5(d).hexdigest(),
               'Extract chunk from mapped memory, across multiple sections')
-    pe.log.setLevel(logging.CRITICAL)
-    for _ in range(12):
+    for _ in range(89):
         e.SHList.add_section(name = 'nxt', rawsize = 0x1000)
-    assertion(13, # Should be 14 if the last section has been added
+    assertion([('error', ('Cannot add section %s: not enough space for section list', 'nxt'), {})],
+              log_history,
+              'Add too many sections (logs)')
+    log_history = []
+    assertion(90, # Should be 91 if the last section could been added
               len(e.SHList),
               'Add too many sections')
-    pe.log.setLevel(logging.ERROR)
     e = PE(wsize=64)
     d = e.pack()
-    assertion('5815feb66c6ef755d4760aefd44e42b1',
+    assertion('863bf62f521b0cad3209e42cff959eed',
               hashlib.md5(d).hexdigest(),
               'Creation of a standard empty PE+')
     pe_mingw = open(__dir__+'/binary_input/pe_mingw.exe', 'rb').read()
@@ -128,6 +124,10 @@ def run_test():
               hashlib.md5(d).hexdigest(),
               'Extract chunk from mapped memory, in a section')
     d = e.virt[0x100:0x200] # One null byte
+    assertion([('warn', ('unknown rva address! -3fff00',), {})],
+              log_history,
+              'Extract chunk from non-mapped memory (logs)')
+    log_history = []
     assertion('93b885adfe0da089cdf634904fd59f71',
               hashlib.md5(d).hexdigest(),
               'Extract chunk from non-mapped memory')
@@ -148,11 +148,22 @@ def run_test():
     d = e.pack()
     assertion('2f08b8315c4e0a30d51a8decf104345c',
               hashlib.md5(d).hexdigest(),
-              'Writing in memory')
-    # Warning: Cannot write at RVA slice(256, 288, None)
+              'Writing in memory (interval)')
+    e.virt[0x401100] = e.virt[0x401100:0x401120]
+    d = e.pack()
+    assertion('2f08b8315c4e0a30d51a8decf104345c',
+              hashlib.md5(d).hexdigest(),
+              'Writing in memory (address)')
     e.virt[0x400100:0x400120] = e.virt[0x400100:0x400120]
-    # Warning: __len__ deprecated
+    assertion([('warn', ('Cannot write at RVA %s', slice(256, 288, None)), {})],
+              log_history,
+              'Writing at invalid RVA (logs)')
+    log_history = []
     assertion(0x468e71, len(e.virt), 'Max virtual address')
+    assertion([('warn', ('__len__ deprecated',), {})],
+              log_history,
+              '__len__ deprectated (logs)')
+    log_history = []
     # Find leave; ret
     assertion(0x401294,
               e.virt.find(struct.pack('BB', 0xc9, 0xc3)),
@@ -223,7 +234,11 @@ def run_test():
     assertion('8a3a1c8c9aa2db211e1d34c7efbb8473',
               hashlib.md5(d).hexdigest(),
               'Adding new imports')
-    d = PE(d).pack() # Warning 'Section 5 size 0x126 not aligned to 0x200'
+    d = PE(d).pack()
+    assertion([('warn', ('Section %d size %#x not aligned to %#x', 5, 294, 512), {})],
+              log_history,
+              'Adding new imports (logs)')
+    log_history = []
     assertion('8a3a1c8c9aa2db211e1d34c7efbb8473',
               hashlib.md5(d).hexdigest(),
               'Adding new imports; fix point')
@@ -241,6 +256,10 @@ def run_test():
               hashlib.md5(d).hexdigest(),
               'Adding new exports')
     d = PE(d).pack()
+    assertion([('warn', ('Section %d size %#x not aligned to %#x', 5, 294, 512), {})],
+              log_history,
+              'Adding new exports (logs)')
+    log_history = []
     assertion('47a864481296d88f908126fb822ded59',
               hashlib.md5(d).hexdigest(),
               'Adding new exports; fix point')
@@ -280,28 +299,92 @@ def run_test():
               hashlib.md5(d).hexdigest(),
               'Display all relocations')
     # Parse some ill-formed PE made by Ange Albertini
-    for f in (
-        'resourceloop.exe',
-        'namedresource.exe',
-        'weirdsord.exe',
-        'nosectionW7.exe',
-        'imports_relocW7.exe',
-        'imports_tinyXP.exe',
-        'bottomsecttbl.exe',
-        'delayfake.exe',
-        'exportobf.exe',
-        'dllbound-ld.exe',
-        'd_tiny.dll',
-        'dllfw.dll',
-        'tinydllXP.dll',
-        ):
-        #e = PE(open('/Users/Shared/NoBackup/Temp/pocs/PE/bin/'+f, 'rb').read())
-        e = PE(open(__dir__+'/binary_input/Ange/'+f, 'rb').read())
     e = PE(open(__dir__+'/binary_input/Ange/resourceloop.exe', 'rb').read())
+    assertion([('warn', ('Resource tree too deep',), {})]*212,
+              log_history,
+              'Ange/resourceloop.exe (logs)')
+    log_history = []
+    e = PE(open(__dir__+'/binary_input/Ange/namedresource.exe', 'rb').read())
+    assertion([],
+              log_history,
+              'Ange/namedresource.exe (logs)')
+    e = PE(open(__dir__+'/binary_input/Ange/weirdsord.exe', 'rb').read())
+    assertion([('warn', ('Section %d offset %#x not aligned to %#x', 0, 513, 16384), {}), ('warn', ('Section %d size %#x not aligned to %#x', 0, 270, 16384), {})],
+              log_history,
+              'Ange/weirdsord.exe (logs)')
+    log_history = []
+    e = PE(open(__dir__+'/binary_input/Ange/nosectionW7.exe', 'rb').read())
+    assertion([('warn', ('Number of rva %d does not match sizeofoptionalheader %d', 16, 0), {})],
+              log_history,
+              'Ange/nosectionW7.exe (logs)')
+    log_history = []
+    e = PE(open(__dir__+'/binary_input/Ange/imports_relocW7.exe', 'rb').read())
+    assertion([],
+              log_history,
+              'Ange/imports_relocW7.exe (logs)')
+    e = PE(open(__dir__+'/binary_input/Ange/imports_tinyXP.exe', 'rb').read())
+    assertion([],
+              log_history,
+              'Ange/imports_tinyXP.exe (logs)')
+    e = PE(open(__dir__+'/binary_input/Ange/bottomsecttbl.exe', 'rb').read())
+    assertion([('warn', ('Number of rva %d does not match sizeofoptionalheader %d', 16, 696), {})],
+              log_history,
+              'Ange/bottomsecttbl.exe (logs)')
+    log_history = []
+    e = PE(open(__dir__+'/binary_input/Ange/delayfake.exe', 'rb').read())
+    assertion([],
+              log_history,
+              'Ange/delayfake.exe (logs)')
+    e = PE(open(__dir__+'/binary_input/Ange/exportobf.exe', 'rb').read())
+    assertion([],
+              log_history,
+              'Ange/exportobf.exe (logs)')
+    e = PE(open(__dir__+'/binary_input/Ange/dllbound-ld.exe', 'rb').read())
+    assertion([],
+              log_history,
+              'Ange/dllbound-ld.exe (logs)')
+    e = PE(open(__dir__+'/binary_input/Ange/d_tiny.dll', 'rb').read())
+    assertion([('warn', ('Opthdr magic %#x', 31074), {}),
+               ('warn', ('Number of rva %d does not match sizeofoptionalheader %d', 0, 13864), {}),
+               ('warn', ('Windows 8 needs at least 13 directories, %d found', 0), {}),
+               ('warn', ('Too many symbols: %d', 541413408), {}),
+               ('warn', ('File too short for StrTable -0x61746127 != 0x0',), {})],
+              log_history,
+              'Ange/d_tiny.dll (logs)')
+    log_history = []
+    e = PE(open(__dir__+'/binary_input/Ange/dllfw.dll', 'rb').read())
+    assertion([],
+              log_history,
+              'Ange/dllfw.dll (logs)')
+    e = PE(open(__dir__+'/binary_input/Ange/tinydllXP.dll', 'rb').read())
+    assertion([('warn', ('Number of rva %d does not match sizeofoptionalheader %d', 0, 0), {}),
+               ('warn', ('Windows 8 needs at least 13 directories, %d found', 0), {}),
+               ('warn', ('File too short for StrTable 0x55 != 0xc258016a',), {})],
+              log_history,
+              'Ange/tinydllXP.dll (logs)')
+    log_history = []
+    e = PE(open(__dir__+'/binary_input/Ange/resourceloop.exe', 'rb').read())
+    log_history = []
     d = e.DirRes.display().encode('latin1')
     assertion('98701be30b09759a64340e5245e48195',
               hashlib.md5(d).hexdigest(),
               'Display Directory RESOURCE that is too deep')
+    # Some various ways for a PE to be detected as invalid
+    e = PE()
+    data = StrPatchwork(e.pack())
+    try:
+        e.NTsig.signature = 0x2000
+        e = PE(e.pack())
+        ko.append('Not a PE, invalid NTsig')
+    except ValueError:
+        pass
+    try:
+        e.DOShdr.lfanew = 0x200000
+        data[60] = struct.pack("<I", e.DOShdr.lfanew)
+        e = PE(data)
+        ko.append('Not a PE, NTsig offset after eof')
+    except ValueError:
+        pass
     # Now, we parse COFF files
     try:
         # Not COFF: OptHdr size too big
@@ -310,7 +393,11 @@ def run_test():
     except ValueError:
         pass
     obj_mingw = open(__dir__+'/binary_input/coff_mingw.obj', 'rb').read()
-    e = PE(obj_mingw) # Warning 'ntsig after eof!'
+    try:
+        e = PE(obj_mingw)
+        ko.append('Not PE')
+    except ValueError:
+        pass
     e = Coff(obj_mingw)
     d = e.rva2off(0x10, section='.text')
     assertion(0x8c+0x10, d, 'rva2off in a .obj')
@@ -319,7 +406,6 @@ def run_test():
     d = e.virt2off(0x10)
     assertion(None, d, 'No virt for .obj')
     out_tms320 = open(__dir__+'/binary_input/C28346_Load_Program_to_Flash.out', 'rb').read()
-    e = PE(out_tms320) # Warning 'not a valid pe!'
     e = Coff(out_tms320)
     d = e.SHList.display().encode('latin1')
     assertion('a63cf686186105b83e49509f213b20ea',
@@ -338,14 +424,50 @@ def run_test():
     e = Coff(open(__dir__+'/binary_input/cku193a05.apollo-sr10-s5r3', 'rb').read())
     # C-Kermit XCOFF32 binary for AIX
     e = Coff(open(__dir__+'/binary_input/cku190.rs6aix32c-3.2.4', 'rb').read())
+    # C-Kermit eCOFF32 binary for MIPS, big endian
+    e = Coff(open(__dir__+'/binary_input/cku192.irix40', 'rb').read())
+    # C-Kermit eCOFF32 binary for MIPS, little endian
+    e = Coff(open(__dir__+'/binary_input/cku192.ultrix43c-mips3', 'rb').read())
+    # Some various ways for a COFF to be detected as invalid
+    obj_mingw = StrPatchwork(obj_mingw)
+    e = COFF(obj_mingw)
+    try:
+        obj_mingw[2] = struct.pack("<H", 0)
+        e = COFF(obj_mingw)
+        ko.append('COFF cannot have no section')
+    except ValueError:
+        pass
+    try:
+        obj_mingw[2] = struct.pack("<H", 0x2000)
+        e = COFF(obj_mingw)
+        ko.append('Too many sections in COFF')
+    except ValueError:
+        pass
+    try:
+        obj_mingw[2] = struct.pack("<H", 0x100)
+        e = COFF(obj_mingw)
+        ko.append('Too many sections in COFF, past end of file')
+    except ValueError:
+        pass
+    try:
+        obj_mingw[2] = struct.pack("<H", 3)
+        obj_mingw[8] = struct.pack("<I", 0x100000)
+        e = COFF(obj_mingw)
+        ko.append('COFF invalid ptr to symbol table')
+    except ValueError:
+        pass
+    obj_mingw[8] = struct.pack("<I", 220)
+    obj_mingw[436] = struct.pack("<I", 10000)
+    e = COFF(obj_mingw)
+    assertion([('warn', ('File too short for StrTable 0x4 != 0x2710',), {})],
+              log_history,
+              'File too short for StrTable (logs)')
+    log_history = []
+    assertion([],
+              log_history,
+              'No non-regression test created unwanted log messages')
     return ko
     # print('HASH', hashlib.md5(d).hexdigest())
 
 if __name__ == "__main__":
-    ko = run_test()
-    if ko:
-        for k in ko:
-            print('Non-regression failure for %r'%k)
-    else:
-        print('OK')
-
+    run_tests(run_test)
