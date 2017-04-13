@@ -160,7 +160,7 @@ class SymbolTable(BaseSection,CArray):
             if type(idx) == int:
                 return self.symbols[idx]
             else:
-                return self.symbols_from_name[idx.strip(data_null)]
+                return self.symbols_from_name[idx.strip('\0')]
         except IndexError:
             log.error("Cannot find symbol with index %r", idx)
             return SymbolNotFound

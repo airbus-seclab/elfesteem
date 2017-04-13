@@ -176,7 +176,7 @@ class LoadMetaclass(CStruct_metaclass):
         return lh
 LoadBase = LoadMetaclass('LoadBase', (CStruct,), {})
 
-from elfesteem.rprc import CData
+from elfesteem.cstruct import CData
 class LoadCommand(LoadBase):
     # A generic load command may have arbitrary data following
     # the first two values 'cmd' and 'cmdsize'.

@@ -153,6 +153,25 @@ def run_test():
     assertion([('error', ('Not a unique loader with entrypoint: []',), {})],
               log_history,
               'No entrypoint in a Mach-O object (logs)')
+    assertion(len(e.symbols), 3,
+              'Number of symbols in a Mach-O object')
+    d = ("\n".join([_.otool() for _ in e.symbols])).encode('latin1')
+    assertion('9543b68138927d012139e526f159846c',
+              hashlib.md5(d).hexdigest(),
+              'Display symbols')
+    assertion(e.symbols['_printf'].otool(),
+              '_printf                             NO_SECT         UX   0x00000000 0000',
+              'Find symbol by name')
+    assertion('SymbolNotFound', e.symbols[10].__class__.__name__,
+              'Find symbol by invalid index')
+    e.symbols[0].sectionindex = 5
+    assertion(e.symbols[0].otool(),
+              '_a                                  INVALID(5)      SX   0x00000000 0000',
+              'Display symbol with invalid section')
+    e.symbols[0].sectionindex = 0xff
+    assertion(e.symbols[0].otool(),
+              '_a                                  INVALID(255)    SX   0x00000000 0000',
+              'Display symbol with too big section index')
     log_history = []
     e.entrypoint = 0
     assertion([('error', ('Not a unique loader with entrypoint: []',), {})],
@@ -283,6 +302,9 @@ def run_test():
     assertion('7038d70ea2d7caf8b4a2adc3c9c01ef9',
               hashlib.md5(d).hexdigest(),
               'Otool-like output including section size "past end of file", llvm version 7')
+    assertion(e.symbols[1].otool(),
+              'execute.c                           NO_SECT         0x4  D 0x00000000 0000',
+              'Display symbol with N_STAB type')
     macho_lib = open(__dir__+'libATCommandStudioDynamic.dylib', 'rb').read()
     e = MACHO(macho_lib)
     macho_lib_hash = hashlib.md5(macho_lib).hexdigest()
@@ -547,13 +569,24 @@ def run_test():
     e.changeUUID("2A0405CF8B1F3502A605695A54C407BB")
     uuid_pos, = e.load.getpos(macho.LC_UUID)
     lh = e.load[uuid_pos]
-    assertion((704906703, 35615, 13570, 42501, 26970, 1422133179),
+    assertion((0x2A0405CF, 0x8B1F, 0x3502, 0xA605, 0x695A, 0x54C407BB),
               lh.uuid,
               'UUID change')
+    assertion('<LC_UUID 2A0405CF-8B1F-3502-A605-695A54C407BB>',
+              repr(lh),
+              'UUID change (repr)')
     d = e.pack()
     assertion('f86802506fb24de2ac2bebd9101326e9',
               hashlib.md5(d).hexdigest(),
               'UUID change (pack)')
+    lh.uuid = (0,0xAAAA,0,0,0,0x11111111)
+    assertion((0,0xAAAA,0,0,0,0x11111111),
+              lh.uuid,
+              'set UUID')
+    d = e.pack()
+    assertion('c8457df239deb4c51c316bd6670a445e',
+              hashlib.md5(d).hexdigest(),
+              'set UUID (pack)')
     e = MACHO(macho_64)
     for l in e.load:
         if getattr(l,'segname',None) == "__LINKEDIT": break
