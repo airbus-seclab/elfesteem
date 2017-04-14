@@ -3,15 +3,15 @@
 from distutils.core import setup
 
 setup(
-    name = 'ELF-Esteem',
-    version = '0.1',    
+    name = 'ELFEsteem',
+    version = '0.2',
     packages=['elfesteem'],
     scripts = ['elfcli'],
     # Metadata
     author = 'Philippe BIONDI',
     author_email = 'phil(at)secdev.org',
-    description = 'ELF-Esteem: ELF file manipulation library',
-    license = 'GPLv2',
+    description = 'ELFEsteem: ELF/PE/Mach-O file manipulation library',
+    license = 'LGPLv2',
     # keywords = '',
     # url = '',
 )
