@@ -251,15 +251,13 @@ class LoadCommand(LoadBase):
                 value = split_integer(value, 10, 5, truncate=2)
             elif self.cmd == LC_ENCRYPTION_INFO:
                 shift = 4
-            elif self.cmd == LC_UNIXTHREAD:
+            elif self.cmd in (LC_THREAD, LC_UNIXTHREAD):
                 shift = 4
                 # Display text values if they are the expected ones.
-                if name == "flavor" and self.flavorname != "":
+                if name == "flavor" and not 'unknown' in self.flavorname:
                     value = self.flavorname
-                if name == "count":
-                    flavorcount = self.flavorname+'_COUNT'
-                    if value == globals()[flavorcount]:
-                        value = flavorcount
+                if name == "count"  and not 'unknown' in self.flavorname:
+                    value = self.flavorcount
             if isinstance(f_type, str):
                 lc_value.append((name, value))
         # otool displays lc_value with a nice alignment
@@ -727,61 +725,6 @@ class dylinker_command(LoadCommand):
     _offsets_in_data = ("name",)
     _fields = [ ("name","u32") ] # dynamic linker's path name
 
-#### Source: /usr/include/mach/*/thread_status.h
-
-# these are the legacy names which should be deprecated in the future
-# they are externally known which is the only reason we don't just get
-# rid of them
-i386_THREAD_STATE             = 1
-i386_FLOAT_STATE              = 2
-i386_EXCEPTION_STATE          = 3
-# these are the supported flavors
-x86_THREAD_STATE32            = 1
-x86_FLOAT_STATE32             = 2
-x86_EXCEPTION_STATE32         = 3
-x86_THREAD_STATE64            = 4
-x86_FLOAT_STATE64             = 5
-x86_EXCEPTION_STATE64         = 6
-x86_THREAD_STATE              = 7
-x86_FLOAT_STATE               = 8
-x86_EXCEPTION_STATE           = 9
-x86_DEBUG_STATE32             = 10
-x86_DEBUG_STATE64             = 11
-x86_DEBUG_STATE               = 12
-THREAD_STATE_NONE             = 13
-# 14 and 15 are used for the internal x86_SAVED_STATE flavours
-x86_AVX_STATE32               = 16
-x86_AVX_STATE64               = 17
-x86_AVX_STATE                 = 18
-
-# manually computed for elfesteem
-i386_THREAD_STATE_COUNT  = 16
-x86_THREAD_STATE64_COUNT = 42
-
-PPC_THREAD_STATE = 1
-PPC_THREAD_STATE_COUNT = 40
-ARM_THREAD_STATE = 1
-ARM_THREAD_STATE_REGISTERS = ('r0', 'r1', 'r2', 'r3',
-                'r4', 'r5', 'r6', 'r7',
-                'r8', 'r9', 'r10', 'r11',
-                'r12', 'sp', 'lr', 'pc',
-                'cpsr')
-ARM_THREAD_STATE_COUNT = len(ARM_THREAD_STATE_REGISTERS)
-
-globs = globals()
-threadStatus = {}
-def add_to_threadStatus(cpu, prefix, suffix):
-    data = {}
-    for val in filter(lambda _:_.startswith(prefix) and _.endswith(suffix), globs.keys()):
-        if val.endswith('_COUNT'): continue
-        if val.endswith('_REGISTERS'): continue
-        data[globs[val]] = val
-    threadStatus[cpu] = data
-add_to_threadStatus(CPU_TYPE_ARM,     'ARM', '')
-add_to_threadStatus(CPU_TYPE_POWERPC, 'PPC', '')
-add_to_threadStatus(CPU_TYPE_I386,    'i386', '')
-add_to_threadStatus(CPU_TYPE_X86_64,  'x86', '64')
-
 #### Source: /usr/include/mach-o/loader.h
 
 # Thread commands contain machine-specific data structures suitable for
@@ -793,28 +736,335 @@ add_to_threadStatus(CPU_TYPE_X86_64,  'x86', '64')
 # the state data structure follows.  This triple may be repeated for many
 # flavors.  The constants for the flavors, counts and state data structure
 # definitions are expected to be in the header file <machine/thread_status.h>.
-class ThreadState(object):
-    def __init__(self, command):
-        self.c = command
+
+class ThreadStateMetaclass(type):
+    registered = {}
+    def __new__(cls, name, bases, dct):
+        o = type.__new__(cls, name, bases, dct)
+        if 'cputype' in dct and 'flavor' in dct:
+            ThreadStateBase.registered[(dct['cputype'],dct['flavor'])] = o
+        return o
+    def __call__(cls, lc):
+        key = (lc.cputype, lc.flavor)
+        if not hasattr(cls, 'cputype') and key in ThreadStateBase.registered:
+            return ThreadStateBase.registered[key](lc)
+        else:
+            return super(ThreadStateMetaclass,cls).__call__(lc)
+
+class ThreadStateBase(ThreadStateMetaclass('ThreadStateBase', (object,), {})):
+    registers = []
+    def __init__(self, lc):
+        self.c = lc
+        # When all registers have the same size, we can precompute the
+        # values used in reg_slice.
+        # If they don't all have the same size, we need to redefine
+        # flavorcount and reg_slice.
+        self.t = convert_size2type("ptr",self.c.wsize)
+        self.s = self.c.wsize//8
+    flavorcount = property(lambda _:_.s//4*len(_.registers))
+    def reg_slice(self, pos):
+        if pos in self.registers:
+            pos = self.registers.index(pos)
+        return self.t, slice(self.s*pos, self.s*(pos+1))
     def __getitem__(self, pos):
-        s_type = convert_size2type("ptr",self.c.wsize)
-        w_byte = self.c.wsize//8
         if isinstance(pos, slice):
             assert pos.step is None
-            ep = struct.unpack(self.c.sex + s_type*(pos.stop-pos.start),
-                               self.c.state[w_byte*pos.start:w_byte*pos.stop])
-            return ep
+            return tuple([self[_] for _ in range(pos.start, pos.stop)])
         else:
-            ep, = struct.unpack(self.c.sex + s_type,
-                               self.c.state[w_byte*pos:w_byte*(pos+1)])
-            return ep
+            fmt, pos = self.reg_slice(pos)
+            return struct.unpack(self.c.sex + fmt, self.c.state[pos])[0]
     def __setitem__(self, pos, val):
-        assert False is isinstance(pos, slice)
-        s_type = convert_size2type("ptr",self.c.wsize)
-        w_byte = self.c.wsize//8
-        self.c.state[w_byte*pos:w_byte*(pos+1)] = struct.pack(self.c.sex + s_type, val)
+        fmt, pos = self.reg_slice(pos)
+        self.c.state[pos] = struct.pack(self.c.sex + fmt, val)
+    def otool(self):
+        return []
+
+#### Source: /usr/include/mach/*/thread_status.h
+
+class ThreadStatePPC(ThreadStateBase):
+    cputype    = CPU_TYPE_POWERPC
+    flavor     = 1
+    flavorname = 'PPC_THREAD_STATE'
+    entrypoint = 'srr0'
+    registers  = ['srr0', 'srr1'] + ['r%d'%_ for _ in range(32)] + \
+                 ['cr', 'xer', 'lr', 'ctr', 'mq', 'vrsave']
+    def otool(self):
+        return [
+    "    r0  %#010x r1  %#010x r2  %#010x r3   %#010x r4   %#010x"%self[2:7],
+    "    r5  %#010x r6  %#010x r7  %#010x r8   %#010x r9   %#010x"%self[7:12],
+    "    r10 %#010x r11 %#010x r12 %#010x r13  %#010x r14  %#010x"%self[12:17],
+    "    r15 %#010x r16 %#010x r17 %#010x r18  %#010x r19  %#010x"%self[17:22],
+    "    r20 %#010x r21 %#010x r22 %#010x r23  %#010x r24  %#010x"%self[22:27],
+    "    r25 %#010x r26 %#010x r27 %#010x r28  %#010x r29  %#010x"%self[27:32],
+    "    r30 %#010x r31 %#010x cr  %#010x xer  %#010x lr   %#010x"%self[32:37],
+    "    ctr %#010x mq  %#010x vrsave %#010x srr0 %#010x srr1 %#010x"
+    % (self[37], self[38], self[39], self[0], self[1]),
+            ]
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_POWERPC
+    flavor     = 2
+    flavorname = 'PPC_FLOAT_STATE'
+    registers  = ['f%d'%_ for _ in range(32)] + [ 'fpscr' ]
+    flavorcount = 66
+    def reg_slice(self, pos):
+        if pos in self.registers:
+            pos = self.registers.index(pos)
+        if pos == 32: # fpscr is 64 bits, 32 bits of rubbish
+            return 'Q', slice(8*pos, 8*pos+8)
+        return 'd', slice(8*pos, 8*pos+8)
+    def otool(self):
+        return [
+    "       f0  %f    f1  %f\n       f2  %f    f3  %f"%self[0:4],
+    "       f4  %f    f5  %f\n       f6  %f    f7  %f"%self[4:8],
+    "       f8  %f    f9  %f\n       f10 %f    f11 %f"%self[8:12],
+    "       f12 %f    f13 %f\n       f14 %f    f15 %f"%self[12:16],
+    "       f16 %f    f17 %f\n       f18 %f    f19 %f"%self[16:20],
+    "       f20 %f    f21 %f\n       f22 %f    f23 %f"%self[20:24],
+    "       f24 %f    f25 %f\n       f26 %f    f27 %f"%self[24:28],
+    "       f28 %f    f29 %f\n       f30 %f    f31 %f"%self[28:32],
+    "       fpscr_pad %#x fpscr %#x"%(self[32]>>32,self[32]&0xffffffff),
+            ]
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_POWERPC
+    flavor     = 3
+    flavorname = 'PPC_EXCEPTION_STATE'
+    registers  = ['dar', 'dsisr', 'exception', 'pad0'] + ['pad1[%d]'%_ for _ in range(4)]
+    def otool(self):
+        return [
+    "      dar 0x%x dsisr 0x%x exception 0x%x pad0 0x%x"%self[0:4],
+    "      pad1[0] 0x%x pad1[1] 0x%x pad1[2] 0x%x pad1[3] 0x%x"%self[4:8],
+            ]
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_POWERPC
+    flavor     = 4
+    flavorname = 'PPC_VECTOR_STATE'
+
+class ThreadStatePPC64(ThreadStateBase):
+    cputype    = CPU_TYPE_POWERPC64
+    flavor     = 5
+    flavorname = 'PPC_THREAD_STATE64'
+    entrypoint = 'srr0'
+    registers  = ['srr0', 'srr1'] + ['r%d'%_ for _ in range(32)] + \
+                 ['cr', 'xer', 'lr', 'ctr', 'vrsave']
+    # NB: cr and vrsave are 32-bit, while all other registers are 64-bit.
+    flavorcount = 76
+    def reg_slice(self, pos):
+        if pos in self.registers:
+            pos = self.registers.index(pos)
+        if pos == 34: return 'I', slice(8*pos, 8*pos+4)   # 'cr' is 32-bit
+        if pos == 38: return 'I', slice(8*pos-8, 8*pos-4) # 'vrsave' is 32-bit
+        if 34 < pos < 38: return 'Q', slice(8*pos-4, 8*pos+4) # Shifted by 32 bits
+        return 'Q', slice(8*pos, 8*(pos+1))
+    def otool(self):
+        return [
+    "    r0  %#018x r1  %#018x r2   %#018x"%self[2:5],
+    "    r3  %#018x r4  %#018x r5   %#018x"%self[5:8],
+    "    r6  %#018x r7  %#018x r8   %#018x"%self[8:11],
+    "    r9  %#018x r10 %#018x r11  %#018x"%self[11:14],
+    "   r12  %#018x r13 %#018x r14  %#018x"%self[14:17],
+    "   r15  %#018x r16 %#018x r17  %#018x"%self[17:20],
+    "   r18  %#018x r19 %#018x r20  %#018x"%self[20:23],
+    "   r21  %#018x r22 %#018x r23  %#018x"%self[23:26],
+    "   r24  %#018x r25 %#018x r26  %#018x"%self[26:29],
+    "   r27  %#018x r28 %#018x r29  %#018x"%self[29:32],
+    "   r30  %#018x r31 %#018x cr   %#010x"%self[32:35],
+    "   xer  %#018x lr  %#018x ctr  %#018x"%self[35:38],
+    "vrsave  %#010x        srr0 %#018x srr1 %#018x"%(self[38], self[0], self[1]),
+            ]
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_POWERPC64
+    flavor     = 6
+    flavorname = 'PPC_EXCEPTION_STATE64'
+
+class ThreadStateX86(ThreadStateBase):
+    cputype    = CPU_TYPE_I386
+    flavor     = 1
+    flavorname = 'x86_THREAD_STATE32' # New name
+    flavorname = 'i386_THREAD_STATE'  # Legacy name
+    entrypoint = 'eip'
+    registers  = ['eax', 'ebx', 'ecx', 'edx', 'edi', 'esi', 'ebp', 'esp',
+                  'ss', 'eflags', 'eip', 'cs', 'ds', 'es', 'fs', 'gs']
+    def otool(self):
+        return [
+    "\t    eax %#010x ebx    %#010x ecx %#010x edx %#010x"%self[0:4],
+    "\t    edi %#010x esi    %#010x ebp %#010x esp %#010x"%self[4:8],
+    "\t    ss  %#010x eflags %#010x eip %#010x cs  %#010x"%self[8:12],
+    "\t    ds  %#010x es     %#010x fs  %#010x gs  %#010x"%self[12:16],
+            ]
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_I386
+    flavor     = 2
+    flavorname = 'x86_FLOAT_STATE32' # New name
+    flavorname = 'i386_FLOAT_STATE'  # Legacy name
+
+class ThreadStateX86(ThreadStateBase):
+    cputype    = CPU_TYPE_I386
+    flavor     = 3
+    flavorname = 'x86_EXCEPTION_STATE32' # New name
+    flavorname = 'i386_EXCEPTION_STATE'  # Legacy name
+
+class ThreadStateX64(ThreadStateBase):
+    cputype    = CPU_TYPE_X86_64
+    flavor     = 4
+    flavorname = 'x86_THREAD_STATE64'
+    entrypoint = 'rip'
+    registers  = ['rax', 'rbx', 'rcx', 'rdx', 'rdi', 'rsi', 'rbp', 'rsp',
+                  'r8', 'r9', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15', 'rip',
+                  'rflags', 'cs', 'fs', 'gs']
+    def otool(self):
+        return [
+    "   rax  %#018x rbx %#018x rcx  %#018x"%self[0:3],
+    "   rdx  %#018x rdi %#018x rsi  %#018x"%self[3:6],
+    "   rbp  %#018x rsp %#018x r8   %#018x"%self[6:9],
+    "    r9  %#018x r10 %#018x r11  %#018x"%self[9:12],
+    "   r12  %#018x r13 %#018x r14  %#018x"%self[12:15],
+    "   r15  %#018x rip %#018x"            %self[15:17],
+    "rflags  %#018x cs  %#018x fs   %#018x"%self[17:20],
+    "    gs  %#018x"                       %self[20],
+            ]
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_X86_64
+    flavor     = 5
+    flavorname = 'x86_FLOAT_STATE64'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_X86_64
+    flavor     = 6
+    flavorname = 'x86_EXCEPTION_STATE64'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_I386
+    flavor     = 7
+    flavorname = 'x86_THREAD_STATE'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_X86_64
+    flavor     = 7
+    flavorname = 'x86_THREAD_STATE'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_I386
+    flavor     = 8
+    flavorname = 'x86_FLOAT_STATE'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_X86_64
+    flavor     = 8
+    flavorname = 'x86_FLOAT_STATE'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_I386
+    flavor     = 9
+    flavorname = 'x86_EXCEPTION_STATE'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_X86_64
+    flavor     = 9
+    flavorname = 'x86_EXCEPTION_STATE'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_I386
+    flavor     = 10
+    flavorname = 'x86_DEBUG_STATE32'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_X86_64
+    flavor     = 11
+    flavorname = 'x86_DEBUG_STATE64'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_I386
+    flavor     = 12
+    flavorname = 'x86_DEBUG_STATE'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_X86_64
+    flavor     = 12
+    flavorname = 'x86_DEBUG_STATE'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_I386
+    flavor     = 16
+    flavorname = 'x86_AVX_STATE32'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_X86_64
+    flavor     = 17
+    flavorname = 'x86_AVX_STATE64'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_I386
+    flavor     = 18
+    flavorname = 'x86_AVX_STATE'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_X86_64
+    flavor     = 18
+    flavorname = 'x86_AVX_STATE'
+
+class ThreadStateARM(ThreadStateBase):
+    cputype    = CPU_TYPE_ARM
+    flavor     = 1
+    flavorname = 'ARM_THREAD_STATE'
+    entrypoint = 'pc'
+    registers  = ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7',
+                  'r8', 'r9', 'r10', 'r11', 'r12', 'sp', 'lr', 'pc', 'cpsr']
+    def otool(self):
+        return [
+    "\t    r0  %#010x r1     %#010x r2  %#010x r3  %#010x"%self[0:4],
+    "\t    r4  %#010x r5     %#010x r6  %#010x r7  %#010x"%self[4:8],
+    "\t    r8  %#010x r9     %#010x r10 %#010x r11 %#010x"%self[8:12],
+    "\t    r12 %#010x sp     %#010x lr  %#010x pc  %#010x"%self[12:16],
+    "\t   cpsr %#010x"%self[16],
+            ]
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_ARM
+    flavor     = 2
+    flavorname = 'ARM_VFP_STATE'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_ARM
+    flavor     = 3
+    flavorname = 'ARM_EXCEPTION_STATE'
+    def otool(self):
+        return [ "\t    exception %#010x fsr %#010x far %#010x"%self[0:3] ]
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_ARM
+    # pre-armv8
+    flavor     = 4
+    flavorname = 'ARM_DEBUG_STATE'
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_ARM64
+    flavor     = 6
+    flavorname = 'ARM_THREAD_STATE64'
+    # TODO. registers = x0-x28, fp, lr, sp, pc, cpsr
+
+class ThreadState(ThreadStateBase):
+    cputype    = CPU_TYPE_ARM64
+    flavor     = 7
+    flavorname = 'ARM_EXCEPTION_STATE64'
+    def otool(self):
+        return [ "\t    far %#018x esr %#010x exception %#010x"
+                 % (self[0], self[1]>>32, self[1]&0xFFFFFFFF) ]
+
+class ThreadState(ThreadStateBase):
+    # Default output
+    flavorname = property(lambda _:'%d (unknown)'%_.c.flavor)
+    def otool(self):
+        return [ "      state (Unknown cputype/cpusubtype)" ]
+
+#### Source: /usr/include/mach-o/loader.h
+
 class thread_command(LoadCommand):
-    # TODO: how is LC_THREAD different from LC_UNIXTHREAD?
     lc_types = (LC_THREAD, LC_UNIXTHREAD)
     _fields = [
         ("flavor","u32"),     # flavor of thread state
@@ -824,77 +1074,24 @@ class thread_command(LoadCommand):
     def __init__(self, *args, **kargs):
         LoadCommand.__init__(self, *args, **kargs)
         self.reg = ThreadState(self)
-    registerInstructionPointer = {
-        CPU_TYPE_I386: 10,
-        CPU_TYPE_X86_64: 16,
-        CPU_TYPE_ARM: 15,
-        CPU_TYPE_POWERPC: 0,
-        }
     def get_entrypoint(self):
-        return self.reg[self.registerInstructionPointer[self.cputype]]
+        return self.reg[self.reg.entrypoint]
     def set_entrypoint(self, val):
-        self.reg[self.registerInstructionPointer[self.cputype]] = val
+        self.reg[self.reg.entrypoint] = val
     entrypoint = property(get_entrypoint, set_entrypoint)
     def cputype(self):
         if type(self.parent) == dict: return self.parent['cputype']
         else:                         return self.parent.parent.Mhdr.cputype
     cputype = property(cputype)
-    flavorname = property(lambda _:threadStatus.get(_.cputype,{}).get(_.flavor,''))
+    flavorname = property(lambda _:_.reg.flavorname)
+    def flavorcount(self):
+        flavorcount = self.reg.flavorname+'_COUNT'
+        if self.count != self.reg.flavorcount:
+            flavorcount = '%d (not %s)' % (self.count, flavorcount)
+        return flavorcount
+    flavorcount = property(flavorcount)
     def otool(self, llvm=False):
-        res = LoadCommand.otool(self, llvm=llvm)
-        if False:
-            # We may want to build the output automatically
-            """
-            registers = getattr(macho, lc.flavorname+'_REGISTERS')
-            state = zip(registers, self.reg)
-            res.append(state)
-            """
-        elif self.cputype == CPU_TYPE_POWERPC:
-            res.append("    r0  %#010x r1  %#010x r2  %#010x r3   %#010x r4   %#010x"%self.reg[2:7])
-            res.append("    r5  %#010x r6  %#010x r7  %#010x r8   %#010x r9   %#010x"%self.reg[7:12])
-            res.append("    r10 %#010x r11 %#010x r12 %#010x r13  %#010x r14  %#010x"%self.reg[12:17])
-            res.append("    r15 %#010x r16 %#010x r17 %#010x r18  %#010x r19  %#010x"%self.reg[17:22])
-            res.append("    r20 %#010x r21 %#010x r22 %#010x r23  %#010x r24  %#010x"%self.reg[22:27])
-            res.append("    r25 %#010x r26 %#010x r27 %#010x r28  %#010x r29  %#010x"%self.reg[27:32])
-            res.append("    r30 %#010x r31 %#010x cr  %#010x xer  %#010x lr   %#010x"%self.reg[32:37])
-            res.append("    ctr %#010x mq  %#010x vrsave %#010x srr0 %#010x srr1 %#010x"%(self.reg[37], self.reg[38], self.reg[39], self.reg[0], self.reg[1]))
-        elif self.cputype == CPU_TYPE_POWERPC64:
-            res.append("    r0  %#018x r1  %#018x r2   %#018x"%self.reg[2:4])
-            res.append("    r3  %#018x r4  %#018x r5   %#018x"%self.reg[4:8])
-            res.append("    r6  %#018x r7  %#018x r8   %#018x"%self.reg[8:11])
-            res.append("    r9  %#018x r10 %#018x r11  %#018x"%self.reg[11:14])
-            res.append("   r12  %#018x r13 %#018x r14  %#018x"%self.reg[14:17])
-            res.append("   r15  %#018x r16 %#018x r17  %#018x"%self.reg[17:20])
-            res.append("   r18  %#018x r19 %#018x r20  %#018x"%self.reg[20:23])
-            res.append("   r21  %#018x r22 %#018x r23  %#018x"%self.reg[23:26])
-            res.append("   r24  %#018x r25 %#018x r26  %#018x"%self.reg[26:29])
-            res.append("   r27  %#018x r28 %#018x r29  %#018x"%self.reg[29:32])
-            res.append("   r30  %#018x r31 %#018x cr   %#010x"%self.reg[32:35])
-            res.append("   xer  %#018x lr  %#018x ctr  %#018x"%self.reg[35:38])
-            res.append("vrsave  %#010x        srr0 %#018x srr1 %#018x"%(self.reg[38], self.reg[0], self.reg[1]))
-        elif self.cputype == CPU_TYPE_ARM:
-            res.append("\t    r0  %#010x r1     %#010x r2  %#010x r3  %#010x"%self.reg[0:4])
-            res.append("\t    r4  %#010x r5     %#010x r6  %#010x r7  %#010x"%self.reg[4:8])
-            res.append("\t    r8  %#010x r9     %#010x r10 %#010x r11 %#010x"%self.reg[8:12])
-            res.append("\t    r12 %#010x sp     %#010x lr  %#010x pc  %#010x"%self.reg[12:16])
-            res.append("\t   cpsr %#010x"%self.reg[16])
-        elif self.cputype == CPU_TYPE_I386 and self.flavor == 1:
-            res.append("\t    eax %#010x ebx    %#010x ecx %#010x edx %#010x"%self.reg[0:4])
-            res.append("\t    edi %#010x esi    %#010x ebp %#010x esp %#010x"%self.reg[4:8])
-            res.append("\t    ss  %#010x eflags %#010x eip %#010x cs  %#010x"%self.reg[8:12])
-            res.append("\t    ds  %#010x es     %#010x fs  %#010x gs  %#010x"%self.reg[12:16])
-        elif self.cputype == CPU_TYPE_X86_64:
-            res.append("   rax  %#018x rbx %#018x rcx  %#018x"%self.reg[0:3])
-            res.append("   rdx  %#018x rdi %#018x rsi  %#018x"%self.reg[3:6])
-            res.append("   rbp  %#018x rsp %#018x r8   %#018x"%self.reg[6:9])
-            res.append("    r9  %#018x r10 %#018x r11  %#018x"%self.reg[9:12])
-            res.append("   r12  %#018x r13 %#018x r14  %#018x"%self.reg[12:15])
-            res.append("   r15  %#018x rip %#018x"            %self.reg[15:17])
-            res.append("rflags  %#018x cs  %#018x fs   %#018x"%self.reg[17:20])
-            res.append("    gs  %#018x"                       %self.reg[20])
-        else:
-            res.append("      state (Unknown cputype/cpusubtype)")
-        return res
+        return LoadCommand.otool(self, llvm=llvm) + self.reg.otool()
 
 
 
