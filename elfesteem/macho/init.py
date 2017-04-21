@@ -57,12 +57,19 @@ VM_PROT_EXECUTE_ONLY = (VM_PROT_EXECUTE|VM_PROT_STRIP_READ)
 
 #### Source: /usr/include/mach-o/fat.h
 
-FAT_MAGIC     = 0xcafebabe
-FAT_CIGAM     = 0xbebafeca # NXSwapLong(FAT_MAGIC)
-# The support for the 64-bit fat file format described here is a work in
-# progress and not yet fully supported in all the Apple Developer Tools.
-FAT_MAGIC_64  = 0xcafebabf
-FAT_CIGAM_64  = 0xbfbafeca # NXSwapLong(FAT_MAGIC_64)
+import sys
+if sys.version_info[0:2] == (2, 3):
+    FAT_MAGIC     = eval("0xcafebabeL")
+    FAT_CIGAM     = eval("0xbebafecaL")
+    FAT_MAGIC_64  = eval("0xcafebabfL")
+    FAT_CIGAM_64  = eval("0xbfbafecaL")
+else:
+    FAT_MAGIC     = 0xcafebabe
+    FAT_CIGAM     = 0xbebafeca # NXSwapLong(FAT_MAGIC)
+    # The support for the 64-bit fat file format described here is a work in
+    # progress and not yet fully supported in all the Apple Developer Tools.
+    FAT_MAGIC_64  = 0xcafebabf
+    FAT_CIGAM_64  = 0xbfbafeca # NXSwapLong(FAT_MAGIC_64)
 
 class fat_header(CStruct):
     _fields = [

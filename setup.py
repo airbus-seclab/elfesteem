@@ -6,7 +6,7 @@ setup(
     name = 'ELF-Esteem',
     version = '0.1',    
     packages = ['elfesteem'],
-    requires = ['python (>= 2.4)'],
+    requires = ['python (>= 2.3)'],
     scripts = ['examples/readelf.py','examples/otool.py','examples/readpe.py'],
     # Metadata
     author = 'Philippe BIONDI',

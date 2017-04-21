@@ -1,5 +1,9 @@
 #! /usr/bin/env python
 
+import sys
+if sys.version_info[0:2] == (2, 3):
+    from elfesteem.compatibility_python23 import reversed
+
 def symbol_demangle(symbol, verbose=False):
     # Some documentation on Visual C++ name mangling is at
     #   https://github.com/wine-mirror/wine/blob/master/dlls/msvcrt/undname.c

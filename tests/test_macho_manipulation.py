@@ -614,12 +614,13 @@ def changeMainToUnixThread(e, **kargs):
     if e.wsize == 32:
         c = (macho.LC_UNIXTHREAD, 80, 1, 16,
              0, 0, 0, 0, 0, 0, 0, 0,
-             0, 0, 0xcafebabe, 0, 0, 0, 0, 0)
+             0, 0, macho.FAT_MAGIC, 0, 0, 0, 0, 0)
     elif e.wsize == 64:
+        FAT_MAGIC_SWAPPED = macho.FAT_MAGIC>>16 + (macho.FAT_MAGIC&0xffff)<<16
         c = (macho.LC_UNIXTHREAD, 184, 4, 42,
              0,0, 0,0, 0,0, 0,0, 0,0, 0,0, 0,0, 0,0,
              0,0, 0,0, 0,0, 0,0, 0,0, 0,0, 0,0, 0,0,
-             0xbabecafe,1, 0,0, 0,0, 0,0, 0,0)
+             FAT_MAGIC_SWAPPED,1, 0,0, 0,0, 0,0, 0,0)
     largs['content'] = struct.pack("<%dI"%len(c), *c)
     lh = macho.LoadCommand(**largs)
     lh.entrypoint = e.off2ad(mainasmpos)

@@ -1,8 +1,6 @@
 #! /usr/bin/env python
 
-# These non-regression tests should be OK from python2.4 to python3.x
-# elfesteem does not work for python2.3 and older, e.g. because 'sorted' or
-# 'reversed' don't exist, neither the type 'set', etc.
+# These non-regression tests should be OK from python2.3 to python3.x
 
 # How to import by name, compatible with python2 and python3
 import sys, os, imp

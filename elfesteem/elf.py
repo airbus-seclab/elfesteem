@@ -2,6 +2,12 @@
 
 from elfesteem.cstruct import CStruct, CStructWithStrTable
 
+import sys
+if sys.version_info[0:2] == (2, 3):
+    mask32 = (eval("1L")<<32)-1 # 'eval' avoids SyntaxError with python3.x
+else:
+    mask32 = eval("0xffffffff") # 'eval' avoids warnings with python2.3
+
 class Ehdr(CStruct):
     _fields = [ ("ident","16s"),
                 ("type","u16"),
@@ -194,7 +200,7 @@ class Rel64(RelBase):
     _fields = [ ("offset","ptr"),
                 ("info","u64") ]
     format = '%(offset)012x  %(info)012x %(type17)-17s %(value)016x %(name)s'
-    type = property(lambda _: _.info & 0xffffffff)
+    type = property(lambda _: _.info & mask32)
     sym_idx = property(lambda _:_.info>>32)
 
 class Rel64MIPS(RelBase):

@@ -17,15 +17,22 @@ class mach_header(CStruct):
         ]
     def __init__(self, *args, **kargs):
         CStruct.__init__(self, *args, **kargs)
-        if self.magic not in [0xfeedface, 0xfeedfacf, 0xcafebabe]:
+        if self.magic not in (MH_MAGIC, MH_MAGIC_64):
             raise ValueError('Not a little-endian Mach-O')
         if self.parent.interval is not None :
             self.parent.interval.delete(0,24+self.wsize//8)
 
-MH_MAGIC    =    0xfeedface #     /* the mach magic number */
-MH_CIGAM    =    0xcefaedfe #     /* NXSwapInt(MH_MAGIC) */
-MH_MAGIC_64 =    0xfeedfacf #     /* the 64-bit mach magic number */
-MH_CIGAM_64 =    0xcffaedfe #     /* NXSwapInt(MH_MAGIC_64) */
+import sys
+if sys.version_info[0:2] == (2, 3):
+    MH_MAGIC    =    eval("0xfeedfaceL")
+    MH_CIGAM    =    eval("0xcefaedfeL")
+    MH_MAGIC_64 =    eval("0xfeedfacfL")
+    MH_CIGAM_64 =    eval("0xcffaedfeL")
+else:
+    MH_MAGIC    =    0xfeedface #     /* the mach magic number */
+    MH_CIGAM    =    0xcefaedfe #     /* NXSwapInt(MH_MAGIC) */
+    MH_MAGIC_64 =    0xfeedfacf #     /* the 64-bit mach magic number */
+    MH_CIGAM_64 =    0xcffaedfe #     /* NXSwapInt(MH_MAGIC_64) */
 
 # Constants for the "filetype" field
 MH_OBJECT       = 0x1  # relocatable object file
@@ -328,7 +335,10 @@ LC_VERSION_MIN_WATCHOS = 0x30
 # "unknown load command required for execution" error and refuse to use the
 # image.  Other load commands without this bit that are not understood will
 # simply be ignored.
-LC_REQ_DYLD = 0x80000000
+if sys.version_info[0:2] == (2, 3):
+    LC_REQ_DYLD = eval("0x80000000L")
+else:
+    LC_REQ_DYLD = 0x80000000
 LC_LOAD_WEAK_DYLIB   |= LC_REQ_DYLD
 LC_RPATH             |= LC_REQ_DYLD
 LC_REEXPORT_DYLIB    |= LC_REQ_DYLD
@@ -1562,7 +1572,7 @@ class LoadCommands(CBase):
                             if not s.addr == 0 :
                                 s.addr += size
              else :
-                if not lco.cmd == 0x80000028:
+                if not lco.cmd == LC_MAIN:
                     lco.changeOffsets(size)
 
     def findlctext(self):

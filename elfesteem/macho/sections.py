@@ -3,6 +3,14 @@ from elfesteem.macho.common import *
 from elfesteem.cstruct import CBase, CData, CString, CArray, CStructWithStrTable
 from elfesteem.strpatchwork import StrPatchwork
 
+import sys
+if sys.version_info[0:2] == (2, 3):
+    mask32 = (eval("1L")<<32)-1 # 'eval' avoids SyntaxError with python3.x
+    mask64 = (eval("1L")<<64)-1
+else:
+    mask32 = eval("0xffffffff") # 'eval' avoids warnings with python2.3
+    mask64 = eval("0xffffffffffffffff")
+
 ############################################################
 # Sections, containing data, at a given offset in the file
 # 
@@ -316,6 +324,8 @@ class Uleb128(CBase):
         pos = 0
         while True:
             val, = struct.unpack("B",c[o:o+1])
+            if sys.version_info[0:2] == (2, 3):
+                val += eval("0L")
             self.value += (val&0x7f) << pos
             self._size += 1; o += 1; pos += 7
             if not val & 0x80: break
@@ -580,11 +590,11 @@ class bind_opcode(bind_entry):
     opcode = BIND_OPCODE_ADD_ADDR_ULEB
     _fields = [ ("val", "u08"), ("addr", Uleb128) ]
     def __str__(self):
-        return bind_entry.__str__(self) + '(0x%08X)' % (int(self.addr) & 0xFFFFFFFF)
+        return bind_entry.__str__(self) + '(0x%08X)' % (int(self.addr) & mask32)
     def apply(self):
         if not hasattr(self.parent, 'addr'): raise ValueError
         self.parent.addr += int(self.addr)
-        self.parent.addr &= 0xFFFFFFFFFFFFFFFF
+        self.parent.addr &= mask64
 
 class bind_opcode(bind_entry):
     opcode = BIND_OPCODE_DO_BIND
@@ -600,12 +610,12 @@ class bind_opcode(bind_entry):
     opcode = BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB
     _fields = [ ("val", "u08"), ("addr", Uleb128) ]
     def __str__(self):
-        return bind_entry.__str__(self) + '(0x%08X)' % (int(self.addr) & 0xFFFFFFFF)
+        return bind_entry.__str__(self) + '(0x%08X)' % (int(self.addr) & mask32)
     def apply(self):
         if not hasattr(self.parent, 'addr'): raise ValueError
         self.parent._info.append(self.parent.cls(self))
         self.parent.addr += self.wsize//8 + int(self.addr)
-        self.parent.addr &= 0xFFFFFFFFFFFFFFFF
+        self.parent.addr &= mask64
 
 class bind_opcode(bind_entry):
     opcode = BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED
@@ -624,7 +634,7 @@ class bind_opcode(bind_entry):
         return bind_entry.__str__(self) + '(%d, 0x%08X)' % (int(self.count), int(self.skip))
     def apply(self):
         if not hasattr(self.parent, 'addr'): raise ValueError
-        if int(self.count) > 0xffffffffffffffff: raise ValueError
+        if int(self.count) > mask64: raise ValueError
         for i in range(int(self.count)):
             self.parent._info.append(self.parent.cls(self))
             self.parent.addr += int(self.skip) + self.wsize//8
@@ -755,7 +765,7 @@ class rebase_opcode(rebase_entry):
     opcode = REBASE_OPCODE_ADD_ADDR_ULEB
     _fields = [ ("val", "u08"), ("addr", Uleb128) ]
     def __str__(self):
-        return rebase_entry.__str__(self) + '(0x%X)' % (int(self.addr) & 0xFFFFFFFF)
+        return rebase_entry.__str__(self) + '(0x%X)' % (int(self.addr) & mask32)
     def apply(self):
         if not hasattr(self.parent, 'addr'): raise ValueError
         self.parent.addr += int(self.addr)
@@ -797,7 +807,7 @@ class rebase_opcode(rebase_entry):
     _fields = [ ("val", "u08"), ("value", Uleb128) ]
     add_addr = property(lambda _: _.wsize//8 + int(_.value))
     def __str__(self):
-        return rebase_entry.__str__(self) + '(%d)' % (self.add_addr & 0xFFFFFFFF)
+        return rebase_entry.__str__(self) + '(%d)' % (self.add_addr & mask32)
     def apply(self):
         if not hasattr(self.parent, 'addr'): raise ValueError
         self.parent._info.append(self.parent.cls(self))

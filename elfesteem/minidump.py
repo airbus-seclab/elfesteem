@@ -3,6 +3,14 @@ Based on: http://amnesia.gtisc.gatech.edu/~moyix/minidump.py
 """
 from elfesteem.new_cstruct import CStruct
 
+import sys
+if sys.version_info[0:2] == (2, 3):
+    mask32 = (eval("1L")<<32)-1 # 'eval' avoids SyntaxError with python3.x
+    bit31 = eval("1L")<<31
+else:
+    mask32 = eval("0xffffffff") # 'eval' avoids warnings with python2.3
+    bit31 = eval("0x80000000")
+
 class Enumeration(object):
     """Stand for an enumeration type"""
 
@@ -185,14 +193,14 @@ class StreamDirectory(CStruct):
                ("Location", "LocationDescriptor"),
     ]
 
-    @property
     def pretty_name(self):
         return streamType[self.StreamType]
+    pretty_name = property(pretty_name)
 
-    @property
     def type_with_name(self):
         return "%#x (%s)" % (self.StreamType,
                 MDminidumpType.from_value(self.StreamType) )
+    type_with_name = property(type_with_name)
 
     def dump(self):
         return '\n'.join([
@@ -202,7 +210,10 @@ class StreamDirectory(CStruct):
             '  location.rva       = %#x' % self.Location.Rva.rva,
             ])
 
-MD_VSFIXEDFILEINFO_SIGNATURE = 0xfeef04bd
+if sys.version_info[0:2] == (2, 3):
+    MD_VSFIXEDFILEINFO_SIGNATURE = eval("0xfeef04bdL")
+else:
+    MD_VSFIXEDFILEINFO_SIGNATURE = eval("0xfeef04bd")
 MD_VSFIXEDFILEINFO_VERSION   = 0x00010000
 class FixedFileInfo(CStruct):
     """VS_FIXEDFILEINFO
@@ -222,7 +233,6 @@ class FixedFileInfo(CStruct):
                ("dwFileDateMS", "u32"),
                ("dwFileDateLS", "u32"),
     ]
-    @property
     def version(self):
         if self.dwSignature != MD_VSFIXEDFILEINFO_SIGNATURE:
             return ''
@@ -233,6 +243,7 @@ class FixedFileInfo(CStruct):
                 self.dwFileVersionMS&0xffff,
                 self.dwFileVersionLS>>16,
                 self.dwFileVersionLS&0xffff)
+    version = property(version)
 
 class MinidumpString(CStruct):
     """MINIDUMP_STRING
@@ -253,14 +264,14 @@ class CvRecord(CStruct):
                ("SignX", "u08", lambda _: 8),
                ("Age", "u32"),
     ]
-    @property
     def signature_str(self):
         return '%08x-%04x-%04x-' % (self.Sign0, self.Sign1, self.Sign2) \
              + ('%02x%02x-'+'%02x'*6) % tuple(self.SignX)
-    @property
+    signature_str = property(signature_str)
     def signature_id(self):
         return '%08X%04X%04X' % (self.Sign0, self.Sign1, self.Sign2) \
              + ('%02X'*8) % tuple(self.SignX)
+    signature_id = property(signature_id)
 
 class Module(CStruct):
     """MINIDUMP_MODULE
@@ -286,11 +297,11 @@ class Module(CStruct):
         rva = self.MiscRecord.Rva.rva
         if rva == 0: self.misc_record = '(null)'
 
-    @property
     def ModuleName(self):
         return MinidumpString.unpack(self.parent_head._content,
                                      off = self.ModuleNameRva.rva,
                                      parent_head = self.parent_head)
+    ModuleName = property(ModuleName)
 
     def dump(self):
         return '\n'.join([
@@ -589,7 +600,7 @@ contextFlags_AMD64 = Enumeration({
     "CONTEXT_EXCEPTION_ACTIVE"    : 0x08000000,
     "CONTEXT_SERVICE_ACTIVE"      : 0x10000000,
     "CONTEXT_EXCEPTION_REQUEST"   : 0x40000000,
-    "CONTEXT_EXCEPTION_REPORTING" : 0x80000000,
+    "CONTEXT_EXCEPTION_REPORTING" : bit31,
 })
 
 
@@ -935,12 +946,12 @@ class MiscInfo(CStruct):
                ("XstateData","MDXStateConfigFeatureMscInfo"),
                ("ProcessCookie","u32"),
     ]
-    @property
     def process_execute_flags(self):
         if self.Flags1 & MD_MISCINFO_FLAGS1_PROCESS_EXECUTE_FLAGS:
             return '%#x' % self.ProcessExecuteFlags
         else:
             return '(invalid)'
+    process_execute_flags = property(process_execute_flags)
     def dump(self):
         res = [
             'MDRawMiscInfo',
@@ -1015,18 +1026,18 @@ class BreakpadRawInfo(CStruct):
                ("DumpThreadId","u32"),
                ("RequestingThreadId","u32"),
     ]
-    @property
     def dump_thread_id(self):
         if self.Validity & MD_BREAKPAD_INFO_VALID_DUMP_THREAD_ID:
             return '%#x' % self.DumpThreadId
         else:
             return '(invalid)'
-    @property
+    dump_thread_id = property(dump_thread_id)
     def requesting_thread_id(self):
         if self.Validity & MD_BREAKPAD_INFO_VALID_REQUESTING_THREAD_ID:
             return '%#x' % self.RequestingThreadId
         else:
             return '(invalid)'
+    requesting_thread_id = property(requesting_thread_id)
     def dump(self):
         return '\n'.join([
             'MDRawBreakpadInfo',
@@ -1087,33 +1098,33 @@ class SystemInfo(CStruct):
     ]
     # The following fields are x86-only
     VendorId = property(lambda _:[
-        _.ProcessorFeatures[0]&0xffffffff,
+        _.ProcessorFeatures[0]&mask32,
         _.ProcessorFeatures[0]>>32,
-        _.ProcessorFeatures[1]&0xffffffff])
+        _.ProcessorFeatures[1]&mask32])
     VersionInformation = property(lambda _:_.ProcessorFeatures[1]>>32)
-    FeatureInformation = property(lambda _:_.ProcessorFeatures[2]&0xffffffff)
+    FeatureInformation = property(lambda _:_.ProcessorFeatures[2]&mask32)
     AMDExtendedCpuFeatures = property(lambda _:_.ProcessorFeatures[2]>>32)
     # The following fields are arm-only
-    Cpuid = property(lambda _:_.ProcessorFeatures[0]&0xffffffff)
+    Cpuid = property(lambda _:_.ProcessorFeatures[0]&mask32)
     ElfHwcaps = property(lambda _:_.ProcessorFeatures[0]>>32) # Linux-specific
 
-    @property
     def pretty_processor_architecture(self):
         return processorArchitecture[self.ProcessorArchitecture]
+    pretty_processor_architecture = property(pretty_processor_architecture)
 
-    @property
     def csd_version(self):
         return MinidumpString.unpack(self.parent_head._content,
                                      off = self.CSDVersionRva.rva,
                                      parent_head = self.parent_head)
+    csd_version = property(csd_version)
 
-    @property
     def cpu_vendor(self):
         if self.ProcessorArchitecture in (MD_CPU_ARCHITECTURE_X86,
                                           MD_CPU_ARCHITECTURE_X86_WIN64):
             import struct
             return '"'+struct.pack("<III", *self.VendorId).decode('latin1')+'"'
         return '(null)'
+    cpu_vendor = property(cpu_vendor)
 
     def dump(self):
         res = [

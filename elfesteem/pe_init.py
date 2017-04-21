@@ -5,6 +5,12 @@ from elfesteem import pe
 from elfesteem.strpatchwork import StrPatchwork
 log = pe.log
 
+import sys
+if sys.version_info[0:2] == (2, 3):
+    from elfesteem.compatibility_python23 import sorted, reversed
+    mask32 = (eval("1L")<<32)-1 # 'eval' avoids SyntaxError with python3.x
+else:
+    mask32 = eval("0xffffffff") # 'eval' avoids warnings with python2.3
 
 
 class ContentRVA(object):
@@ -511,8 +517,8 @@ class PE(object):
         for y in data:
             s += y
         s-=olds
-        while s>0xFFFFFFFF:
-            s = (s>>32)+(s&0xFFFFFFFF)
+        while s>mask32:
+            s = (s>>32)+(s&mask32)
         while s>0xFFFF:
             s = (s&0xFFFF)+((s>>16)&0xFFFF)
         if len(c)%2:
@@ -621,7 +627,7 @@ class PE(object):
                 off += rva
                 v = struct.unpack('I', self.drva[off:off+4])[0]
                 v += offset
-                self.drva[off:off+4] = struct.pack('I', v & 0xFFFFFFFF)
+                self.drva[off:off+4] = struct.pack('I', v & mask32)
         self.NThdr.ImageBase = imgbase
 
 # The COFF file format happens to have many variants,

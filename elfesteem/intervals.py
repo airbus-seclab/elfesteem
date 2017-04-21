@@ -1,6 +1,8 @@
 import sys
 if sys.version_info[0] >= 3:
     from functools import reduce
+if sys.version_info[0:2] == (2, 3):
+    from elfesteem.compatibility_python23 import sorted
 
 class Intervals(object):
     '''

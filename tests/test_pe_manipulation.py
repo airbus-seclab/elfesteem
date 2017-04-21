@@ -248,7 +248,8 @@ def run_test():
     assertion(0x40703e,
               e.DirExport.get_funcvirt('coco'),
               'Export: get_funcvirt')
-    assertion({1: 3740123390, 'coco': 3740123390},
+    # 'eval' avoids warnings with python2.3
+    assertion({1: eval("0xdeedc0fe"), 'coco': eval("0xdeedc0fe")},
               e.export_funcs(),
               'Export: export_funcs')
     d = e.pack()

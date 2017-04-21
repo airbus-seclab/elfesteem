@@ -12,6 +12,10 @@ console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
 log.addHandler(console_handler)
 log.setLevel(logging.INFO)
 
+import sys
+if sys.version_info[0:2] == (2, 3):
+    from elfesteem.compatibility_python23 import sorted
+
 DIRECTORY_ENTRY_EXPORT           = 0
 DIRECTORY_ENTRY_IMPORT           = 1
 DIRECTORY_ENTRY_RESOURCE         = 2

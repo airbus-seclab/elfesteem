@@ -8,6 +8,8 @@ sys.path.insert(1, os.path.abspath(sys.path[0]+'/..'))
 from elfesteem.strpatchwork import StrPatchwork
 from elfesteem import minidump as mp
 
+if sys.version_info[0:2] == (2, 3):
+    from elfesteem.compatibility_python23 import sorted
 
 class MemorySegment(object):
     """Stand for a segment in memory with additionnal information"""
@@ -19,39 +21,39 @@ class MemorySegment(object):
         self.memory_info = memory_info
         self.minidump = self.memory_desc.parent_head
 
-    @property
     def address(self):
         return self.memory_desc.StartOfMemoryRange
+    address = property(address)
 
-    @property
     def size(self):
         if isinstance(self.memory_desc, mp.MemoryDescriptor64):
             return self.memory_desc.DataSize
         elif isinstance(self.memory_desc, mp.MemoryDescriptor):
             return self.memory_desc.Memory.DataSize
         raise TypeError
+    size = property(size)
 
-    @property
     def name(self):
         if self.module:
             return self.module.ModuleName
         return ""
+    name = property(name)
 
-    @property
     def content(self):
         return self.minidump._content[self.offset:self.offset + self.size]
+    content = property(content)
 
-    @property
     def protect(self):
         if self.memory_info:
             return self.memory_info.Protect
         return None
+    protect = property(protect)
 
-    @property
     def pretty_protect(self):
         if self.protect is None:
             return "UNKNOWN"
         return mp.memProtect[self.protect]
+    pretty_protect = property(pretty_protect)
 
     def dump(self):
         return mp.data_str(self.content)
@@ -205,7 +207,7 @@ class Minidump(object):
 
         # Sanity check
         if mode64:
-            assert all(addr in self.memory for addr in addr2module)
+            assert not False in [addr in self.memory for addr in addr2module]
 
     def get(self, virt_start, virt_stop):
         """Return the content at the (virtual addresses)
