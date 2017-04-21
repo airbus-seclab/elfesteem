@@ -56,32 +56,6 @@ RT_ANIICON                       = 22
 RT_HTML                          = 23
 RT_MANIFEST                      = 24
 
-
-RT = {
-    RT_CURSOR       :"RT_CURSOR",
-    RT_BITMAP       :"RT_BITMAP",
-    RT_ICON         :"RT_ICON",
-    RT_MENU         :"RT_MENU",
-    RT_DIALOG       :"RT_DIALOG",
-    RT_STRING       :"RT_STRING",
-    RT_FONTDIR      :"RT_FONTDIR",
-    RT_FONT         :"RT_FONT",
-    RT_ACCELERATOR  :"RT_ACCELERATOR",
-    RT_RCDATA       :"RT_RCDATA",
-    RT_MESSAGETABLE :"RT_MESSAGETABLE",
-    RT_GROUP_CURSOR :"RT_GROUP_CURSOR",
-    RT_GROUP_ICON   :"RT_GROUP_ICON",
-    RT_VERSION      :"RT_VERSION",
-    RT_DLGINCLUDE   :"RT_DLGINCLUDE",
-    RT_PLUGPLAY     :"RT_PLUGPLAY",
-    RT_VXD          :"RT_VXD",
-    RT_ANICURSOR    :"RT_ANICURSOR",
-    RT_ANIICON      :"RT_ANIICON",
-    RT_HTML         :"RT_HTML",
-    RT_MANIFEST     :"RT_MANIFEST",
-    }
-
-
 # Constants, e.g. from http://llvm.org/docs/doxygen/html/namespacellvm_1_1COFF.html
 # plus the ones known by pefile.py, and some other
 IMAGE_FILE_MACHINE_UNKNOWN   = 0x0
