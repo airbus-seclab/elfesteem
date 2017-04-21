@@ -779,7 +779,9 @@ class ThreadStateBase(ThreadStateMetaclass('ThreadStateBase', (object,), {})):
     def otool(self):
         return []
 
-#### Source: /usr/include/mach/*/thread_status.h
+#### Source: /usr/include/mach/*/{_structs.h,thread_status.h}
+# The data for all known architectures can be found at
+# https://github.com/opensource-apple/cctools/blob/master/include/...
 
 class ThreadStatePPC(ThreadStateBase):
     cputype    = CPU_TYPE_POWERPC
@@ -1046,7 +1048,32 @@ class ThreadState(ThreadStateBase):
     cputype    = CPU_TYPE_ARM64
     flavor     = 6
     flavorname = 'ARM_THREAD_STATE64'
-    # TODO. registers = x0-x28, fp, lr, sp, pc, cpsr
+    entrypoint = 'pc'
+    registers  = ['x%d'%_ for _ in range(29)] + ['fp', 'sp', 'lr', 'pc', 'cpsr']
+    flavorcount = 68
+    # NB: cpsr is 32-bit, while all other registers are 64-bit.
+    # Therefore flavorcount should be 67, but the C compiler adds 32-bits
+    # of padding at the end of the __darwin_arm_thread_state64 structure.
+    def reg_slice(self, pos):
+        if pos in self.registers:
+            pos = self.registers.index(pos)
+        if pos == 33: return 'I', slice(8*pos, 8*pos+4)   # 'cpsr' is 32-bit
+        return 'Q', slice(8*pos, 8*(pos+1))
+    def otool(self):
+        return [
+    "\t    x0  %#018x x1  %#018x x2  %#018x"%self[0:3],
+    "\t    x3  %#018x x4  %#018x x5  %#018x"%self[3:6],
+    "\t    x6  %#018x x7  %#018x x8  %#018x"%self[6:9],
+    "\t    x9  %#018x x10 %#018x x11 %#018x"%self[9:12],
+    "\t    x12 %#018x x13 %#018x x14 %#018x"%self[12:15],
+    "\t    x15 %#018x x16 %#018x x17 %#018x"%self[15:18],
+    "\t    x18 %#018x x19 %#018x x20 %#018x"%self[18:21],
+    "\t    x21 %#018x x22 %#018x x23 %#018x"%self[21:24],
+    "\t    x24 %#018x x25 %#018x x26 %#018x"%self[24:27],
+    "\t    x27 %#018x x28 %#018x  fp %#018x"%self[27:30],
+    "\t     lr %#018x sp  %#018x  pc %#018x"%self[30:33],
+    "\t   cpsr %#010x"%self[33],
+            ]
 
 class ThreadState(ThreadStateBase):
     cputype    = CPU_TYPE_ARM64
