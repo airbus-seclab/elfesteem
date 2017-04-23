@@ -455,17 +455,13 @@ if __name__ == '__main__':
         if len(args.file) > 1:
             print("\nFile: %s" % file)
         raw = open(file, 'rb').read()
-        if raw[:2] in (
-            # MZ magic for DOS executable, normally for all PE/COFF files
-            struct.pack("2B", 0x4d,0x5a),
-            # HR magic found in bochsys.dll from IDA
-            struct.pack("2B", 0x48,0x52),
-            ):
+        if raw[:2] == struct.pack("2B", 0x48,0x52):
+            # IDA's bochsys.dll is a normal PE with its magic number replaced
+            # by 'HR', probably meaning HexRays.
+            raw = struct.pack("2B", 0x4d,0x5a) + raw[2:]
+        try:
             e = pe_init.PE(raw)
-            if e.NTsig.signature != 0x4550:
-                print('Not a valid PE')
-                continue
-        else:
+        except ValueError:
             try:
                 e = pe_init.Coff(raw)
             except ValueError:
