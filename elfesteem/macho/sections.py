@@ -997,7 +997,7 @@ dyld_constants = {
   'BIND_OPCODE'  : {},
   'REBASE_OPCODE'  : {},
   }
-enumerate_constants(dyld_constants, globals())
+enumerate_constants(dyld_constants, dict(globals()))
 
 
 #### Many other sections inside the __LINKEDIT segment

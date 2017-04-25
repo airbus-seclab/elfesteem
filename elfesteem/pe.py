@@ -453,9 +453,12 @@ constants = {
   'IMAGE_SCN' : {},
   'STYP' : {},
   }
-for t in constants.keys():
-    for v in [v for v in globals().keys() if v[:len(t)+1]==t+"_"]:
-        constants[t][globals()[v]] = v[len(t)+1:]
+def enumerate_constants(constants, globs):
+    for type in constants:
+        for val in filter(lambda x:x[:len(type)+1]==type+"_", globs.keys()):
+            if not globs[val] in constants[type]:
+                constants[type][globs[val]] = val[len(type)+1:]
+enumerate_constants(constants, dict(globals()))
 
 class InvalidOffset(Exception):
     pass

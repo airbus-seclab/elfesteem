@@ -2003,4 +2003,4 @@ constants = {
   'DT'  : {}, # dynamic entry type
   'R'   : {}, # special case, two levels of dictionary
   }
-enumerate_constants(constants, globals())
+enumerate_constants(constants, dict(globals()))

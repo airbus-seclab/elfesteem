@@ -1487,7 +1487,7 @@ constants = {
   'LC'  : {},
   'S'   : {},
   }
-enumerate_constants(constants, globals())
+enumerate_constants(constants, dict(globals()))
 
 
 ######################################################################
