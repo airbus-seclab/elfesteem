@@ -255,6 +255,77 @@ def run_test():
               log_history,
               'Invalid ELF endianess (logs)')
     log_history = []
+    elf_tiny = open(__dir__+'/binary_input/tiny84.bin', 'rb').read()
+    assertion('90f9fa06566389883d82b9cda016b10d',
+              hashlib.md5(elf_tiny).hexdigest(),
+              'Reading tiny84')
+    e = ELF(elf_tiny)
+    assertion([('warn', ('No section (e.g. core file)',), {})],
+              log_history,
+              'tiny84 (logs)')
+    log_history = []
+    d = e.pack()
+    assertion('90f9fa06566389883d82b9cda016b10d',
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading tiny84')
+    elf_tiny = open(__dir__+'/binary_input/tiny76.bin', 'rb').read()
+    assertion('3a5753c93c492d2d1d3fc6c227baec7a',
+              hashlib.md5(elf_tiny).hexdigest(),
+              'Reading tiny76')
+    e = ELF(elf_tiny)
+    d = e.pack()
+    assertion('3a5753c93c492d2d1d3fc6c227baec7a',
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading tiny76')
+    assertion([('warn', ('No section (e.g. core file)',), {})],
+              log_history,
+              'tiny76 (logs)')
+    log_history = []
+    elf_tiny = open(__dir__+'/binary_input/tiny64.bin', 'rb').read()
+    assertion('0dd8a6325f7cf633ed8c527add5dc634',
+              hashlib.md5(elf_tiny).hexdigest(),
+              'Reading tiny64')
+    e = ELF(elf_tiny)
+    assertion([('warn', ('No section (e.g. core file)',), {})],
+              log_history,
+              'tiny64 (logs)')
+    log_history = []
+    d = e.pack()
+    # Not identical, it is an invalid ELF, with invalid section headers
+    assertion('05ab778ceccbbf67840d5d35bcd84ed9',
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading tiny64')
+    elf_tiny = open(__dir__+'/binary_input/tiny52.bin', 'rb').read()
+    assertion('18ddd4966cb003b80862735d19ddbeb7',
+              hashlib.md5(elf_tiny).hexdigest(),
+              'Reading tiny52')
+    e = ELF(elf_tiny)
+    assertion([('error', ('Invalid ELF, endianess defined to %d', 0), {}),
+               ('error', ('Offset to section headers after end of file',), {}),
+               ('error', ('Ehdr version is 65568 instead of 1',), {})],
+              log_history,
+              'tiny52 (logs)')
+    log_history = []
+    d = e.pack()
+    assertion('18ddd4966cb003b80862735d19ddbeb7',
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading tiny52')
+    elf_tiny = open(__dir__+'/binary_input/tiny45.bin', 'rb').read()
+    assertion('44023f74799f2e009a1400c74de50cdd',
+              hashlib.md5(elf_tiny).hexdigest(),
+              'Reading tiny45')
+    e = ELF(elf_tiny)
+    assertion([('error', ('Invalid ELF, endianess defined to %d', 0), {}),
+               ('error', ('Offset to section headers after end of file',), {}),
+               ('error', ('Ehdr version is 65568 instead of 1',), {})],
+              log_history,
+              'tiny45 (logs)')
+    log_history = []
+    d = e.pack()
+    # packing tiny45 generates tiny52 :-)
+    assertion('18ddd4966cb003b80862735d19ddbeb7',
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading tiny45')
     assertion([],
               log_history,
               'No non-regression test created unwanted log messages')

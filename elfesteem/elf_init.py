@@ -869,7 +869,11 @@ class ELF(object):
         c[self.Ehdr.phoff] = self.ph.pack()
         for s in self.sh:
             c[s.sh.offset] = s.pack()
-        c[self.Ehdr.shoff] = self.sh.pack()
+        sh = self.sh.pack()
+        if len(sh):
+            # When 'shoff' is invalid, 'sh' is empty, but the line below
+            # is very slow because strpatchwork extends the file.
+            c[self.Ehdr.shoff] = sh
         return c.pack()
 
     def check_coherency(self):
