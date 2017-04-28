@@ -73,7 +73,7 @@ def print_indirect(e, **fargs):
     indirectsym_table = None
     indirectsym_section = []
     for s in e.sect:
-        if type(s) == macho_init.DySymbolTable and s.type == 'indirectsym':
+        if getattr(s, 'type', None) == 'indirectsym':
             if indirectsym_table is not None:
                 raise ValueError("Only one IndirectSymbolTable per Mach-O file")
             indirectsym_table = s
@@ -91,7 +91,7 @@ def print_indirect(e, **fargs):
     idx = 0
     for s in indirectsym_section:
         print("Indirect symbols for (%s,%s) %u entries"
-           % (s.sh.segname, s.sh.sectname, len(s.list)))
+           % (s.sh.segname, s.sh.sectname, len(s)))
         if e.wsize == 64:
             header = "%-18s %5s"
             format = "0x%016x %5s"
@@ -114,9 +114,9 @@ def print_indirect(e, **fargs):
         header += "%s"
         format += "%s"
         print(header % tuple(data))
-        for entry in s.list:
-            content = struct.unpack(valfmt,entry.content)[-1]
-            index = indirectsym_table.entries[idx]
+        for entry in s:
+            if verbose: content = struct.unpack(valfmt,entry.content)[-1]
+            index = indirectsym_table.entries[idx].index
             name = ''
             if   index == macho.INDIRECT_SYMBOL_LOCAL: index = "LOCAL"
             elif index == macho.INDIRECT_SYMBOL_ABS:   index = "ABSOLUTE"
@@ -125,7 +125,7 @@ def print_indirect(e, **fargs):
             if verbose: data.append(content)
             print(format % tuple(data))
             idx += 1
-            address += len(entry.content)
+            address += entry.bytelen
 
 def print_relocs(e, **fargs):
     for s in e.sect:
