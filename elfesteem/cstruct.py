@@ -392,3 +392,28 @@ class CArray(CArray_base):
 
     def __repr__(self):
         return "<%s of length %d>" % (self.__class__.__name__, len(self))
+
+# Method that defines constants (as in .h headers) and tables that
+# can recover the constant's name from its value.
+def Constants(globs = {}, table = {},
+              name = None, prefix = None,
+              no_name = (), **kargs):
+    if prefix is None:
+        # Use the prefix common to all value names
+        for k in kargs:
+            if prefix is None:
+                prefix = k
+            else:
+                while not k.startswith(prefix):
+                    prefix = prefix[:-1]
+    if name is None:
+        if prefix.endswith('_'): name = prefix[:-1]
+        else:                    name = prefix
+    if name is not '' and not name in table: table[name] = {}
+    for k in kargs:
+        globs[k] = kargs[k]
+        if name is not '':
+            if k.startswith(prefix) and not k in no_name:
+                if kargs[k] in table[name]:
+                    print("Duplicate at %s[%s]=%s; %s"%(name,kargs[k],table[name][kargs[k]],k))
+                table[name][kargs[k]] = k[len(prefix):]

@@ -1,6 +1,6 @@
 import struct
 from elfesteem.macho.common import *
-from elfesteem.cstruct import CBase, CData, CString, CArray, CStructWithStrTable
+from elfesteem.cstruct import Constants, CBase, CData, CString, CArray, CStructWithStrTable
 from elfesteem.strpatchwork import StrPatchwork
 
 import sys
@@ -10,6 +10,10 @@ if sys.version_info[0:2] == (2, 3):
 else:
     mask32 = eval("0xffffffff") # 'eval' avoids warnings with python2.3
     mask64 = eval("0xffffffffffffffff")
+
+dyld_constants = {}
+def SetConstants(**kargs):
+    Constants(globs = globals(), table = dyld_constants, **kargs)
 
 ############################################################
 # Sections, containing data, at a given offset in the file
@@ -404,29 +408,38 @@ class DyldArrayGeneric(BaseSection,CArray):
 # encoded in a few bytes.
 
 # The following are used to encode binding information
-BIND_TYPE_POINTER                            =  1
-BIND_TYPE_TEXT_ABSOLUTE32                    =  2
-BIND_TYPE_TEXT_PCREL32                       =  3
-BIND_SPECIAL_DYLIB_SELF                      =  0
-BIND_SPECIAL_DYLIB_MAIN_EXECUTABLE           = -1
-BIND_SPECIAL_DYLIB_FLAT_LOOKUP               = -2
+SetConstants(
+BIND_TYPE_POINTER                            =  1,
+BIND_TYPE_TEXT_ABSOLUTE32                    =  2,
+BIND_TYPE_TEXT_PCREL32                       =  3,
+)
+SetConstants(
+BIND_SPECIAL_DYLIB_SELF                      =  0,
+BIND_SPECIAL_DYLIB_MAIN_EXECUTABLE           = -1,
+BIND_SPECIAL_DYLIB_FLAT_LOOKUP               = -2,
+)
+
 BIND_IMMEDIATE_MASK                          = 0x0F
-BIND_SYMBOL_FLAGS_WEAK_IMPORT                = 0x01
-BIND_SYMBOL_FLAGS_NON_WEAK_DEFINITION        = 0x08
+SetConstants(
+BIND_SYMBOL_FLAGS_WEAK_IMPORT                = 0x01,
+BIND_SYMBOL_FLAGS_NON_WEAK_DEFINITION        = 0x08,
+)
 BIND_OPCODE_MASK                             = 0xF0
-BIND_OPCODE_DONE                             = 0x00
-BIND_OPCODE_SET_DYLIB_ORDINAL_IMM            = 0x10
-BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB           = 0x20
-BIND_OPCODE_SET_DYLIB_SPECIAL_IMM            = 0x30
-BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM    = 0x40
-BIND_OPCODE_SET_TYPE_IMM                     = 0x50
-BIND_OPCODE_SET_ADDEND_SLEB                  = 0x60
-BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB      = 0x70
-BIND_OPCODE_ADD_ADDR_ULEB                    = 0x80
-BIND_OPCODE_DO_BIND                          = 0x90
-BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB            = 0xA0
-BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED      = 0xB0
-BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB = 0xC0
+SetConstants(
+BIND_OPCODE_DONE                             = 0x00,
+BIND_OPCODE_SET_DYLIB_ORDINAL_IMM            = 0x10,
+BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB           = 0x20,
+BIND_OPCODE_SET_DYLIB_SPECIAL_IMM            = 0x30,
+BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM    = 0x40,
+BIND_OPCODE_SET_TYPE_IMM                     = 0x50,
+BIND_OPCODE_SET_ADDEND_SLEB                  = 0x60,
+BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB      = 0x70,
+BIND_OPCODE_ADD_ADDR_ULEB                    = 0x80,
+BIND_OPCODE_DO_BIND                          = 0x90,
+BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB            = 0xA0,
+BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED      = 0xB0,
+BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB = 0xC0,
+)
 
 def get_lib_name(e, idx):
     from elfesteem.macho.loaders import LC_LOAD_DYLIB
@@ -670,19 +683,23 @@ dyldarray_register(DyldArrayLazyBind)
 
 # The following are used to encode rebasing information
 REBASE_IMMEDIATE_MASK                                   = 0x0F
-REBASE_TYPE_POINTER                                     = 1
-REBASE_TYPE_TEXT_ABSOLUTE32                             = 2
-REBASE_TYPE_TEXT_PCREL32                                = 3
+SetConstants(
+REBASE_TYPE_POINTER                                     = 1,
+REBASE_TYPE_TEXT_ABSOLUTE32                             = 2,
+REBASE_TYPE_TEXT_PCREL32                                = 3,
+)
 REBASE_OPCODE_MASK                                      = 0xF0
-REBASE_OPCODE_DONE                                      = 0x00
-REBASE_OPCODE_SET_TYPE_IMM                              = 0x10
-REBASE_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB               = 0x20
-REBASE_OPCODE_ADD_ADDR_ULEB                             = 0x30
-REBASE_OPCODE_ADD_ADDR_IMM_SCALED                       = 0x40
-REBASE_OPCODE_DO_REBASE_IMM_TIMES                       = 0x50
-REBASE_OPCODE_DO_REBASE_ULEB_TIMES                      = 0x60
-REBASE_OPCODE_DO_REBASE_ADD_ADDR_ULEB                   = 0x70
-REBASE_OPCODE_DO_REBASE_ULEB_TIMES_SKIPPING_ULEB        = 0x80
+SetConstants(
+REBASE_OPCODE_DONE                                      = 0x00,
+REBASE_OPCODE_SET_TYPE_IMM                              = 0x10,
+REBASE_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB               = 0x20,
+REBASE_OPCODE_ADD_ADDR_ULEB                             = 0x30,
+REBASE_OPCODE_ADD_ADDR_IMM_SCALED                       = 0x40,
+REBASE_OPCODE_DO_REBASE_IMM_TIMES                       = 0x50,
+REBASE_OPCODE_DO_REBASE_ULEB_TIMES                      = 0x60,
+REBASE_OPCODE_DO_REBASE_ADD_ADDR_ULEB                   = 0x70,
+REBASE_OPCODE_DO_REBASE_ULEB_TIMES_SKIPPING_ULEB        = 0x80,
+)
 
 class Rebase(Bind):
     _to_copy = ('seg', 'addr', 'info_type')
@@ -986,19 +1003,6 @@ class DyldTrieExport(BaseSection):
     def __str__(self):
         return "%-30s %-10s %#010x %#010x" % (self.__class__.__name__, '', self.offset, len(self.info))
 dyldarray_register(DyldTrieExport)
-
-def enumerate_constants(constants, globs):
-    for type in constants:
-        for val in filter(lambda x:x[:len(type)+1]==type+"_", globs.keys()):
-            if not globs[val] in constants[type]:
-                constants[type][globs[val]] = val[len(type)+1:]
-
-dyld_constants = {
-  'BIND_OPCODE'  : {},
-  'REBASE_OPCODE'  : {},
-  }
-enumerate_constants(dyld_constants, dict(globals()))
-
 
 #### Many other sections inside the __LINKEDIT segment
 

@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-from elfesteem.cstruct import CBase, CString, CStruct, CArray
+from elfesteem.cstruct import Constants, CBase, CString, CStruct, CArray
 from elfesteem.cstruct import data_null, data_empty
 from elfesteem.cstruct import bytes_to_name, name_to_bytes
 from elfesteem.strpatchwork import StrPatchwork
@@ -16,449 +16,483 @@ import sys
 if sys.version_info[0:2] == (2, 3):
     from elfesteem.compatibility_python23 import sorted
 
-DIRECTORY_ENTRY_EXPORT           = 0
-DIRECTORY_ENTRY_IMPORT           = 1
-DIRECTORY_ENTRY_RESOURCE         = 2
-DIRECTORY_ENTRY_EXCEPTION        = 3
-DIRECTORY_ENTRY_SECURITY         = 4
-DIRECTORY_ENTRY_BASERELOC        = 5
-DIRECTORY_ENTRY_DEBUG            = 6
-DIRECTORY_ENTRY_COPYRIGHT        = 7
-DIRECTORY_ENTRY_GLOBALPTR        = 8
-DIRECTORY_ENTRY_TLS              = 9
-DIRECTORY_ENTRY_LOAD_CONFIG      = 10
-DIRECTORY_ENTRY_BOUND_IMPORT     = 11
-DIRECTORY_ENTRY_IAT              = 12
-DIRECTORY_ENTRY_DELAY_IMPORT     = 13
-DIRECTORY_ENTRY_COM_DESCRIPTOR   = 14
-DIRECTORY_ENTRY_RESERVED         = 15
+constants = {}
+def SetConstants(**kargs):
+    Constants(globs = globals(), table = constants, **kargs)
 
+SetConstants(
+DIRECTORY_ENTRY_EXPORT           = 0,
+DIRECTORY_ENTRY_IMPORT           = 1,
+DIRECTORY_ENTRY_RESOURCE         = 2,
+DIRECTORY_ENTRY_EXCEPTION        = 3,
+DIRECTORY_ENTRY_SECURITY         = 4,
+DIRECTORY_ENTRY_BASERELOC        = 5,
+DIRECTORY_ENTRY_DEBUG            = 6,
+DIRECTORY_ENTRY_COPYRIGHT        = 7,
+DIRECTORY_ENTRY_GLOBALPTR        = 8,
+DIRECTORY_ENTRY_TLS              = 9,
+DIRECTORY_ENTRY_LOAD_CONFIG      = 10,
+DIRECTORY_ENTRY_BOUND_IMPORT     = 11,
+DIRECTORY_ENTRY_IAT              = 12,
+DIRECTORY_ENTRY_DELAY_IMPORT     = 13,
+DIRECTORY_ENTRY_COM_DESCRIPTOR   = 14,
+DIRECTORY_ENTRY_RESERVED         = 15,
+)
 
-RT_CURSOR                        = 1
-RT_BITMAP                        = 2
-RT_ICON                          = 3
-RT_MENU                          = 4
-RT_DIALOG                        = 5
-RT_STRING                        = 6
-RT_FONTDIR                       = 7
-RT_FONT                          = 8
-RT_ACCELERATOR                   = 9
-RT_RCDATA                        = 10
-RT_MESSAGETABLE                  = 11
-RT_GROUP_CURSOR                  = 12
-RT_GROUP_ICON                    = 14
-RT_VERSION                       = 16
-RT_DLGINCLUDE                    = 17
-RT_PLUGPLAY                      = 19
-RT_VXD                           = 20
-RT_ANICURSOR                     = 21
-RT_ANIICON                       = 22
-RT_HTML                          = 23
-RT_MANIFEST                      = 24
+SetConstants(
+RT_CURSOR                        = 1,
+RT_BITMAP                        = 2,
+RT_ICON                          = 3,
+RT_MENU                          = 4,
+RT_DIALOG                        = 5,
+RT_STRING                        = 6,
+RT_FONTDIR                       = 7,
+RT_FONT                          = 8,
+RT_ACCELERATOR                   = 9,
+RT_RCDATA                        = 10,
+RT_MESSAGETABLE                  = 11,
+RT_GROUP_CURSOR                  = 12,
+RT_GROUP_ICON                    = 14,
+RT_VERSION                       = 16,
+RT_DLGINCLUDE                    = 17,
+RT_PLUGPLAY                      = 19,
+RT_VXD                           = 20,
+RT_ANICURSOR                     = 21,
+RT_ANIICON                       = 22,
+RT_HTML                          = 23,
+RT_MANIFEST                      = 24,
+)
 
+SetConstants(
 # Constants, e.g. from http://llvm.org/docs/doxygen/html/namespacellvm_1_1COFF.html
 # plus the ones known by pefile.py, and some other
-IMAGE_FILE_MACHINE_UNKNOWN   = 0x0
-IMAGE_FILE_MACHINE_AM33      = 0x13
-IMAGE_FILE_MACHINE_TI        = 0xC2
-IMAGE_FILE_MACHINE_MIPSIII   = 0x142
-IMAGE_FILE_MACHINE_iAPX286SMALL   = 0x14A
-IMAGE_FILE_MACHINE_I386      = 0x14C
-IMAGE_FILE_MACHINE_I860      = 0x14D
-IMAGE_FILE_MACHINE_mc68k     = 0x150
-IMAGE_FILE_MACHINE_iAPX286LARGE   = 0x152
-IMAGE_FILE_MACHINE_MIPSEB    = 0x160
-IMAGE_FILE_MACHINE_R3000     = 0x162
-IMAGE_FILE_MACHINE_R4000     = 0x166
-IMAGE_FILE_MACHINE_R10000    = 0x168
-IMAGE_FILE_MACHINE_WCEMIPSV2 = 0x169 
-IMAGE_FILE_MACHINE_WE32000   = 0x170
-IMAGE_FILE_MACHINE_I386_BIS  = 0x175
-IMAGE_FILE_MACHINE_CLIPPER   = 0x17F
-IMAGE_FILE_MACHINE_ALPHA_O   = 0x183 # OSF1/Tru64 Object file
-IMAGE_FILE_MACHINE_ALPHA_PE  = 0x184 # Windows NT PE for Alpha
-IMAGE_FILE_MACHINE_ALPHA_Z   = 0x188 # OSF1/Tru64 Compressed object file
-IMAGE_FILE_MACHINE_ALPHA_U   = 0x18F # OSF1/Tru64 Ucode object file. Obsolete
-IMAGE_FILE_MACHINE_APOLLOA88K= 0x194
-IMAGE_FILE_MACHINE_APOLLOM68K= 0x197
-IMAGE_FILE_MACHINE_SH3       = 0x1A2
-IMAGE_FILE_MACHINE_SH3DSP    = 0x1A3
-IMAGE_FILE_MACHINE_SH3E      = 0x1A4
-IMAGE_FILE_MACHINE_SH4       = 0x1A6
-IMAGE_FILE_MACHINE_SH5       = 0x1A8
-IMAGE_FILE_MACHINE_ARM       = 0x1C0
-IMAGE_FILE_MACHINE_THUMB     = 0x1C2
-IMAGE_FILE_MACHINE_ARMV7     = 0x1C4
-IMAGE_FILE_MACHINE_ARMNT     = 0x1C4 # same
-IMAGE_FILE_MACHINE_AM33      = 0x1D3
-IMAGE_FILE_MACHINE_XCOFF32   = 0x1DF
-IMAGE_FILE_MACHINE_POWERPC   = 0x1F0
-IMAGE_FILE_MACHINE_POWERPCFP = 0x1F1
-IMAGE_FILE_MACHINE_XCOFF64   = 0x1F7
-IMAGE_FILE_MACHINE_IA64      = 0x200
-IMAGE_FILE_MACHINE_MIPS16    = 0x266
-IMAGE_FILE_MACHINE_ALPHA64   = 0x284
-IMAGE_FILE_MACHINE_AXP64     = 0x284 # same
-IMAGE_FILE_MACHINE_MIPSFPU   = 0x366
-IMAGE_FILE_MACHINE_MIPSFPU16 = 0x466
-IMAGE_FILE_MACHINE_TRICORE   = 0x520
-IMAGE_FILE_MACHINE_CEF       = 0xCEF
-IMAGE_FILE_MACHINE_EBC       = 0xEBC
-IMAGE_FILE_MACHINE_AMD64     = 0x8664
-IMAGE_FILE_MACHINE_M32R      = 0x9041
-IMAGE_FILE_MACHINE_ARM64     = 0xAA64
-IMAGE_FILE_MACHINE_CEE       = 0xC0EE
+IMAGE_FILE_MACHINE_UNKNOWN   = 0x0,
+IMAGE_FILE_MACHINE_AM33_LLVM = 0x13,
+IMAGE_FILE_MACHINE_TI        = 0xC2,
+IMAGE_FILE_MACHINE_MIPSIII   = 0x142,
+IMAGE_FILE_MACHINE_iAPX286SMALL   = 0x14A,
+IMAGE_FILE_MACHINE_I386      = 0x14C,
+IMAGE_FILE_MACHINE_I860      = 0x14D,
+IMAGE_FILE_MACHINE_mc68k     = 0x150,
+IMAGE_FILE_MACHINE_iAPX286LARGE   = 0x152,
+IMAGE_FILE_MACHINE_MIPSEB    = 0x160,
+IMAGE_FILE_MACHINE_R3000     = 0x162,
+IMAGE_FILE_MACHINE_R4000     = 0x166,
+IMAGE_FILE_MACHINE_R10000    = 0x168,
+IMAGE_FILE_MACHINE_WCEMIPSV2 = 0x169 ,
+IMAGE_FILE_MACHINE_WE32000   = 0x170,
+IMAGE_FILE_MACHINE_I386_BIS  = 0x175,
+IMAGE_FILE_MACHINE_CLIPPER   = 0x17F,
+IMAGE_FILE_MACHINE_ALPHA_O   = 0x183, # OSF1/Tru64 Object file
+IMAGE_FILE_MACHINE_ALPHA_PE  = 0x184, # Windows NT PE for Alpha
+IMAGE_FILE_MACHINE_ALPHA_Z   = 0x188, # OSF1/Tru64 Compressed object file
+IMAGE_FILE_MACHINE_ALPHA_U   = 0x18F, # OSF1/Tru64 Ucode object file. Obsolete
+IMAGE_FILE_MACHINE_APOLLOA88K= 0x194,
+IMAGE_FILE_MACHINE_APOLLOM68K= 0x197,
+IMAGE_FILE_MACHINE_SH3       = 0x1A2,
+IMAGE_FILE_MACHINE_SH3DSP    = 0x1A3,
+IMAGE_FILE_MACHINE_SH3E      = 0x1A4,
+IMAGE_FILE_MACHINE_SH4       = 0x1A6,
+IMAGE_FILE_MACHINE_SH5       = 0x1A8,
+IMAGE_FILE_MACHINE_ARM       = 0x1C0,
+IMAGE_FILE_MACHINE_THUMB     = 0x1C2,
+IMAGE_FILE_MACHINE_ARMV7     = 0x1C4,
+IMAGE_FILE_MACHINE_ARMNT     = 0x1C4, # same
+IMAGE_FILE_MACHINE_AM33      = 0x1D3,
+IMAGE_FILE_MACHINE_XCOFF32   = 0x1DF,
+IMAGE_FILE_MACHINE_POWERPC   = 0x1F0,
+IMAGE_FILE_MACHINE_POWERPCFP = 0x1F1,
+IMAGE_FILE_MACHINE_XCOFF64   = 0x1F7,
+IMAGE_FILE_MACHINE_IA64      = 0x200,
+IMAGE_FILE_MACHINE_MIPS16    = 0x266,
+IMAGE_FILE_MACHINE_ALPHA64   = 0x284,
+IMAGE_FILE_MACHINE_AXP64     = 0x284, # same
+IMAGE_FILE_MACHINE_MIPSFPU   = 0x366,
+IMAGE_FILE_MACHINE_MIPSFPU16 = 0x466,
+IMAGE_FILE_MACHINE_TRICORE   = 0x520,
+IMAGE_FILE_MACHINE_CEF       = 0xCEF,
+IMAGE_FILE_MACHINE_EBC       = 0xEBC,
+IMAGE_FILE_MACHINE_AMD64     = 0x8664,
+IMAGE_FILE_MACHINE_M32R      = 0x9041,
+IMAGE_FILE_MACHINE_ARM64     = 0xAA64,
+IMAGE_FILE_MACHINE_CEE       = 0xC0EE,
+no_name = ('IMAGE_FILE_MACHINE_ARMNT', 'IMAGE_FILE_MACHINE_AXP64')
+)
 
-IMAGE_FILE_FLAG_RELOCS_STRIPPED         = 0x0001
-IMAGE_FILE_FLAG_EXECUTABLE_IMAGE        = 0x0002
-IMAGE_FILE_FLAG_LINE_NUMS_STRIPPED      = 0x0004
-IMAGE_FILE_FLAG_LOCAL_SYMS_STRIPPED     = 0x0008
-IMAGE_FILE_FLAG_AGGRESSIVE_WS_TRIM      = 0x0010
-IMAGE_FILE_FLAG_LARGE_ADDRESS_AWARE     = 0x0020
-IMAGE_FILE_FLAG_BYTES_REVERSED_LO       = 0x0080
-IMAGE_FILE_FLAG_32BIT_MACHINE           = 0x0100
-IMAGE_FILE_FLAG_DEBUG_STRIPPED          = 0x0200
-IMAGE_FILE_FLAG_REMOVABLE_RUN_FROM_SWAP = 0x0400
-IMAGE_FILE_FLAG_NET_RUN_FROM_SWAP       = 0x0800
-IMAGE_FILE_FLAG_SYSTEM                  = 0x1000
-IMAGE_FILE_FLAG_DLL                     = 0x2000
-IMAGE_FILE_FLAG_UP_SYSTEM_ONLY          = 0x4000
-IMAGE_FILE_FLAG_BYTES_REVERSED_HI       = 0x8000 
+SetConstants(
+IMAGE_FILE_FLAG_RELOCS_STRIPPED         = 0x0001,
+IMAGE_FILE_FLAG_EXECUTABLE_IMAGE        = 0x0002,
+IMAGE_FILE_FLAG_LINE_NUMS_STRIPPED      = 0x0004,
+IMAGE_FILE_FLAG_LOCAL_SYMS_STRIPPED     = 0x0008,
+IMAGE_FILE_FLAG_AGGRESSIVE_WS_TRIM      = 0x0010,
+IMAGE_FILE_FLAG_LARGE_ADDRESS_AWARE     = 0x0020,
+IMAGE_FILE_FLAG_BYTES_REVERSED_LO       = 0x0080,
+IMAGE_FILE_FLAG_32BIT_MACHINE           = 0x0100,
+IMAGE_FILE_FLAG_DEBUG_STRIPPED          = 0x0200,
+IMAGE_FILE_FLAG_REMOVABLE_RUN_FROM_SWAP = 0x0400,
+IMAGE_FILE_FLAG_NET_RUN_FROM_SWAP       = 0x0800,
+IMAGE_FILE_FLAG_SYSTEM                  = 0x1000,
+IMAGE_FILE_FLAG_DLL                     = 0x2000,
+IMAGE_FILE_FLAG_UP_SYSTEM_ONLY          = 0x4000,
+IMAGE_FILE_FLAG_BYTES_REVERSED_HI       = 0x8000,
+)
 
-IMAGE_SYM_CLASS_END_OF_FUNCTION  = -1
-IMAGE_SYM_CLASS_NULL             = 0
-IMAGE_SYM_CLASS_AUTOMATIC        = 1
-IMAGE_SYM_CLASS_EXTERNAL         = 2
-IMAGE_SYM_CLASS_STATIC           = 3
-IMAGE_SYM_CLASS_REGISTER         = 4
-IMAGE_SYM_CLASS_EXTERNAL_DEF     = 5
-IMAGE_SYM_CLASS_LABEL            = 6
-IMAGE_SYM_CLASS_UNDEFINED_LABEL  = 7
-IMAGE_SYM_CLASS_MEMBER_OF_STRUCT = 8
-IMAGE_SYM_CLASS_ARGUMENT         = 9
-IMAGE_SYM_CLASS_STRUCT_TAG       = 10
-IMAGE_SYM_CLASS_MEMBER_OF_UNION  = 11
-IMAGE_SYM_CLASS_UNION_TAG        = 12
-IMAGE_SYM_CLASS_TYPE_DEFINITION  = 13
-IMAGE_SYM_CLASS_UNDEFINED_STATIC = 14
-IMAGE_SYM_CLASS_ENUM_TAG         = 15
-IMAGE_SYM_CLASS_MEMBER_OF_ENUM   = 16
-IMAGE_SYM_CLASS_REGISTER_PARAM   = 17
-IMAGE_SYM_CLASS_BIT_FIELD        = 18
-IMAGE_SYM_CLASS_BLOCK            = 100
-IMAGE_SYM_CLASS_FUNCTION         = 101
-IMAGE_SYM_CLASS_END_OF_STRUCT    = 102
-IMAGE_SYM_CLASS_FILE             = 103
-IMAGE_SYM_CLASS_SECTION          = 104
-IMAGE_SYM_CLASS_WEAK_EXTERNAL    = 105
-IMAGE_SYM_CLASS_CLR_TOKEN        = 107 
+SetConstants(
+IMAGE_SYM_CLASS_END_OF_FUNCTION  = -1,
+IMAGE_SYM_CLASS_NULL             = 0,
+IMAGE_SYM_CLASS_AUTOMATIC        = 1,
+IMAGE_SYM_CLASS_EXTERNAL         = 2,
+IMAGE_SYM_CLASS_STATIC           = 3,
+IMAGE_SYM_CLASS_REGISTER         = 4,
+IMAGE_SYM_CLASS_EXTERNAL_DEF     = 5,
+IMAGE_SYM_CLASS_LABEL            = 6,
+IMAGE_SYM_CLASS_UNDEFINED_LABEL  = 7,
+IMAGE_SYM_CLASS_MEMBER_OF_STRUCT = 8,
+IMAGE_SYM_CLASS_ARGUMENT         = 9,
+IMAGE_SYM_CLASS_STRUCT_TAG       = 10,
+IMAGE_SYM_CLASS_MEMBER_OF_UNION  = 11,
+IMAGE_SYM_CLASS_UNION_TAG        = 12,
+IMAGE_SYM_CLASS_TYPE_DEFINITION  = 13,
+IMAGE_SYM_CLASS_UNDEFINED_STATIC = 14,
+IMAGE_SYM_CLASS_ENUM_TAG         = 15,
+IMAGE_SYM_CLASS_MEMBER_OF_ENUM   = 16,
+IMAGE_SYM_CLASS_REGISTER_PARAM   = 17,
+IMAGE_SYM_CLASS_BIT_FIELD        = 18,
+IMAGE_SYM_CLASS_BLOCK            = 100,
+IMAGE_SYM_CLASS_FUNCTION         = 101,
+IMAGE_SYM_CLASS_END_OF_STRUCT    = 102,
+IMAGE_SYM_CLASS_FILE             = 103,
+IMAGE_SYM_CLASS_SECTION          = 104,
+IMAGE_SYM_CLASS_WEAK_EXTERNAL    = 105,
+IMAGE_SYM_CLASS_CLR_TOKEN        = 107,
+)
 
-IMAGE_SYM_TYPE_NULL   = 0
-IMAGE_SYM_TYPE_VOID   = 1
-IMAGE_SYM_TYPE_CHAR   = 2
-IMAGE_SYM_TYPE_SHORT  = 3
-IMAGE_SYM_TYPE_INT    = 4
-IMAGE_SYM_TYPE_LONG   = 5
-IMAGE_SYM_TYPE_FLOAT  = 6
-IMAGE_SYM_TYPE_DOUBLE = 7
-IMAGE_SYM_TYPE_STRUCT = 8
-IMAGE_SYM_TYPE_UNION  = 9
-IMAGE_SYM_TYPE_ENUM   = 10
-IMAGE_SYM_TYPE_MOE    = 11
-IMAGE_SYM_TYPE_BYTE   = 12
-IMAGE_SYM_TYPE_WORD   = 13
-IMAGE_SYM_TYPE_UINT   = 14
-IMAGE_SYM_TYPE_DWORD  = 15 
+SetConstants(
+IMAGE_SYM_TYPE_NULL   = 0,
+IMAGE_SYM_TYPE_VOID   = 1,
+IMAGE_SYM_TYPE_CHAR   = 2,
+IMAGE_SYM_TYPE_SHORT  = 3,
+IMAGE_SYM_TYPE_INT    = 4,
+IMAGE_SYM_TYPE_LONG   = 5,
+IMAGE_SYM_TYPE_FLOAT  = 6,
+IMAGE_SYM_TYPE_DOUBLE = 7,
+IMAGE_SYM_TYPE_STRUCT = 8,
+IMAGE_SYM_TYPE_UNION  = 9,
+IMAGE_SYM_TYPE_ENUM   = 10,
+IMAGE_SYM_TYPE_MOE    = 11,
+IMAGE_SYM_TYPE_BYTE   = 12,
+IMAGE_SYM_TYPE_WORD   = 13,
+IMAGE_SYM_TYPE_UINT   = 14,
+IMAGE_SYM_TYPE_DWORD  = 15,
+)
 
-IMAGE_SYM_DTYPE_NULL     = 0
-IMAGE_SYM_DTYPE_POINTER  = 1
-IMAGE_SYM_DTYPE_FUNCTION = 2
-IMAGE_SYM_DTYPE_ARRAY    = 3
-IMAGE_SYM_DTYPE_SCT_COMPLEX_TYPE_SHIFT = 4 
+SetConstants(
+IMAGE_SYM_DTYPE_NULL     = 0,
+IMAGE_SYM_DTYPE_POINTER  = 1,
+IMAGE_SYM_DTYPE_FUNCTION = 2,
+IMAGE_SYM_DTYPE_ARRAY    = 3,
+IMAGE_SYM_DTYPE_SCT_COMPLEX_TYPE_SHIFT = 4,
+)
 
 # Official names of these constants in Windows
 IMAGE_NT_OPTIONAL_HDR32_MAGIC   = 0x10b
 IMAGE_NT_OPTIONAL_HDR64_MAGIC   = 0x20b
 IMAGE_NT_OPTIONAL_HDR_ROM_MAGIC = 0x107
+
+SetConstants(
 # Better names, for consistency for COFF that are not in PE files
-IMAGE_OPTIONAL_HDR_MAGIC_EXE32  = 0x10b
-IMAGE_OPTIONAL_HDR_MAGIC_EXE64  = 0x20b
-IMAGE_OPTIONAL_HDR_MAGIC_ROM    = 0x107
-IMAGE_OPTIONAL_HDR_MAGIC_EXE_TI = 0x108 # TI COFF executables
+IMAGE_OPTIONAL_HDR_MAGIC_EXE32  = IMAGE_NT_OPTIONAL_HDR32_MAGIC,
+IMAGE_OPTIONAL_HDR_MAGIC_EXE64  = IMAGE_NT_OPTIONAL_HDR64_MAGIC,
+IMAGE_OPTIONAL_HDR_MAGIC_ROM    = IMAGE_NT_OPTIONAL_HDR_ROM_MAGIC,
+IMAGE_OPTIONAL_HDR_MAGIC_EXE_TI = 0x108, # TI COFF executables
+)
 
+SetConstants(
+prefix = 'STYP_',
 # COFF section flags
-STYP_DSECT     = 0x00000001 # Dummy section
-STYP_TEXT      = 0x00000020 # Text only
-STYP_DATA      = 0x00000040 # Data only
-STYP_BSS       = 0x00000080 # Bss only
-STYP_RDATA     = 0x00000100 # Read-only data only
-STYP_SDATA     = 0x00000200 # Small data only
-STYP_SBSS      = 0x00000400 # Small bss only
-STYP_UCODE     = 0x00000800 # Obsolete
-STYP_GOT       = 0x00001000 # Global offset table
-STYP_DYNAMIC   = 0x00002000 # Dynamic linking information
-STYP_DYNSYM    = 0x00004000 # Dynamic linking symbol table
-STYP_REL_DYN   = 0x00008000 # Dynamic relocation information
-STYP_DYNSTR    = 0x00010000 # Dynamic linking symbol table
-STYP_HASH      = 0x00020000 # Dynamic symbol hash table
-STYP_DSOLIST   = 0x00040000 # Shared library dependency list
-STYP_MSYM      = 0x00080000 # Additional dynamic linking symbol table
-STYP_CONFLICT  = 0x00100000 # Additional dynamic linking information
-STYP_FINI      = 0x01000000 # Termination text only
-STYP_COMMENT   = 0x02000000 # Comment section
-STYP_RCONST    = 0x02200000 # Read-only constants
-STYP_XDATA     = 0x02400000 # Exception scope table
-STYP_TLSDATA   = 0x02500000 # Initialized TLS data
-STYP_TLSBSS    = 0x02600000 # Uninitialized TLS data
-STYP_TLSINIT   = 0x02700000 # Initialization for TLS data
-STYP_PDATA     = 0x02800000 # Exception procedure table
-STYP_LITA      = 0x04000000 # Address literals only
-STYP_LIT8      = 0x08000000 # 8-byte literals only
-STYP_EXTMASK   = 0x0ff00000 # Identifies bits used for multiple bit flag values
-STYP_LIT4      = 0x10000000 # 4-byte literals only
-S_NRELOC_OVFL2 = 0x20000000 # Section header field s_nreloc has overflowed
-STYP_INIT      = 0x80000000 # Initialization text only
+STYP_DSECT     = 0x00000001, # Dummy section
+STYP_TEXT      = 0x00000020, # Text only
+STYP_DATA      = 0x00000040, # Data only
+STYP_BSS       = 0x00000080, # Bss only
+STYP_RDATA     = 0x00000100, # Read-only data only
+STYP_SDATA     = 0x00000200, # Small data only
+STYP_SBSS      = 0x00000400, # Small bss only
+STYP_UCODE     = 0x00000800, # Obsolete
+STYP_GOT       = 0x00001000, # Global offset table
+STYP_DYNAMIC   = 0x00002000, # Dynamic linking information
+STYP_DYNSYM    = 0x00004000, # Dynamic linking symbol table
+STYP_REL_DYN   = 0x00008000, # Dynamic relocation information
+STYP_DYNSTR    = 0x00010000, # Dynamic linking symbol table
+STYP_HASH      = 0x00020000, # Dynamic symbol hash table
+STYP_DSOLIST   = 0x00040000, # Shared library dependency list
+STYP_MSYM      = 0x00080000, # Additional dynamic linking symbol table
+STYP_CONFLICT  = 0x00100000, # Additional dynamic linking information
+STYP_FINI      = 0x01000000, # Termination text only
+STYP_COMMENT   = 0x02000000, # Comment section
+STYP_RCONST    = 0x02200000, # Read-only constants
+STYP_XDATA     = 0x02400000, # Exception scope table
+STYP_TLSDATA   = 0x02500000, # Initialized TLS data
+STYP_TLSBSS    = 0x02600000, # Uninitialized TLS data
+STYP_TLSINIT   = 0x02700000, # Initialization for TLS data
+STYP_PDATA     = 0x02800000, # Exception procedure table
+STYP_LITA      = 0x04000000, # Address literals only
+STYP_LIT8      = 0x08000000, # 8-byte literals only
+STYP_EXTMASK   = 0x0ff00000, # Identifies bits used for multiple bit flag values
+STYP_LIT4      = 0x10000000, # 4-byte literals only
+S_NRELOC_OVFL2 = 0x20000000, # Section header field s_nreloc has overflowed
+STYP_INIT      = 0x80000000, # Initialization text only
+)
 
-# PE section flags (somewhat compatible, with different names)
-IMAGE_SCN_TYPE_NO_PAD              = 0x00000008
-IMAGE_SCN_CNT_CODE                 = 0x00000020
-IMAGE_SCN_CNT_INITIALIZED_DATA     = 0x00000040
-IMAGE_SCN_CNT_UNINITIALIZED_DATA   = 0x00000080
-IMAGE_SCN_LNK_INFO                 = 0x00000200
-IMAGE_SCN_LNK_REMOVE               = 0x00000800
-IMAGE_SCN_LNK_COMDAT               = 0x00001000
-IMAGE_SCN_GPREL                    = 0x00008000
-IMAGE_SCN_ALIGN_1BYTES             = 0x00010000
-IMAGE_SCN_ALIGN_2BYTES             = 0x00020000
-IMAGE_SCN_ALIGN_4BYTES             = 0x00030000
-IMAGE_SCN_ALIGN_8BYTES             = 0x00040000
-IMAGE_SCN_ALIGN_16BYTES            = 0x00050000
-IMAGE_SCN_ALIGN_32BYTES            = 0x00060000
-IMAGE_SCN_ALIGN_64BYTES            = 0x00070000
-IMAGE_SCN_ALIGN_128BYTES           = 0x00080000
-IMAGE_SCN_ALIGN_256BYTES           = 0x00090000
-IMAGE_SCN_ALIGN_512BYTES           = 0x000A0000
-IMAGE_SCN_ALIGN_1024BYTES          = 0x000B0000
-IMAGE_SCN_ALIGN_2048BYTES          = 0x000C0000
-IMAGE_SCN_ALIGN_4096BYTES          = 0x000D0000
-IMAGE_SCN_ALIGN_8192BYTES          = 0x000E0000
-IMAGE_SCN_LNK_NRELOC_OVFL          = 0x01000000
-IMAGE_SCN_MEM_DISCARDABLE          = 0x02000000
-IMAGE_SCN_MEM_NOT_CACHED           = 0x04000000
-IMAGE_SCN_MEM_NOT_PAGED            = 0x08000000
-IMAGE_SCN_MEM_SHARED               = 0x10000000
-IMAGE_SCN_MEM_EXECUTE              = 0x20000000
-IMAGE_SCN_MEM_READ                 = 0x40000000
-IMAGE_SCN_MEM_WRITE                = 0x80000000
+SetConstants(
+# PE section flags (somewhat compatible, with different names),
+IMAGE_SCN_TYPE_NO_PAD              = 0x00000008,
+IMAGE_SCN_CNT_CODE                 = 0x00000020,
+IMAGE_SCN_CNT_INITIALIZED_DATA     = 0x00000040,
+IMAGE_SCN_CNT_UNINITIALIZED_DATA   = 0x00000080,
+IMAGE_SCN_LNK_INFO                 = 0x00000200,
+IMAGE_SCN_LNK_REMOVE               = 0x00000800,
+IMAGE_SCN_LNK_COMDAT               = 0x00001000,
+IMAGE_SCN_GPREL                    = 0x00008000,
+IMAGE_SCN_ALIGN_1BYTES             = 0x00010000,
+IMAGE_SCN_ALIGN_2BYTES             = 0x00020000,
+IMAGE_SCN_ALIGN_4BYTES             = 0x00030000,
+IMAGE_SCN_ALIGN_8BYTES             = 0x00040000,
+IMAGE_SCN_ALIGN_16BYTES            = 0x00050000,
+IMAGE_SCN_ALIGN_32BYTES            = 0x00060000,
+IMAGE_SCN_ALIGN_64BYTES            = 0x00070000,
+IMAGE_SCN_ALIGN_128BYTES           = 0x00080000,
+IMAGE_SCN_ALIGN_256BYTES           = 0x00090000,
+IMAGE_SCN_ALIGN_512BYTES           = 0x000A0000,
+IMAGE_SCN_ALIGN_1024BYTES          = 0x000B0000,
+IMAGE_SCN_ALIGN_2048BYTES          = 0x000C0000,
+IMAGE_SCN_ALIGN_4096BYTES          = 0x000D0000,
+IMAGE_SCN_ALIGN_8192BYTES          = 0x000E0000,
+IMAGE_SCN_LNK_NRELOC_OVFL          = 0x01000000,
+IMAGE_SCN_MEM_DISCARDABLE          = 0x02000000,
+IMAGE_SCN_MEM_NOT_CACHED           = 0x04000000,
+IMAGE_SCN_MEM_NOT_PAGED            = 0x08000000,
+IMAGE_SCN_MEM_SHARED               = 0x10000000,
+IMAGE_SCN_MEM_EXECUTE              = 0x20000000,
+IMAGE_SCN_MEM_READ                 = 0x40000000,
+IMAGE_SCN_MEM_WRITE                = 0x80000000,
+)
 
+SetConstants(
 # subsytem, in NT headers
-IMAGE_SUBSYSTEM_UNKNOWN     = 0
-IMAGE_SUBSYSTEM_NATIVE      = 1 # Doesn't require a subsystem (such as a device driver)
-IMAGE_SUBSYSTEM_WINDOWS_GUI = 2 # Runs in the Windows GUI subsystem
-IMAGE_SUBSYSTEM_WINDOWS_CUI = 3 # Runs in the Windows character subsystem (a console app)
-IMAGE_SUBSYSTEM_OS2_CUI     = 5 # Runs in the OS/2 character subsystem (OS/2 1.x apps only)
-IMAGE_SUBSYSTEM_POSIX_CUI   = 7 # Runs in the Posix character subsystem
-IMAGE_SUBSYSTEM_NATIVE_WINDOWS           = 8 # Native Win9x driver
-IMAGE_SUBSYSTEM_WINDOWS_CE_GUI           = 9 # Windows CE
-IMAGE_SUBSYSTEM_EFI_APPLICATION          = 10
-IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER  = 11
-IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER       = 12
-IMAGE_SUBSYSTEM_EFI_ROM                  = 13
-IMAGE_SUBSYSTEM_XBOX                     = 14
-IMAGE_SUBSYSTEM_WINDOWS_BOOT_APPLICATION = 16
+IMAGE_SUBSYSTEM_UNKNOWN     = 0,
+IMAGE_SUBSYSTEM_NATIVE      = 1, # Doesn't require a subsystem (such as a device driver)
+IMAGE_SUBSYSTEM_WINDOWS_GUI = 2, # Runs in the Windows GUI subsystem
+IMAGE_SUBSYSTEM_WINDOWS_CUI = 3, # Runs in the Windows character subsystem (a console app)
+IMAGE_SUBSYSTEM_OS2_CUI     = 5, # Runs in the OS/2 character subsystem (OS/2 1.x apps only)
+IMAGE_SUBSYSTEM_POSIX_CUI   = 7, # Runs in the Posix character subsystem
+IMAGE_SUBSYSTEM_NATIVE_WINDOWS           = 8, # Native Win9x driver
+IMAGE_SUBSYSTEM_WINDOWS_CE_GUI           = 9, # Windows CE
+IMAGE_SUBSYSTEM_EFI_APPLICATION          = 10,
+IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER  = 11,
+IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER       = 12,
+IMAGE_SUBSYSTEM_EFI_ROM                  = 13,
+IMAGE_SUBSYSTEM_XBOX                     = 14,
+IMAGE_SUBSYSTEM_WINDOWS_BOOT_APPLICATION = 16,
+)
 
 # Relocations
+
+SetConstants(
 # The following relocation type indicators are defined for x64 and compatible processors
-IMAGE_REL_AMD64_ABSOLUTE = 0x0000 # The relocation is ignored.
-IMAGE_REL_AMD64_ADDR64   = 0x0001 # The 64-bit VA of the relocation target.
-IMAGE_REL_AMD64_ADDR32   = 0x0002 # The 32-bit VA of the relocation target.
-IMAGE_REL_AMD64_ADDR32NB = 0x0003 # The 32-bit address without an image base (RVA).
-IMAGE_REL_AMD64_REL32    = 0x0004 # The 32-bit relative address from the byte following the relocation.
-IMAGE_REL_AMD64_REL32_1  = 0x0005 # The 32-bit address relative to byte distance 1 from the relocation.
-IMAGE_REL_AMD64_REL32_2  = 0x0006 # The 32-bit address relative to byte distance 2 from the relocation.
-IMAGE_REL_AMD64_REL32_3  = 0x0007 # The 32-bit address relative to byte distance 3 from the relocation.
-IMAGE_REL_AMD64_REL32_4  = 0x0008 # The 32-bit address relative to byte distance 4 from the relocation.
-IMAGE_REL_AMD64_REL32_5  = 0x0009 # The 32-bit address relative to byte distance 5 from the relocation.
-IMAGE_REL_AMD64_SECTION  = 0x000A # The 16-bit section index of the section that contains the target. This is used to support debugging information.
-IMAGE_REL_AMD64_SECREL   = 0x000B # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
-IMAGE_REL_AMD64_SECREL7  = 0x000C # A 7-bit unsigned offset from the base of the section that contains the target.
-IMAGE_REL_AMD64_TOKEN    = 0x000D # CLR tokens.
-IMAGE_REL_AMD64_SREL32   = 0x000E # A 32-bit signed span-dependent value emitted into the object.
-IMAGE_REL_AMD64_PAIR     = 0x000F # A pair that must immediately follow every span-dependent value.
-IMAGE_REL_AMD64_SSPAN32  = 0x0010 # A 32-bit signed span-dependent value that is applied at link time.
+IMAGE_REL_AMD64_ABSOLUTE = 0x0000, # The relocation is ignored.
+IMAGE_REL_AMD64_ADDR64   = 0x0001, # The 64-bit VA of the relocation target.
+IMAGE_REL_AMD64_ADDR32   = 0x0002, # The 32-bit VA of the relocation target.
+IMAGE_REL_AMD64_ADDR32NB = 0x0003, # The 32-bit address without an image base (RVA).
+IMAGE_REL_AMD64_REL32    = 0x0004, # The 32-bit relative address from the byte following the relocation.
+IMAGE_REL_AMD64_REL32_1  = 0x0005, # The 32-bit address relative to byte distance 1 from the relocation.
+IMAGE_REL_AMD64_REL32_2  = 0x0006, # The 32-bit address relative to byte distance 2 from the relocation.
+IMAGE_REL_AMD64_REL32_3  = 0x0007, # The 32-bit address relative to byte distance 3 from the relocation.
+IMAGE_REL_AMD64_REL32_4  = 0x0008, # The 32-bit address relative to byte distance 4 from the relocation.
+IMAGE_REL_AMD64_REL32_5  = 0x0009, # The 32-bit address relative to byte distance 5 from the relocation.
+IMAGE_REL_AMD64_SECTION  = 0x000A, # The 16-bit section index of the section that contains the target. This is used to support debugging information.
+IMAGE_REL_AMD64_SECREL   = 0x000B, # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
+IMAGE_REL_AMD64_SECREL7  = 0x000C, # A 7-bit unsigned offset from the base of the section that contains the target.
+IMAGE_REL_AMD64_TOKEN    = 0x000D, # CLR tokens.
+IMAGE_REL_AMD64_SREL32   = 0x000E, # A 32-bit signed span-dependent value emitted into the object.
+IMAGE_REL_AMD64_PAIR     = 0x000F, # A pair that must immediately follow every span-dependent value.
+IMAGE_REL_AMD64_SSPAN32  = 0x0010, # A 32-bit signed span-dependent value that is applied at link time.
+)
+
+SetConstants(
 # The following relocation type indicators are defined for ARM processors.
-IMAGE_REL_ARM_ABSOLUTE   = 0x0000 # The relocation is ignored.
-IMAGE_REL_ARM_ADDR32     = 0x0001 # The 32-bit VA of the target.
-IMAGE_REL_ARM_ADDR32NB   = 0x0002 # The 32-bit RVA of the target.
-IMAGE_REL_ARM_BRANCH24   = 0x0003 # The 24-bit relative displacement to the target. 
-IMAGE_REL_ARM_BRANCH11   = 0x0004 # The reference to a subroutine call. The reference consists of two 16-bit instructions with 11-bit offsets.
-IMAGE_REL_ARM_SECTION    = 0x000E # The 16-bit section index of the section that contains the target. This is used to support debugging information.
-IMAGE_REL_ARM_SECREL     = 0x000F # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
-IMAGE_REL_ARM_MOV32      = 0x0010 # The 32-bit VA of the target. This relocation is applied using a MOVW instruction for the low 16 bits followed by a MOVT for the high 16 bits.
-IMAGE_REL_THUMB_MOV32    = 0x0011 # The 32-bit VA of the target. This relocation is applied using a MOVW instruction for the low 16 bits followed by a MOVT for the high 16 bits.
-IMAGE_REL_THUMB_BRANCH20 = 0x0012 # The instruction is fixed up with the 21-bit relative displacement to the 2-byte aligned target. The least significant bit of the displacement is always zero and is not stored. This relocation corresponds to a Thumb-2 32-bit conditional B instruction.
-IMAGE_REL_THUMB_BRANCH24 = 0x0014 # The instruction is fixed up with the 25-bit relative displacement to the 2-byte aligned target. The least significant bit of the displacement is zero and is not stored. This relocation corresponds to a Thumb-2 B instruction.
-IMAGE_REL_THUMB_BLX23    = 0x0015 # The instruction is fixed up with the 25-bit relative displacement to the 4-byte aligned target. The low 2 bits of the displacement are zero and are not stored. This relocation corresponds to a Thumb-2 BLX instruction.
-IMAGE_REL_ARM_PAIR       = 0x0016 # The relocation is valid only when it immediately follows a ARM_REFHI or THUMB_REFHI. Its SymbolTableIndex contains a displacement and not an index into the symbol table.
+IMAGE_REL_ARM_ABSOLUTE   = 0x0000, # The relocation is ignored.
+IMAGE_REL_ARM_ADDR32     = 0x0001, # The 32-bit VA of the target.
+IMAGE_REL_ARM_ADDR32NB   = 0x0002, # The 32-bit RVA of the target.
+IMAGE_REL_ARM_BRANCH24   = 0x0003, # The 24-bit relative displacement to the target. 
+IMAGE_REL_ARM_BRANCH11   = 0x0004, # The reference to a subroutine call. The reference consists of two 16-bit instructions with 11-bit offsets.
+IMAGE_REL_ARM_SECTION    = 0x000E, # The 16-bit section index of the section that contains the target. This is used to support debugging information.
+IMAGE_REL_ARM_SECREL     = 0x000F, # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
+IMAGE_REL_ARM_MOV32      = 0x0010, # The 32-bit VA of the target. This relocation is applied using a MOVW instruction for the low 16 bits followed by a MOVT for the high 16 bits.
+IMAGE_REL_THUMB_MOV32    = 0x0011, # The 32-bit VA of the target. This relocation is applied using a MOVW instruction for the low 16 bits followed by a MOVT for the high 16 bits.
+IMAGE_REL_THUMB_BRANCH20 = 0x0012, # The instruction is fixed up with the 21-bit relative displacement to the 2-byte aligned target. The least significant bit of the displacement is always zero and is not stored. This relocation corresponds to a Thumb-2 32-bit conditional B instruction.
+IMAGE_REL_THUMB_BRANCH24 = 0x0014, # The instruction is fixed up with the 25-bit relative displacement to the 2-byte aligned target. The least significant bit of the displacement is zero and is not stored. This relocation corresponds to a Thumb-2 B instruction.
+IMAGE_REL_THUMB_BLX23    = 0x0015, # The instruction is fixed up with the 25-bit relative displacement to the 4-byte aligned target. The low 2 bits of the displacement are zero and are not stored. This relocation corresponds to a Thumb-2 BLX instruction.
+IMAGE_REL_ARM_PAIR       = 0x0016, # The relocation is valid only when it immediately follows a ARM_REFHI or THUMB_REFHI. Its SymbolTableIndex contains a displacement and not an index into the symbol table.
+)
+
+SetConstants(
 # The following relocation type indicators are defined for ARM64 processors.
-IMAGE_REL_ARM64_ABSOLUTE       = 0x0000 # The relocation is ignored.
-IMAGE_REL_ARM64_ADDR32         = 0x0001 # The 32-bit VA of the target.
-IMAGE_REL_ARM64_ADDR32NB       = 0x0002 # The 32-bit RVA of the target.
-IMAGE_REL_ARM64_BRANCH26       = 0x0003 # The 26-bit relative displacement to the target, for B and BL instructions. 
-IMAGE_REL_ARM64_PAGEBASE_REL21 = 0x0004 # The page base of the target, for ADRP instruction.
-IMAGE_REL_ARM64_REL21          = 0x0005 # The 12-bit relative displacement to the target, for instruction ADR
-IMAGE_REL_ARM64_PAGEOFFSET_12A = 0x0006 # The 12-bit page offset of the target, for instructions ADD/ADDS (immediate) with zero shift.
-IMAGE_REL_ARM64_PAGEOFFSET_12L = 0x0007 # The 12-bit page offset of the target, for instruction LDR (indexed, unsigned immediate).
-IMAGE_REL_ARM64_SECREL         = 0x0008 # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
-IMAGE_REL_ARM64_SECREL_LOW12A  = 0x0009 # Bit 0:11 of section offset of the target, for instructions ADD/ADDS (immediate) with zero shift.
-IMAGE_REL_ARM64_SECREL_HIGH12A = 0x000A # Bit 12:23 of section offset of the target, for instructions ADD/ADDS (immediate) with zero shift.
-IMAGE_REL_ARM64_SECREL_LOW12L  = 0x000B # Bit 0:11 of section offset of the target, for instruction LDR (indexed, unsigned immediate).
-IMAGE_REL_ARM64_TOKEN          = 0x000C # CLR token.
-IMAGE_REL_ARM64_SECTION        = 0x000D # The 16-bit section index of the section that contains the target. This is used to support debugging information.
-IMAGE_REL_ARM64_ADDR64         = 0x000E # The 64-bit VA of the relocation target.
-IMAGE_REL_ARM64_BRANCH19       = 0x000F # The 19-bit offset to the relocation target, for conditional B instruction.
-IMAGE_REL_ARM64_BRANCH14       = 0x0010 # The 14-bit offset to the relocation target, for instructions TBZ and TBNZ.
+IMAGE_REL_ARM64_ABSOLUTE       = 0x0000, # The relocation is ignored.
+IMAGE_REL_ARM64_ADDR32         = 0x0001, # The 32-bit VA of the target.
+IMAGE_REL_ARM64_ADDR32NB       = 0x0002, # The 32-bit RVA of the target.
+IMAGE_REL_ARM64_BRANCH26       = 0x0003, # The 26-bit relative displacement to the target, for B and BL instructions. 
+IMAGE_REL_ARM64_PAGEBASE_REL21 = 0x0004, # The page base of the target, for ADRP instruction.
+IMAGE_REL_ARM64_REL21          = 0x0005, # The 12-bit relative displacement to the target, for instruction ADR
+IMAGE_REL_ARM64_PAGEOFFSET_12A = 0x0006, # The 12-bit page offset of the target, for instructions ADD/ADDS (immediate) with zero shift.
+IMAGE_REL_ARM64_PAGEOFFSET_12L = 0x0007, # The 12-bit page offset of the target, for instruction LDR (indexed, unsigned immediate).
+IMAGE_REL_ARM64_SECREL         = 0x0008, # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
+IMAGE_REL_ARM64_SECREL_LOW12A  = 0x0009, # Bit 0:11 of section offset of the target, for instructions ADD/ADDS (immediate) with zero shift.
+IMAGE_REL_ARM64_SECREL_HIGH12A = 0x000A, # Bit 12:23 of section offset of the target, for instructions ADD/ADDS (immediate) with zero shift.
+IMAGE_REL_ARM64_SECREL_LOW12L  = 0x000B, # Bit 0:11 of section offset of the target, for instruction LDR (indexed, unsigned immediate).
+IMAGE_REL_ARM64_TOKEN          = 0x000C, # CLR token.
+IMAGE_REL_ARM64_SECTION        = 0x000D, # The 16-bit section index of the section that contains the target. This is used to support debugging information.
+IMAGE_REL_ARM64_ADDR64         = 0x000E, # The 64-bit VA of the relocation target.
+IMAGE_REL_ARM64_BRANCH19       = 0x000F, # The 19-bit offset to the relocation target, for conditional B instruction.
+IMAGE_REL_ARM64_BRANCH14       = 0x0010, # The 14-bit offset to the relocation target, for instructions TBZ and TBNZ.
+)
+
+SetConstants(
 # The following relocation type indicators are defined for Hitachi SH3 and SH4 processors. SH5-specific relocations are noted as SHM (SH Media).
-IMAGE_REL_SH3_ABSOLUTE        = 0x0000 # The relocation is ignored.
-IMAGE_REL_SH3_DIRECT16        = 0x0001 # A reference to the 16-bit location that contains the VA of the target symbol.
-IMAGE_REL_SH3_DIRECT32        = 0x0002 # The 32-bit VA of the target symbol.
-IMAGE_REL_SH3_DIRECT8         = 0x0003 # A reference to the 8-bit location that contains the VA of the target symbol.
-IMAGE_REL_SH3_DIRECT8_WORD    = 0x0004 # A reference to the 8-bit instruction that contains the effective 16-bit VA of the target symbol.
-IMAGE_REL_SH3_DIRECT8_LONG    = 0x0005 # A reference to the 8-bit instruction that contains the effective 32-bit VA of the target symbol.
-IMAGE_REL_SH3_DIRECT4         = 0x0006 # A reference to the 8-bit location whose low 4 bits contain the VA of the target symbol.
-IMAGE_REL_SH3_DIRECT4_WORD    = 0x0007 # A reference to the 8-bit instruction whose low 4 bits contain the effective 16-bit VA of the target symbol.
-IMAGE_REL_SH3_DIRECT4_LONG    = 0x0008 # A reference to the 8-bit instruction whose low 4 bits contain the effective 32-bit VA of the target symbol.
-IMAGE_REL_SH3_PCREL8_WORD     = 0x0009 # A reference to the 8-bit instruction that contains the effective 16-bit relative offset of the target symbol.
-IMAGE_REL_SH3_PCREL8_LONG     = 0x000A # A reference to the 8-bit instruction that contains the effective 32-bit relative offset of the target symbol.
-IMAGE_REL_SH3_PCREL12_WORD    = 0x000B # A reference to the 16-bit instruction whose low 12 bits contain the effective 16-bit relative offset of the target symbol.
-IMAGE_REL_SH3_STARTOF_SECTION = 0x000C # A reference to a 32-bit location that is the VA of the section that contains the target symbol.
-IMAGE_REL_SH3_SIZEOF_SECTION  = 0x000D # A reference to the 32-bit location that is the size of the section that contains the target symbol.
-IMAGE_REL_SH3_SECTION         = 0x000E # The 16-bit section index of the section that contains the target. This is used to support debugging information.
-IMAGE_REL_SH3_SECREL          = 0x000F # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
-IMAGE_REL_SH3_DIRECT32_NB     = 0x0010 # The 32-bit RVA of the target symbol.
-IMAGE_REL_SH3_GPREL4_LONG     = 0x0011 # GP relative.
-IMAGE_REL_SH3_TOKEN           = 0x0012 # CLR token.
-IMAGE_REL_SHM_PCRELPT         = 0x0013 # The offset from the current instruction in longwords. If the NOMODE bit is not set, insert the inverse of the low bit at bit 32 to select PTA or PTB.
-IMAGE_REL_SHM_REFLO           = 0x0014 # The low 16 bits of the 32-bit address.
-IMAGE_REL_SHM_REFHALF         = 0x0015 # The high 16 bits of the 32-bit address.
-IMAGE_REL_SHM_RELLO           = 0x0016 # The low 16 bits of the relative address.
-IMAGE_REL_SHM_RELHALF         = 0x0017 # The high 16 bits of the relative address.
-IMAGE_REL_SHM_PAIR            = 0x0018 # The relocation is valid only when it immediately follows a REFHALF, RELHALF, or RELLO relocation. The SymbolTableIndex field of the relocation contains a displacement and not an index into the symbol table.
-IMAGE_REL_SHM_NOMODE          = 0x8000 # The relocation ignores section mode.
+IMAGE_REL_SH3_ABSOLUTE        = 0x0000, # The relocation is ignored.
+IMAGE_REL_SH3_DIRECT16        = 0x0001, # A reference to the 16-bit location that contains the VA of the target symbol.
+IMAGE_REL_SH3_DIRECT32        = 0x0002, # The 32-bit VA of the target symbol.
+IMAGE_REL_SH3_DIRECT8         = 0x0003, # A reference to the 8-bit location that contains the VA of the target symbol.
+IMAGE_REL_SH3_DIRECT8_WORD    = 0x0004, # A reference to the 8-bit instruction that contains the effective 16-bit VA of the target symbol.
+IMAGE_REL_SH3_DIRECT8_LONG    = 0x0005, # A reference to the 8-bit instruction that contains the effective 32-bit VA of the target symbol.
+IMAGE_REL_SH3_DIRECT4         = 0x0006, # A reference to the 8-bit location whose low 4 bits contain the VA of the target symbol.
+IMAGE_REL_SH3_DIRECT4_WORD    = 0x0007, # A reference to the 8-bit instruction whose low 4 bits contain the effective 16-bit VA of the target symbol.
+IMAGE_REL_SH3_DIRECT4_LONG    = 0x0008, # A reference to the 8-bit instruction whose low 4 bits contain the effective 32-bit VA of the target symbol.
+IMAGE_REL_SH3_PCREL8_WORD     = 0x0009, # A reference to the 8-bit instruction that contains the effective 16-bit relative offset of the target symbol.
+IMAGE_REL_SH3_PCREL8_LONG     = 0x000A, # A reference to the 8-bit instruction that contains the effective 32-bit relative offset of the target symbol.
+IMAGE_REL_SH3_PCREL12_WORD    = 0x000B, # A reference to the 16-bit instruction whose low 12 bits contain the effective 16-bit relative offset of the target symbol.
+IMAGE_REL_SH3_STARTOF_SECTION = 0x000C, # A reference to a 32-bit location that is the VA of the section that contains the target symbol.
+IMAGE_REL_SH3_SIZEOF_SECTION  = 0x000D, # A reference to the 32-bit location that is the size of the section that contains the target symbol.
+IMAGE_REL_SH3_SECTION         = 0x000E, # The 16-bit section index of the section that contains the target. This is used to support debugging information.
+IMAGE_REL_SH3_SECREL          = 0x000F, # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
+IMAGE_REL_SH3_DIRECT32_NB     = 0x0010, # The 32-bit RVA of the target symbol.
+IMAGE_REL_SH3_GPREL4_LONG     = 0x0011, # GP relative.
+IMAGE_REL_SH3_TOKEN           = 0x0012, # CLR token.
+IMAGE_REL_SHM_PCRELPT         = 0x0013, # The offset from the current instruction in longwords. If the NOMODE bit is not set, insert the inverse of the low bit at bit 32 to select PTA or PTB.
+IMAGE_REL_SHM_REFLO           = 0x0014, # The low 16 bits of the 32-bit address.
+IMAGE_REL_SHM_REFHALF         = 0x0015, # The high 16 bits of the 32-bit address.
+IMAGE_REL_SHM_RELLO           = 0x0016, # The low 16 bits of the relative address.
+IMAGE_REL_SHM_RELHALF         = 0x0017, # The high 16 bits of the relative address.
+IMAGE_REL_SHM_PAIR            = 0x0018, # The relocation is valid only when it immediately follows a REFHALF, RELHALF, or RELLO relocation. The SymbolTableIndex field of the relocation contains a displacement and not an index into the symbol table.
+IMAGE_REL_SHM_NOMODE          = 0x8000, # The relocation ignores section mode.
+)
+
+SetConstants(
 # The following relocation type indicators are defined for PowerPC processors.
-IMAGE_REL_PPC_ABSOLUTE   = 0x0000 # The relocation is ignored.
-IMAGE_REL_PPC_ADDR64     = 0x0001 # The 64-bit VA of the target.
-IMAGE_REL_PPC_ADDR32     = 0x0002 # The 32-bit VA of the target.
-IMAGE_REL_PPC_ADDR24     = 0x0003 # The low 24 bits of the VA of the target. This is valid only when the target symbol is absolute and can be sign-extended to its original value.
-IMAGE_REL_PPC_ADDR16     = 0x0004 # The low 16 bits of the target's VA.
-IMAGE_REL_PPC_ADDR14     = 0x0005 # The low 14 bits of the target's VA. This is valid only when the target symbol is absolute and can be sign-extended to its original value.
-IMAGE_REL_PPC_REL24      = 0x0006 # A 24-bit PC-relative offset to the symbol's location.
-IMAGE_REL_PPC_REL14      = 0x0007 # A 14-bit PC-relative offset to the symbol's location.
-IMAGE_REL_PPC_ADDR32NB   = 0x000A # The 32-bit RVA of the target.
-IMAGE_REL_PPC_SECREL     = 0x000B # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
-IMAGE_REL_PPC_SECTION    = 0x000C # The 16-bit section index of the section that contains the target. This is used to support debugging information.
-IMAGE_REL_PPC_SECREL16   = 0x000F # The 16-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
-IMAGE_REL_PPC_REFHI      = 0x0010 # The high 16 bits of the target's 32-bit VA. This is used for the first instruction in a two-instruction sequence that loads a full address. This relocation must be immediately followed by a PAIR relocation whose SymbolTableIndex contains a signed 16-bit displacement that is added to the upper 16 bits that was taken from the location that is being relocated.
-IMAGE_REL_PPC_REFLO      = 0x0011 # The low 16 bits of the target's VA.
-IMAGE_REL_PPC_PAIR       = 0x0012 # A relocation that is valid only when it immediately follows a REFHI or SECRELHI relocation. Its SymbolTableIndex contains a displacement and not an index into the symbol table.
-IMAGE_REL_PPC_SECRELLO   = 0x0013 # The low 16 bits of the 32-bit offset of the target from the beginning of its section.
-IMAGE_REL_PPC_GPREL      = 0x0015 # The 16-bit signed displacement of the target relative to the GP register.
-IMAGE_REL_PPC_TOKEN      = 0x0016 # The CLR token.
+IMAGE_REL_PPC_ABSOLUTE   = 0x0000, # The relocation is ignored.
+IMAGE_REL_PPC_ADDR64     = 0x0001, # The 64-bit VA of the target.
+IMAGE_REL_PPC_ADDR32     = 0x0002, # The 32-bit VA of the target.
+IMAGE_REL_PPC_ADDR24     = 0x0003, # The low 24 bits of the VA of the target. This is valid only when the target symbol is absolute and can be sign-extended to its original value.
+IMAGE_REL_PPC_ADDR16     = 0x0004, # The low 16 bits of the target's VA.
+IMAGE_REL_PPC_ADDR14     = 0x0005, # The low 14 bits of the target's VA. This is valid only when the target symbol is absolute and can be sign-extended to its original value.
+IMAGE_REL_PPC_REL24      = 0x0006, # A 24-bit PC-relative offset to the symbol's location.
+IMAGE_REL_PPC_REL14      = 0x0007, # A 14-bit PC-relative offset to the symbol's location.
+IMAGE_REL_PPC_ADDR32NB   = 0x000A, # The 32-bit RVA of the target.
+IMAGE_REL_PPC_SECREL     = 0x000B, # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
+IMAGE_REL_PPC_SECTION    = 0x000C, # The 16-bit section index of the section that contains the target. This is used to support debugging information.
+IMAGE_REL_PPC_SECREL16   = 0x000F, # The 16-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
+IMAGE_REL_PPC_REFHI      = 0x0010, # The high 16 bits of the target's 32-bit VA. This is used for the first instruction in a two-instruction sequence that loads a full address. This relocation must be immediately followed by a PAIR relocation whose SymbolTableIndex contains a signed 16-bit displacement that is added to the upper 16 bits that was taken from the location that is being relocated.
+IMAGE_REL_PPC_REFLO      = 0x0011, # The low 16 bits of the target's VA.
+IMAGE_REL_PPC_PAIR       = 0x0012, # A relocation that is valid only when it immediately follows a REFHI or SECRELHI relocation. Its SymbolTableIndex contains a displacement and not an index into the symbol table.
+IMAGE_REL_PPC_SECRELLO   = 0x0013, # The low 16 bits of the 32-bit offset of the target from the beginning of its section.
+IMAGE_REL_PPC_GPREL      = 0x0015, # The 16-bit signed displacement of the target relative to the GP register.
+IMAGE_REL_PPC_TOKEN      = 0x0016, # The CLR token.
+)
+
+SetConstants(
 # The following relocation type indicators are defined for Intel 386 and compatible processors.
-IMAGE_REL_I386_ABSOLUTE  = 0x0000 # The relocation is ignored.
-IMAGE_REL_I386_DIR16     = 0x0001 # Not supported.
-IMAGE_REL_I386_REL16     = 0x0002 # Not supported.
-IMAGE_REL_I386_DIR32     = 0x0006 # The target's 32-bit VA.
-IMAGE_REL_I386_DIR32NB   = 0x0007 # The target's 32-bit RVA.
-IMAGE_REL_I386_SEG12     = 0x0009 # Not supported.
-IMAGE_REL_I386_SECTION   = 0x000A # The 16-bit section index of the section that contains the target. This is used to support debugging information.
-IMAGE_REL_I386_SECREL    = 0x000B # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
-IMAGE_REL_I386_TOKEN     = 0x000C # The CLR token.
-IMAGE_REL_I386_SECREL7   = 0x000D # A 7-bit offset from the base of the section that contains the target.
-IMAGE_REL_I386_REL32     = 0x0014 # The 32-bit relative displacement to the target. This supports the x86 relative branch and call instructions.
+IMAGE_REL_I386_ABSOLUTE  = 0x0000, # The relocation is ignored.
+IMAGE_REL_I386_DIR16     = 0x0001, # Not supported.
+IMAGE_REL_I386_REL16     = 0x0002, # Not supported.
+IMAGE_REL_I386_DIR32     = 0x0006, # The target's 32-bit VA.
+IMAGE_REL_I386_DIR32NB   = 0x0007, # The target's 32-bit RVA.
+IMAGE_REL_I386_SEG12     = 0x0009, # Not supported.
+IMAGE_REL_I386_SECTION   = 0x000A, # The 16-bit section index of the section that contains the target. This is used to support debugging information.
+IMAGE_REL_I386_SECREL    = 0x000B, # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
+IMAGE_REL_I386_TOKEN     = 0x000C, # The CLR token.
+IMAGE_REL_I386_SECREL7   = 0x000D, # A 7-bit offset from the base of the section that contains the target.
+IMAGE_REL_I386_REL32     = 0x0014, # The 32-bit relative displacement to the target. This supports the x86 relative branch and call instructions.
+)
+
+SetConstants(
 # The following relocation type indicators are defined for the Intel Itanium processor family and compatible processors. Note that relocations on instructions use the bundle's offset and slot number for the relocation offset.
-IMAGE_REL_IA64_ABSOLUTE  = 0x0000 # The relocation is ignored.
-IMAGE_REL_IA64_IMM14     = 0x0001 # The instruction relocation can be followed by an ADDEND relocation whose value is added to the target address before it is inserted into the specified slot in the IMM14 bundle. The relocation target must be absolute or the image must be fixed.
-IMAGE_REL_IA64_IMM22     = 0x0002 # The instruction relocation can be followed by an ADDEND relocation whose value is added to the target address before it is inserted into the specified slot in the IMM22 bundle. The relocation target must be absolute or the image must be fixed.
-IMAGE_REL_IA64_IMM64     = 0x0003 # The slot number of this relocation must be one (1). The relocation can be followed by an ADDEND relocation whose value is added to the target address before it is stored in all three slots of the IMM64 bundle.
-IMAGE_REL_IA64_DIR32     = 0x0004 # The target's 32-bit VA. This is supported only for /LARGEADDRESSAWARE:NO images.
-IMAGE_REL_IA64_DIR64     = 0x0005 # The target's 64-bit VA.
-IMAGE_REL_IA64_PCREL21B  = 0x0006 # The instruction is fixed up with the 25-bit relative displacement to the 16-bit aligned target. The low 4 bits of the displacement are zero and are not stored.
-IMAGE_REL_IA64_PCREL21M  = 0x0007 # The instruction is fixed up with the 25-bit relative displacement to the 16-bit aligned target. The low 4 bits of the displacement, which are zero, are not stored.
-IMAGE_REL_IA64_PCREL21F  = 0x0008 # The LSBs of this relocation's offset must contain the slot number whereas the rest is the bundle address. The bundle is fixed up with the 25-bit relative displacement to the 16-bit aligned target. The low 4 bits of the displacement are zero and are not stored.
-IMAGE_REL_IA64_GPREL22   = 0x0009 # The instruction relocation can be followed by an ADDEND relocation whose value is added to the target address and then a 22-bit GP-relative offset that is calculated and applied to the GPREL22 bundle.
-IMAGE_REL_IA64_LTOFF22   = 0x000A # The instruction is fixed up with the 22-bit GP-relative offset to the target symbol's literal table entry. The linker creates this literal table entry based on this relocation and the ADDEND relocation that might follow.
-IMAGE_REL_IA64_SECTION   = 0x000B # The 16-bit section index of the section contains the target. This is used to support debugging information.
-IMAGE_REL_IA64_SECREL22  = 0x000C # The instruction is fixed up with the 22-bit offset of the target from the beginning of its section. This relocation can be followed immediately by an ADDEND relocation, whose Value field contains the 32-bit unsigned offset of the target from the beginning of the section.
-IMAGE_REL_IA64_SECREL64I = 0x000D # The slot number for this relocation must be one (1). The instruction is fixed up with the 64-bit offset of the target from the beginning of its section. This relocation can be followed immediately by an ADDEND relocation whose Value field contains the 32-bit unsigned offset of the target from the beginning of the section.
-IMAGE_REL_IA64_SECREL32  = 0x000E # The address of data to be fixed up with the 32-bit offset of the target from the beginning of its section.
-IMAGE_REL_IA64_DIR32NB   = 0x0010 # The target's 32-bit RVA.
-IMAGE_REL_IA64_SREL14    = 0x0011 # This is applied to a signed 14-bit immediate that contains the difference between two relocatable targets. This is a declarative field for the linker that indicates that the compiler has already emitted this value.
-IMAGE_REL_IA64_SREL22    = 0x0012 # This is applied to a signed 22-bit immediate that contains the difference between two relocatable targets. This is a declarative field for the linker that indicates that the compiler has already emitted this value.
-IMAGE_REL_IA64_SREL32    = 0x0013 # This is applied to a signed 32-bit immediate that contains the difference between two relocatable values. This is a declarative field for the linker that indicates that the compiler has already emitted this value.
-IMAGE_REL_IA64_UREL32    = 0x0014 # This is applied to an unsigned 32-bit immediate that contains the difference between two relocatable values. This is a declarative field for the linker that indicates that the compiler has already emitted this value.
-IMAGE_REL_IA64_PCREL60X  = 0x0015 # A 60-bit PC-relative fixup that always stays as a BRL instruction of an MLX bundle.
-IMAGE_REL_IA64_PCREL60B  = 0x0016 # A 60-bit PC-relative fixup. If the target displacement fits in a signed 25-bit field, convert the entire bundle to an MBB bundle with NOP.B in slot 1 and a 25-bit BR instruction (with the 4 lowest bits all zero and dropped) in slot 2.
-IMAGE_REL_IA64_PCREL60F  = 0x0017 # A 60-bit PC-relative fixup. If the target displacement fits in a signed 25-bit field, convert the entire bundle to an MFB bundle with NOP.F in slot 1 and a 25-bit (4 lowest bits all zero and dropped) BR instruction in slot 2.
-IMAGE_REL_IA64_PCREL60I  = 0x0018 # A 60-bit PC-relative fixup. If the target displacement fits in a signed 25-bit field, convert the entire bundle to an MIB bundle with NOP.I in slot 1 and a 25-bit (4 lowest bits all zero and dropped) BR instruction in slot 2.
-IMAGE_REL_IA64_PCREL60M  = 0x0019 # A 60-bit PC-relative fixup. If the target displacement fits in a signed 25-bit field, convert the entire bundle to an MMB bundle with NOP.M in slot 1 and a 25-bit (4 lowest bits all zero and dropped) BR instruction in slot 2.
-IMAGE_REL_IA64_IMMGPREL64= 0x001a # A 64-bit GP-relative fixup.
-IMAGE_REL_IA64_TOKEN     = 0x001b # A CLR token.
-IMAGE_REL_IA64_GPREL32   = 0x001c # A 32-bit GP-relative fixup.
-IMAGE_REL_IA64_ADDEND    = 0x001F # The relocation is valid only when it immediately follows one of the following relocations: IMM14, IMM22, IMM64, GPREL22, LTOFF22, LTOFF64, SECREL22, SECREL64I, or SECREL32. Its value contains the addend to apply to instructions within a bundle, not for data.
+IMAGE_REL_IA64_ABSOLUTE  = 0x0000, # The relocation is ignored.
+IMAGE_REL_IA64_IMM14     = 0x0001, # The instruction relocation can be followed by an ADDEND relocation whose value is added to the target address before it is inserted into the specified slot in the IMM14 bundle. The relocation target must be absolute or the image must be fixed.
+IMAGE_REL_IA64_IMM22     = 0x0002, # The instruction relocation can be followed by an ADDEND relocation whose value is added to the target address before it is inserted into the specified slot in the IMM22 bundle. The relocation target must be absolute or the image must be fixed.
+IMAGE_REL_IA64_IMM64     = 0x0003, # The slot number of this relocation must be one (1). The relocation can be followed by an ADDEND relocation whose value is added to the target address before it is stored in all three slots of the IMM64 bundle.
+IMAGE_REL_IA64_DIR32     = 0x0004, # The target's 32-bit VA. This is supported only for /LARGEADDRESSAWARE:NO images.
+IMAGE_REL_IA64_DIR64     = 0x0005, # The target's 64-bit VA.
+IMAGE_REL_IA64_PCREL21B  = 0x0006, # The instruction is fixed up with the 25-bit relative displacement to the 16-bit aligned target. The low 4 bits of the displacement are zero and are not stored.
+IMAGE_REL_IA64_PCREL21M  = 0x0007, # The instruction is fixed up with the 25-bit relative displacement to the 16-bit aligned target. The low 4 bits of the displacement, which are zero, are not stored.
+IMAGE_REL_IA64_PCREL21F  = 0x0008, # The LSBs of this relocation's offset must contain the slot number whereas the rest is the bundle address. The bundle is fixed up with the 25-bit relative displacement to the 16-bit aligned target. The low 4 bits of the displacement are zero and are not stored.
+IMAGE_REL_IA64_GPREL22   = 0x0009, # The instruction relocation can be followed by an ADDEND relocation whose value is added to the target address and then a 22-bit GP-relative offset that is calculated and applied to the GPREL22 bundle.
+IMAGE_REL_IA64_LTOFF22   = 0x000A, # The instruction is fixed up with the 22-bit GP-relative offset to the target symbol's literal table entry. The linker creates this literal table entry based on this relocation and the ADDEND relocation that might follow.
+IMAGE_REL_IA64_SECTION   = 0x000B, # The 16-bit section index of the section contains the target. This is used to support debugging information.
+IMAGE_REL_IA64_SECREL22  = 0x000C, # The instruction is fixed up with the 22-bit offset of the target from the beginning of its section. This relocation can be followed immediately by an ADDEND relocation, whose Value field contains the 32-bit unsigned offset of the target from the beginning of the section.
+IMAGE_REL_IA64_SECREL64I = 0x000D, # The slot number for this relocation must be one (1). The instruction is fixed up with the 64-bit offset of the target from the beginning of its section. This relocation can be followed immediately by an ADDEND relocation whose Value field contains the 32-bit unsigned offset of the target from the beginning of the section.
+IMAGE_REL_IA64_SECREL32  = 0x000E, # The address of data to be fixed up with the 32-bit offset of the target from the beginning of its section.
+IMAGE_REL_IA64_DIR32NB   = 0x0010, # The target's 32-bit RVA.
+IMAGE_REL_IA64_SREL14    = 0x0011, # This is applied to a signed 14-bit immediate that contains the difference between two relocatable targets. This is a declarative field for the linker that indicates that the compiler has already emitted this value.
+IMAGE_REL_IA64_SREL22    = 0x0012, # This is applied to a signed 22-bit immediate that contains the difference between two relocatable targets. This is a declarative field for the linker that indicates that the compiler has already emitted this value.
+IMAGE_REL_IA64_SREL32    = 0x0013, # This is applied to a signed 32-bit immediate that contains the difference between two relocatable values. This is a declarative field for the linker that indicates that the compiler has already emitted this value.
+IMAGE_REL_IA64_UREL32    = 0x0014, # This is applied to an unsigned 32-bit immediate that contains the difference between two relocatable values. This is a declarative field for the linker that indicates that the compiler has already emitted this value.
+IMAGE_REL_IA64_PCREL60X  = 0x0015, # A 60-bit PC-relative fixup that always stays as a BRL instruction of an MLX bundle.
+IMAGE_REL_IA64_PCREL60B  = 0x0016, # A 60-bit PC-relative fixup. If the target displacement fits in a signed 25-bit field, convert the entire bundle to an MBB bundle with NOP.B in slot 1 and a 25-bit BR instruction (with the 4 lowest bits all zero and dropped) in slot 2.
+IMAGE_REL_IA64_PCREL60F  = 0x0017, # A 60-bit PC-relative fixup. If the target displacement fits in a signed 25-bit field, convert the entire bundle to an MFB bundle with NOP.F in slot 1 and a 25-bit (4 lowest bits all zero and dropped) BR instruction in slot 2.
+IMAGE_REL_IA64_PCREL60I  = 0x0018, # A 60-bit PC-relative fixup. If the target displacement fits in a signed 25-bit field, convert the entire bundle to an MIB bundle with NOP.I in slot 1 and a 25-bit (4 lowest bits all zero and dropped) BR instruction in slot 2.
+IMAGE_REL_IA64_PCREL60M  = 0x0019, # A 60-bit PC-relative fixup. If the target displacement fits in a signed 25-bit field, convert the entire bundle to an MMB bundle with NOP.M in slot 1 and a 25-bit (4 lowest bits all zero and dropped) BR instruction in slot 2.
+IMAGE_REL_IA64_IMMGPREL64= 0x001a, # A 64-bit GP-relative fixup.
+IMAGE_REL_IA64_TOKEN     = 0x001b, # A CLR token.
+IMAGE_REL_IA64_GPREL32   = 0x001c, # A 32-bit GP-relative fixup.
+IMAGE_REL_IA64_ADDEND    = 0x001F, # The relocation is valid only when it immediately follows one of the following relocations: IMM14, IMM22, IMM64, GPREL22, LTOFF22, LTOFF64, SECREL22, SECREL64I, or SECREL32. Its value contains the addend to apply to instructions within a bundle, not for data.
+)
+
+SetConstants(
 # The following relocation type indicators are defined for MIPS processors.
-IMAGE_REL_MIPS_ABSOLUTE  = 0x0000 # The relocation is ignored.
-IMAGE_REL_MIPS_REFHALF   = 0x0001 # The high 16 bits of the target's 32-bit VA.
-IMAGE_REL_MIPS_REFWORD   = 0x0002 # The target's 32-bit VA.
-IMAGE_REL_MIPS_JMPADDR   = 0x0003 # The low 26 bits of the target's VA. This supports the MIPS J and JAL instructions.
-IMAGE_REL_MIPS_REFHI     = 0x0004 # The high 16 bits of the target's 32-bit VA. This is used for the first instruction in a two-instruction sequence that loads a full address. This relocation must be immediately followed by a PAIR relocation whose SymbolTableIndex contains a signed 16-bit displacement that is added to the upper 16 bits that are taken from the location that is being relocated.
-IMAGE_REL_MIPS_REFLO     = 0x0005 # The low 16 bits of the target's VA.
-IMAGE_REL_MIPS_GPREL     = 0x0006 # A 16-bit signed displacement of the target relative to the GP register.
-IMAGE_REL_MIPS_LITERAL   = 0x0007 # The same as IMAGE_REL_MIPS_GPREL.
-IMAGE_REL_MIPS_SECTION   = 0x000A # The 16-bit section index of the section contains the target. This is used to support debugging information.
-IMAGE_REL_MIPS_SECREL    = 0x000B # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
-IMAGE_REL_MIPS_SECRELLO  = 0x000C # The low 16 bits of the 32-bit offset of the target from the beginning of its section.
-IMAGE_REL_MIPS_SECRELHI  = 0x000D # The high 16 bits of the 32-bit offset of the target from the beginning of its section. An IMAGE_REL_MIPS_PAIR relocation must immediately follow this one. The SymbolTableIndex of the PAIR relocation contains a signed 16-bit displacement that is added to the upper 16 bits that are taken from the location that is being relocated.
-IMAGE_REL_MIPS_JMPADDR16 = 0x0010 # The low 26 bits of the target's VA. This supports the MIPS16 JAL instruction.
-IMAGE_REL_MIPS_REFWORDNB = 0x0022 # The target's 32-bit RVA.
-IMAGE_REL_MIPS_PAIR      = 0x0025 # The relocation is valid only when it immediately follows a REFHI or SECRELHI relocation. Its SymbolTableIndex contains a displacement and not an index into the symbol table.
+IMAGE_REL_MIPS_ABSOLUTE  = 0x0000, # The relocation is ignored.
+IMAGE_REL_MIPS_REFHALF   = 0x0001, # The high 16 bits of the target's 32-bit VA.
+IMAGE_REL_MIPS_REFWORD   = 0x0002, # The target's 32-bit VA.
+IMAGE_REL_MIPS_JMPADDR   = 0x0003, # The low 26 bits of the target's VA. This supports the MIPS J and JAL instructions.
+IMAGE_REL_MIPS_REFHI     = 0x0004, # The high 16 bits of the target's 32-bit VA. This is used for the first instruction in a two-instruction sequence that loads a full address. This relocation must be immediately followed by a PAIR relocation whose SymbolTableIndex contains a signed 16-bit displacement that is added to the upper 16 bits that are taken from the location that is being relocated.
+IMAGE_REL_MIPS_REFLO     = 0x0005, # The low 16 bits of the target's VA.
+IMAGE_REL_MIPS_GPREL     = 0x0006, # A 16-bit signed displacement of the target relative to the GP register.
+IMAGE_REL_MIPS_LITERAL   = 0x0007, # The same as IMAGE_REL_MIPS_GPREL.
+IMAGE_REL_MIPS_SECTION   = 0x000A, # The 16-bit section index of the section contains the target. This is used to support debugging information.
+IMAGE_REL_MIPS_SECREL    = 0x000B, # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
+IMAGE_REL_MIPS_SECRELLO  = 0x000C, # The low 16 bits of the 32-bit offset of the target from the beginning of its section.
+IMAGE_REL_MIPS_SECRELHI  = 0x000D, # The high 16 bits of the 32-bit offset of the target from the beginning of its section. An IMAGE_REL_MIPS_PAIR relocation must immediately follow this one. The SymbolTableIndex of the PAIR relocation contains a signed 16-bit displacement that is added to the upper 16 bits that are taken from the location that is being relocated.
+IMAGE_REL_MIPS_JMPADDR16 = 0x0010, # The low 26 bits of the target's VA. This supports the MIPS16 JAL instruction.
+IMAGE_REL_MIPS_REFWORDNB = 0x0022, # The target's 32-bit RVA.
+IMAGE_REL_MIPS_PAIR      = 0x0025, # The relocation is valid only when it immediately follows a REFHI or SECRELHI relocation. Its SymbolTableIndex contains a displacement and not an index into the symbol table.
+)
+
+SetConstants(
 # The following relocation type indicators are defined for the Mitsubishi M32R processors.
-IMAGE_REL_M32R_ABSOLUTE  = 0x0000 # The relocation is ignored.
-IMAGE_REL_M32R_ADDR32    = 0x0001 # The target's 32-bit VA.
-IMAGE_REL_M32R_ADDR32NB  = 0x0002 # The target's 32-bit RVA.
-IMAGE_REL_M32R_ADDR24    = 0x0003 # The target's 24-bit VA.
-IMAGE_REL_M32R_GPREL16   = 0x0004 # The target's 16-bit offset from the GP register.
-IMAGE_REL_M32R_PCREL24   = 0x0005 # The target's 24-bit offset from the program counter (PC), shifted left by 2 bits and sign-extended 
-IMAGE_REL_M32R_PCREL16   = 0x0006 # The target's 16-bit offset from the PC, shifted left by 2 bits and sign-extended
-IMAGE_REL_M32R_PCREL8    = 0x0007 # The target's 8-bit offset from the PC, shifted left by 2 bits and sign-extended
-IMAGE_REL_M32R_REFHALF   = 0x0008 # The 16 MSBs of the target VA.
-IMAGE_REL_M32R_REFHI     = 0x0009 # The 16 MSBs of the target VA, adjusted for LSB sign extension. This is used for the first instruction in a two-instruction sequence that loads a full 32-bit address. This relocation must be immediately followed by a PAIR relocation whose SymbolTableIndex contains a signed 16-bit displacement that is added to the upper 16 bits that are taken from the location that is being relocated.
-IMAGE_REL_M32R_REFLO     = 0x000A # The 16 LSBs of the target VA.
-IMAGE_REL_M32R_PAIR      = 0x000B # The relocation must follow the REFHI relocation. Its SymbolTableIndex contains a displacement and not an index into the symbol table.
-IMAGE_REL_M32R_SECTION   = 0x000C # The 16-bit section index of the section that contains the target. This is used to support debugging information.
-IMAGE_REL_M32R_SECREL    = 0x000D # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
-IMAGE_REL_M32R_TOKEN     = 0x000E # The CLR token.
-
-
-constants = {
-  'RT' : {},
-  'DIRECTORY_ENTRY' : {},
-  'IMAGE_FILE_MACHINE' : {},
-  'IMAGE_FILE_FLAG' : {},
-  'IMAGE_SYM_CLASS' : {},
-  'IMAGE_SYM_TYPE'  : {},
-  'IMAGE_SYM_DTYPE' : {},
-  'IMAGE_OPTIONAL_HDR_MAGIC' : {},
-  'IMAGE_SUBSYSTEM' : {},
-  'IMAGE_SCN' : {},
-  'STYP' : {},
-  }
-def enumerate_constants(constants, globs):
-    for type in constants:
-        for val in filter(lambda x:x[:len(type)+1]==type+"_", globs.keys()):
-            if not globs[val] in constants[type]:
-                constants[type][globs[val]] = val[len(type)+1:]
-enumerate_constants(constants, dict(globals()))
+IMAGE_REL_M32R_ABSOLUTE  = 0x0000, # The relocation is ignored.
+IMAGE_REL_M32R_ADDR32    = 0x0001, # The target's 32-bit VA.
+IMAGE_REL_M32R_ADDR32NB  = 0x0002, # The target's 32-bit RVA.
+IMAGE_REL_M32R_ADDR24    = 0x0003, # The target's 24-bit VA.
+IMAGE_REL_M32R_GPREL16   = 0x0004, # The target's 16-bit offset from the GP register.
+IMAGE_REL_M32R_PCREL24   = 0x0005, # The target's 24-bit offset from the program counter (PC), shifted left by 2 bits and sign-extended 
+IMAGE_REL_M32R_PCREL16   = 0x0006, # The target's 16-bit offset from the PC, shifted left by 2 bits and sign-extended
+IMAGE_REL_M32R_PCREL8    = 0x0007, # The target's 8-bit offset from the PC, shifted left by 2 bits and sign-extended
+IMAGE_REL_M32R_REFHALF   = 0x0008, # The 16 MSBs of the target VA.
+IMAGE_REL_M32R_REFHI     = 0x0009, # The 16 MSBs of the target VA, adjusted for LSB sign extension. This is used for the first instruction in a two-instruction sequence that loads a full 32-bit address. This relocation must be immediately followed by a PAIR relocation whose SymbolTableIndex contains a signed 16-bit displacement that is added to the upper 16 bits that are taken from the location that is being relocated.
+IMAGE_REL_M32R_REFLO     = 0x000A, # The 16 LSBs of the target VA.
+IMAGE_REL_M32R_PAIR      = 0x000B, # The relocation must follow the REFHI relocation. Its SymbolTableIndex contains a displacement and not an index into the symbol table.
+IMAGE_REL_M32R_SECTION   = 0x000C, # The 16-bit section index of the section that contains the target. This is used to support debugging information.
+IMAGE_REL_M32R_SECREL    = 0x000D, # The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.
+IMAGE_REL_M32R_TOKEN     = 0x000E, # The CLR token.
+)
 
 class InvalidOffset(Exception):
     pass

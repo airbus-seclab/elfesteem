@@ -1,6 +1,10 @@
 from elfesteem.macho.common import *
-from elfesteem.cstruct import convert_size2type, CBase, CArray
+from elfesteem.cstruct import convert_size2type, Constants, CBase, CArray
 import struct
+
+constants = {}
+def SetConstants(**kargs):
+    Constants(globs = globals(), table = constants, **kargs)
 
 #### Source: /usr/include/mach-o/loader.h
 
@@ -24,56 +28,68 @@ class mach_header(CStruct):
 
 import sys
 if sys.version_info[0:2] == (2, 3):
-    MH_MAGIC    =    eval("0xfeedfaceL")
-    MH_CIGAM    =    eval("0xcefaedfeL")
-    MH_MAGIC_64 =    eval("0xfeedfacfL")
-    MH_CIGAM_64 =    eval("0xcffaedfeL")
+    SetConstants(
+    name = 'MH_MAGIC',
+    MH_MAGIC    =    eval("0xfeedfaceL"),
+    MH_CIGAM    =    eval("0xcefaedfeL"),
+    MH_MAGIC_64 =    eval("0xfeedfacfL"),
+    MH_CIGAM_64 =    eval("0xcffaedfeL"),
+    )
 else:
-    MH_MAGIC    =    0xfeedface #     /* the mach magic number */
-    MH_CIGAM    =    0xcefaedfe #     /* NXSwapInt(MH_MAGIC) */
-    MH_MAGIC_64 =    0xfeedfacf #     /* the 64-bit mach magic number */
-    MH_CIGAM_64 =    0xcffaedfe #     /* NXSwapInt(MH_MAGIC_64) */
+    SetConstants(
+    name = 'MH_MAGIC',
+    MH_MAGIC    =    0xfeedface, #     /* the mach magic number */
+    MH_CIGAM    =    0xcefaedfe, #     /* NXSwapInt(MH_MAGIC) */
+    MH_MAGIC_64 =    0xfeedfacf, #     /* the 64-bit mach magic number */
+    MH_CIGAM_64 =    0xcffaedfe, #     /* NXSwapInt(MH_MAGIC_64) */
+    )
 
+SetConstants(
 # Constants for the "filetype" field
-MH_OBJECT       = 0x1  # relocatable object file
-MH_EXECUTE      = 0x2  # demand paged executable file
-MH_FVMLIB       = 0x3  # fixed VM shared library file
-MH_CORE         = 0x4  # core file
-MH_PRELOAD      = 0x5  # preloaded executable file
-MH_DYLIB        = 0x6  # dynamically bound shared library
-MH_DYLINKER     = 0x7  # dynamic link editor
-MH_BUNDLE       = 0x8  # dynamically bound bundle file
-MH_DYLIB_STUB   = 0x9  # shared library stub for static linking only, no section contents
-MH_DSYM         = 0xa  # companion file with only debug sections
-MH_KEXT_BUNDLE  = 0xb  # x86_64 kexts
+name = 'MH_FILETYPE',
+MH_OBJECT       = 0x1,  # relocatable object file
+MH_EXECUTE      = 0x2,  # demand paged executable file
+MH_FVMLIB       = 0x3,  # fixed VM shared library file
+MH_CORE         = 0x4,  # core file
+MH_PRELOAD      = 0x5,  # preloaded executable file
+MH_DYLIB        = 0x6,  # dynamically bound shared library
+MH_DYLINKER     = 0x7,  # dynamic link editor
+MH_BUNDLE       = 0x8,  # dynamically bound bundle file
+MH_DYLIB_STUB   = 0x9,  # shared library stub for static linking only, no section contents
+MH_DSYM         = 0xa,  # companion file with only debug sections
+MH_KEXT_BUNDLE  = 0xb,  # x86_64 kexts
+)
 
+SetConstants(
 # Constant bits for the "flags" field
-MH_NOUNDEFS                = 0x00000001
-MH_INCRLINK                = 0x00000002
-MH_DYLDLINK                = 0x00000004
-MH_BINDATLOAD              = 0x00000008
-MH_PREBOUND                = 0x00000010
-MH_SPLIT_SEGS              = 0x00000020
-MH_LAZY_INIT               = 0x00000040
-MH_TWOLEVEL                = 0x00000080
-MH_FORCE_FLAT              = 0x00000100
-MH_NOMULTIDEFS             = 0x00000200
-MH_NOFIXPREBINDING         = 0x00000400
-MH_PREBINDABLE             = 0x00000800
-MH_ALLMODSBOUND            = 0x00001000
-MH_SUBSECTIONS_VIA_SYMBOLS = 0x00002000
-MH_CANONICAL               = 0x00004000
-MH_WEAK_DEFINES            = 0x00008000
-MH_BINDS_TO_WEAK           = 0x00010000
-MH_ALLOW_STACK_EXECUTION   = 0x00020000
-MH_ROOT_SAFE               = 0x00040000
-MH_SETUID_SAFE             = 0x00080000
-MH_NO_REEXPORTED_DYLIBS    = 0x00100000
-MH_PIE                     = 0x00200000
-MH_DEAD_STRIPPABLE_DYLIB   = 0x00400000
-MH_HAS_TLV_DESCRIPTORS     = 0x00800000
-MH_NO_HEAP_EXECUTION       = 0x01000000
-MH_APP_EXTENSION_SAFE      = 0x02000000
+name = 'MH_FLAGS',
+MH_NOUNDEFS                = 0x00000001,
+MH_INCRLINK                = 0x00000002,
+MH_DYLDLINK                = 0x00000004,
+MH_BINDATLOAD              = 0x00000008,
+MH_PREBOUND                = 0x00000010,
+MH_SPLIT_SEGS              = 0x00000020,
+MH_LAZY_INIT               = 0x00000040,
+MH_TWOLEVEL                = 0x00000080,
+MH_FORCE_FLAT              = 0x00000100,
+MH_NOMULTIDEFS             = 0x00000200,
+MH_NOFIXPREBINDING         = 0x00000400,
+MH_PREBINDABLE             = 0x00000800,
+MH_ALLMODSBOUND            = 0x00001000,
+MH_SUBSECTIONS_VIA_SYMBOLS = 0x00002000,
+MH_CANONICAL               = 0x00004000,
+MH_WEAK_DEFINES            = 0x00008000,
+MH_BINDS_TO_WEAK           = 0x00010000,
+MH_ALLOW_STACK_EXECUTION   = 0x00020000,
+MH_ROOT_SAFE               = 0x00040000,
+MH_SETUID_SAFE             = 0x00080000,
+MH_NO_REEXPORTED_DYLIBS    = 0x00100000,
+MH_PIE                     = 0x00200000,
+MH_DEAD_STRIPPABLE_DYLIB   = 0x00400000,
+MH_HAS_TLV_DESCRIPTORS     = 0x00800000,
+MH_NO_HEAP_EXECUTION       = 0x01000000,
+MH_APP_EXTENSION_SAFE      = 0x02000000,
+)
 
 # The load commands directly follow the mach_header.  The total size of all
 # of the commands is given by the sizeofcmds field in the mach_header.  All
@@ -277,57 +293,6 @@ class LoadCommand(LoadBase):
         # NB: for some load commands, additional information will be displayed
 
 
-# Constants for the cmd field of all load commands, the type
-LC_SEGMENT         = 0x1   # segment of this file to be mapped
-LC_SYMTAB          = 0x2   # link-edit stab symbol table info
-LC_SYMSEG          = 0x3   # link-edit gdb symbol table info (obsolete)
-LC_THREAD          = 0x4   # thread
-LC_UNIXTHREAD      = 0x5   # unix thread (includes a stack)
-LC_LOADFVMLIB      = 0x6   # load a specified fixed VM shared library
-LC_IDFVMLIB        = 0x7   # fixed VM shared library identification
-LC_IDENT           = 0x8   # object identification info (obsolete)
-LC_FVMFILE         = 0x9   # fixed VM file inclusion (internal use)
-LC_PREPAGE         = 0xa   # prepage command (internal use)
-LC_DYSYMTAB        = 0xb   # dynamic link-edit symbol table info
-LC_LOAD_DYLIB      = 0xc   # load a dynamically linked shared library
-LC_ID_DYLIB        = 0xd   # dynamically linked shared lib ident
-LC_LOAD_DYLINKER   = 0xe   # load a dynamic linker
-LC_ID_DYLINKER     = 0xf   # dynamic linker identification
-LC_PREBOUND_DYLIB  = 0x10  # modules prebound for a dynamically linked shared library
-LC_ROUTINES        = 0x11  # image routines
-LC_SUB_FRAMEWORK   = 0x12  # sub framework
-LC_SUB_UMBRELLA    = 0x13  # sub umbrella
-LC_SUB_CLIENT      = 0x14  # sub client
-LC_SUB_LIBRARY     = 0x15  # sub library
-LC_TWOLEVEL_HINTS  = 0x16  # two-level namespace lookup hints
-LC_PREBIND_CKSUM   = 0x17  # prebind checksum
-LC_LOAD_WEAK_DYLIB = 0x18  # load a dynamically linked shared library that is allowed to be missing (all symbols are weak imported)
-LC_SEGMENT_64      = 0x19  # 64-bit segment of this file to be mapped
-LC_ROUTINES_64     = 0x1a  # 64-bit image routines
-LC_UUID            = 0x1b  # the uuid
-LC_RPATH           = 0x1c  # runpath additions
-LC_CODE_SIGNATURE  = 0x1d  # local of code signature
-LC_SEGMENT_SPLIT_INFO  = 0x1e # local of info to split segments
-LC_REEXPORT_DYLIB  = 0x1f  # load and re-export dylib
-LC_LAZY_LOAD_DYLIB = 0x20  # delay load of dylib until first use
-LC_ENCRYPTION_INFO = 0x21  # encrypted segment information
-LC_DYLD_INFO       = 0x22  # compressed dyld information
-LC_DYLD_INFO_ONLY  = 0x22  # compressed dyld information only
-LC_LOAD_UPWARD_DYLIB   = 0x23 # load upward dylib
-LC_VERSION_MIN_MACOSX  = 0x24 # build for MacOSX min OS version
-LC_VERSION_MIN_IPHONEOS= 0x25 # build for iPhoneOS min OS version
-LC_FUNCTION_STARTS = 0x26  # compressed table of function start addresses
-LC_DYLD_ENVIRONMENT= 0x27  # string for dyld to treat like environment variable
-LC_MAIN            = 0x28  # replacement for LC_UNIXTHREAD
-LC_DATA_IN_CODE    = 0x29  # table of non-instructions in __text
-LC_SOURCE_VERSION  = 0x2A  # source version used to build binary
-LC_DYLIB_CODE_SIGN_DRS = 0x2B # Code signing DRs copied from linked dylibs
-LC_ENCRYPTION_INFO_64  = 0x2C # 64-bit encrypted segment information
-LC_LINKER_OPTION       = 0x2D # linker options in MH_OBJECT files
-LC_LINKER_OPTIMIZATION_HINT = 0x2E # optimization hints in MH_OBJECT files
-LC_VERSION_MIN_TVOS    = 0x2F
-LC_VERSION_MIN_WATCHOS = 0x30
-
 # After MacOS X 10.1 when a new load command is added that is required to be
 # understood by the dynamic linker for the image to execute properly the
 # LC_REQ_DYLD bit will be or'ed into the load command constant.  If the dynamic
@@ -339,12 +304,58 @@ if sys.version_info[0:2] == (2, 3):
     LC_REQ_DYLD = eval("0x80000000L")
 else:
     LC_REQ_DYLD = 0x80000000
-LC_LOAD_WEAK_DYLIB   |= LC_REQ_DYLD
-LC_RPATH             |= LC_REQ_DYLD
-LC_REEXPORT_DYLIB    |= LC_REQ_DYLD
-LC_DYLD_INFO_ONLY    |= LC_REQ_DYLD
-LC_LOAD_UPWARD_DYLIB |= LC_REQ_DYLD
-LC_MAIN              |= LC_REQ_DYLD
+
+SetConstants(
+LC_SEGMENT         = 0x1,   # segment of this file to be mapped
+LC_SYMTAB          = 0x2,   # link-edit stab symbol table info
+LC_SYMSEG          = 0x3,   # link-edit gdb symbol table info (obsolete)
+LC_THREAD          = 0x4,   # thread
+LC_UNIXTHREAD      = 0x5,   # unix thread (includes a stack)
+LC_LOADFVMLIB      = 0x6,   # load a specified fixed VM shared library
+LC_IDFVMLIB        = 0x7,   # fixed VM shared library identification
+LC_IDENT           = 0x8,   # object identification info (obsolete)
+LC_FVMFILE         = 0x9,   # fixed VM file inclusion (internal use)
+LC_PREPAGE         = 0xa,   # prepage command (internal use)
+LC_DYSYMTAB        = 0xb,   # dynamic link-edit symbol table info
+LC_LOAD_DYLIB      = 0xc,   # load a dynamically linked shared library
+LC_ID_DYLIB        = 0xd,   # dynamically linked shared lib ident
+LC_LOAD_DYLINKER   = 0xe,   # load a dynamic linker
+LC_ID_DYLINKER     = 0xf,   # dynamic linker identification
+LC_PREBOUND_DYLIB  = 0x10,  # modules prebound for a dynamically linked shared library
+LC_ROUTINES        = 0x11,  # image routines
+LC_SUB_FRAMEWORK   = 0x12,  # sub framework
+LC_SUB_UMBRELLA    = 0x13,  # sub umbrella
+LC_SUB_CLIENT      = 0x14,  # sub client
+LC_SUB_LIBRARY     = 0x15,  # sub library
+LC_TWOLEVEL_HINTS  = 0x16,  # two-level namespace lookup hints
+LC_PREBIND_CKSUM   = 0x17,  # prebind checksum
+LC_LOAD_WEAK_DYLIB = 0x18|LC_REQ_DYLD,  # load a dynamically linked shared library that is allowed to be missing (all symbols are weak imported)
+LC_SEGMENT_64      = 0x19,  # 64-bit segment of this file to be mapped
+LC_ROUTINES_64     = 0x1a,  # 64-bit image routines
+LC_UUID            = 0x1b,  # the uuid
+LC_RPATH           = 0x1c|LC_REQ_DYLD,  # runpath additions
+LC_CODE_SIGNATURE  = 0x1d,  # local of code signature
+LC_SEGMENT_SPLIT_INFO  = 0x1e, # local of info to split segments
+LC_REEXPORT_DYLIB  = 0x1f|LC_REQ_DYLD,  # load and re-export dylib
+LC_LAZY_LOAD_DYLIB = 0x20,  # delay load of dylib until first use
+LC_ENCRYPTION_INFO = 0x21,  # encrypted segment information
+LC_DYLD_INFO       = 0x22,  # compressed dyld information
+LC_DYLD_INFO_ONLY  = 0x22|LC_REQ_DYLD,  # compressed dyld information only
+LC_LOAD_UPWARD_DYLIB   = 0x23|LC_REQ_DYLD, # load upward dylib
+LC_VERSION_MIN_MACOSX  = 0x24, # build for MacOSX min OS version
+LC_VERSION_MIN_IPHONEOS= 0x25, # build for iPhoneOS min OS version
+LC_FUNCTION_STARTS = 0x26,  # compressed table of function start addresses
+LC_DYLD_ENVIRONMENT= 0x27,  # string for dyld to treat like environment variable
+LC_MAIN            = 0x28|LC_REQ_DYLD,  # replacement for LC_UNIXTHREAD
+LC_DATA_IN_CODE    = 0x29,  # table of non-instructions in __text
+LC_SOURCE_VERSION  = 0x2A,  # source version used to build binary
+LC_DYLIB_CODE_SIGN_DRS = 0x2B, # Code signing DRs copied from linked dylibs
+LC_ENCRYPTION_INFO_64  = 0x2C, # 64-bit encrypted segment information
+LC_LINKER_OPTION       = 0x2D, # linker options in MH_OBJECT files
+LC_LINKER_OPTIMIZATION_HINT = 0x2E, # optimization hints in MH_OBJECT files
+LC_VERSION_MIN_TVOS    = 0x2F,
+LC_VERSION_MIN_WATCHOS = 0x30,
+)
 
 # * In loader.h, there are two data structures: section and section_64, which are merged in one structure below.
 class sectionHeader(CStruct):
@@ -415,45 +426,51 @@ class sectionHeader(CStruct):
         return self.sectname == "__text"
     all_flags = property(lambda _:_.flags) # Backwards compatibility
 
+SetConstants(
+prefix = 'S_',
 # Constants for the type of a section
-SECTION_TYPE                    = 0x000000ff # Up to 256 section types
-S_REGULAR                             = 0x00 # regular section
-S_ZEROFILL                            = 0x01 # zero fill on demand section
-S_CSTRING_LITERALS                    = 0x02 # section with only literal C strings
-S_4BYTE_LITERALS                      = 0x03 # section with only 4 byte literals
-S_8BYTE_LITERALS                      = 0x04 # section with only 8 byte literals
-S_LITERAL_POINTERS                    = 0x05 # section with only pointers to literals
-S_NON_LAZY_SYMBOL_POINTERS            = 0x06 # section with only non-lazy symbol pointers
-S_LAZY_SYMBOL_POINTERS                = 0x07 # section with only lazy symbol pointers
-S_SYMBOL_STUBS                        = 0x08 # section with only symbol stubs, byte size of stub in the reserved2 field
-S_MOD_INIT_FUNC_POINTERS              = 0x09 # section with only function pointers for initialization
-S_MOD_TERM_FUNC_POINTERS              = 0x0a # section with only function pointers for termination
-S_COALESCED                           = 0x0b # section contains symbols that are to be coalesced
-S_GB_ZEROFILL                         = 0x0c # zero fill on demand section (that can be larger than 4 gigabytes)
-S_INTERPOSING                         = 0x0d # section with only pairs of function pointers for interposing
-S_16BYTE_LITERALS                     = 0x0e # section with only 16 byte literals
-S_DTRACE_DOF                          = 0x0f # section contains DTrace Object Format
-S_LAZY_DYLIB_SYMBOL_POINTERS          = 0x10 # section with only lazy symbol pointers to lazy loaded dylibs
-S_THREAD_LOCAL_REGULAR                = 0x11 # template of initial values for TLVs
-S_THREAD_LOCAL_ZEROFILL               = 0x12 # template of initial values for TLVs
-S_THREAD_LOCAL_VARIABLES              = 0x13 # TLV descriptors
-S_THREAD_LOCAL_VARIABLE_POINTERS      = 0x14 # pointers to TLV descriptors
-S_THREAD_LOCAL_INIT_FUNCTION_POINTERS = 0x15 # functions to call to initialize TLV values
+SECTION_TYPE                    = 0x000000ff, # Up to 256 section types
+S_REGULAR                             = 0x00, # regular section
+S_ZEROFILL                            = 0x01, # zero fill on demand section
+S_CSTRING_LITERALS                    = 0x02, # section with only literal C strings
+S_4BYTE_LITERALS                      = 0x03, # section with only 4 byte literals
+S_8BYTE_LITERALS                      = 0x04, # section with only 8 byte literals
+S_LITERAL_POINTERS                    = 0x05, # section with only pointers to literals
+S_NON_LAZY_SYMBOL_POINTERS            = 0x06, # section with only non-lazy symbol pointers
+S_LAZY_SYMBOL_POINTERS                = 0x07, # section with only lazy symbol pointers
+S_SYMBOL_STUBS                        = 0x08, # section with only symbol stubs, byte size of stub in the reserved2 field
+S_MOD_INIT_FUNC_POINTERS              = 0x09, # section with only function pointers for initialization
+S_MOD_TERM_FUNC_POINTERS              = 0x0a, # section with only function pointers for termination
+S_COALESCED                           = 0x0b, # section contains symbols that are to be coalesced
+S_GB_ZEROFILL                         = 0x0c, # zero fill on demand section (that can be larger than 4 gigabytes)
+S_INTERPOSING                         = 0x0d, # section with only pairs of function pointers for interposing
+S_16BYTE_LITERALS                     = 0x0e, # section with only 16 byte literals
+S_DTRACE_DOF                          = 0x0f, # section contains DTrace Object Format
+S_LAZY_DYLIB_SYMBOL_POINTERS          = 0x10, # section with only lazy symbol pointers to lazy loaded dylibs
+S_THREAD_LOCAL_REGULAR                = 0x11, # template of initial values for TLVs
+S_THREAD_LOCAL_ZEROFILL               = 0x12, # template of initial values for TLVs
+S_THREAD_LOCAL_VARIABLES              = 0x13, # TLV descriptors
+S_THREAD_LOCAL_VARIABLE_POINTERS      = 0x14, # pointers to TLV descriptors
+S_THREAD_LOCAL_INIT_FUNCTION_POINTERS = 0x15, # functions to call to initialize TLV values
+)
 
+SetConstants(
+prefix = 'S_ATTR',
 # Constants for the section attributes part of the flags field of a section structure.
-SECTION_ATTRIBUTES         = 0xffffff00 # Up to 24 section attributes
-SECTION_ATTRIBUTES_USR     = 0xff000000 # User setable attributes
-S_ATTR_PURE_INSTRUCTIONS   = 0x80000000 #  section contains only true machine instructions
-S_ATTR_NO_TOC              = 0x40000000 #  section contains coalesced symbols that are not to be in a ranlib table of contents
-S_ATTR_STRIP_STATIC_SYMS   = 0x20000000 #  ok to strip static symbols in this section in files with the MH_DYLDLINK flag
-S_ATTR_NO_DEAD_STRIP       = 0x10000000 #  no dead stripping
-S_ATTR_LIVE_SUPPORT        = 0x08000000 #  blocks are live if they reference live blocks
-S_ATTR_SELF_MODIFYING_CODE = 0x04000000 #  Used with i386 code stubs written on by dyld
-S_ATTR_DEBUG               = 0x02000000 #  A debug section
-SECTION_ATTRIBUTES_SYS     = 0x00ffff00 # system setable attributes
-S_ATTR_SOME_INSTRUCTIONS   = 0x00000400 #  Section contains some machine instructions
-S_ATTR_EXT_RELOC           = 0x00000200 #  Section has external relocation entries
-S_ATTR_LOC_RELOC           = 0x00000100 #  Section has local relocation entries
+SECTION_ATTRIBUTES         = 0xffffff00, # Up to 24 section attributes
+SECTION_ATTRIBUTES_USR     = 0xff000000, # User setable attributes
+S_ATTR_PURE_INSTRUCTIONS   = 0x80000000, #  section contains only true machine instructions
+S_ATTR_NO_TOC              = 0x40000000, #  section contains coalesced symbols that are not to be in a ranlib table of contents
+S_ATTR_STRIP_STATIC_SYMS   = 0x20000000, #  ok to strip static symbols in this section in files with the MH_DYLDLINK flag
+S_ATTR_NO_DEAD_STRIP       = 0x10000000, #  no dead stripping
+S_ATTR_LIVE_SUPPORT        = 0x08000000, #  blocks are live if they reference live blocks
+S_ATTR_SELF_MODIFYING_CODE = 0x04000000, #  Used with i386 code stubs written on by dyld
+S_ATTR_DEBUG               = 0x02000000, #  A debug section
+SECTION_ATTRIBUTES_SYS     = 0x00ffff00, # system setable attributes
+S_ATTR_SOME_INSTRUCTIONS   = 0x00000400, #  Section contains some machine instructions
+S_ATTR_EXT_RELOC           = 0x00000200, #  Section has external relocation entries
+S_ATTR_LOC_RELOC           = 0x00000100, #  Section has local relocation entries
+)
 
 # The currently known segment names and the section names in those segments
 SEG_PAGEZERO      = "__PAGEZERO"      # the pagezero segment which has no protections and catches NULL references for MH_EXECUTE files
@@ -614,11 +631,13 @@ class segment_command(LoadCommand):
             self.filesize += len(s.pack())
             self.vmsize += len(s.pack())   
 
+SetConstants(
 # Constants for the flags field of the segment_command
-SG_HIGHVM              = 0x1 # the file contents for this segment is for the high part of the VM space, the low part is zero filled (for stacks in core files)
-SG_FVMLIB              = 0x2 # this segment is the VM that is allocated by a fixed VM library, for overlap checking in the link editor
-SG_NORELOC             = 0x4 # this segment has nothing that was relocated in it and nothing relocated to it, that is it maybe safely replaced without relocation
-SG_PROTECTED_VERSION_1 = 0x8 # This segment is protected.  If the segment starts at file offset 0, the first page of the segment is not protected.  All other pages of the segment are protected.
+SG_HIGHVM              = 0x1, # the file contents for this segment is for the high part of the VM space, the low part is zero filled (for stacks in core files)
+SG_FVMLIB              = 0x2, # this segment is the VM that is allocated by a fixed VM library, for overlap checking in the link editor
+SG_NORELOC             = 0x4, # this segment has nothing that was relocated in it and nothing relocated to it, that is it maybe safely replaced without relocation
+SG_PROTECTED_VERSION_1 = 0x8, # This segment is protected.  If the segment starts at file offset 0, the first page of the segment is not protected.  All other pages of the segment are protected.
+)
 
 
 # Fixed virtual memory shared libraries are identified by two things.  The
@@ -1467,27 +1486,14 @@ class data_in_code_command(CStruct):
         ]
     data_incode_off = property(lambda _:_.offset)
     data_incode_size = property(lambda _:_.length)
-DICE_KIND_DATA              = 0x0001
-DICE_KIND_JUMP_TABLE8       = 0x0002
-DICE_KIND_JUMP_TABLE16      = 0x0003
-DICE_KIND_JUMP_TABLE32      = 0x0004
-DICE_KIND_ABS_JUMP_TABLE32  = 0x0005
 
-
-
-#### Finalize
-def enumerate_constants(constants, globs):
-    for type in constants:
-        for val in filter(lambda x:x[:len(type)+1]==type+"_", globs.keys()):
-            if not globs[val] in constants[type]:
-                constants[type][globs[val]] = val[len(type)+1:]
-
-constants = {
-  'CPU_TYPE'  : {},
-  'LC'  : {},
-  'S'   : {},
-  }
-enumerate_constants(constants, dict(globals()))
+SetConstants(
+DICE_KIND_DATA              = 0x0001,
+DICE_KIND_JUMP_TABLE8       = 0x0002,
+DICE_KIND_JUMP_TABLE16      = 0x0003,
+DICE_KIND_JUMP_TABLE32      = 0x0004,
+DICE_KIND_ABS_JUMP_TABLE32  = 0x0005,
+)
 
 
 ######################################################################
