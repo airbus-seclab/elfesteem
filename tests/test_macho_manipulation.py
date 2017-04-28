@@ -270,6 +270,13 @@ def run_test():
     assertion('b61b686819bd3c94e765b220ef708353',
               hashlib.md5(d).hexdigest(),
               'Adding a section (32 bits)')
+    macho_bin = open(__dir__+'sh', 'rb').read()
+    e = MACHO(macho_bin)
+    macho_bin_hash = hashlib.md5(macho_bin).hexdigest()
+    d = e.pack()
+    assertion(macho_bin_hash,
+              hashlib.md5(d).hexdigest(),
+              'Packing after reading /bin/sh')
     macho_lib = open(__dir__+'libdns_services.dylib', 'rb').read()
     e = MACHO(macho_lib)
     assertion(e.entrypoint, -1,

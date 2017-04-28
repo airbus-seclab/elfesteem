@@ -575,6 +575,8 @@ class MACHO(object):
                     indstubIndex += 1
             if symbol_stub is not None :
                 for indstub in symbol_stub:
+                    if indstubIndex >= len(symbol_table):
+                        break
                     symbol_table[indstubIndex].stub = indstub
                     indstubIndex += 1
 

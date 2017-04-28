@@ -36,6 +36,9 @@ macho/macho_64.out
 macho/macho_fat.out
     Built by Louis Granboulan for elfesteem non-regression tests
 
+macho/sh
+    An example of Mach-O with more symbol stubs than symbols (/bin/sh)
+
 macho/libPrintServiceQuota.1.dylib
     An example of big-endian Mach-O (from an old MacOSX for PowerPC)
 
