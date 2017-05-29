@@ -184,7 +184,7 @@ class LoadMetaclass(CStruct_metaclass):
             # A subclass of LoadCommand has been used, with an incoherent cmd
             # We don't use the class name, because one class may correspond
             # to many values for cmd.
-            log.warn("Incoherent input cmd=%#x for %s", cmd, cls.__name__)
+            log.warning("Incoherent input cmd=%#x for %s", cmd, cls.__name__)
             lh = super(LoadMetaclass,cls).__call__(*args, **kargs)
         elif cmd in LoadCommand.registered:
             # LoadCommand has been used with a known cmd
@@ -1514,15 +1514,15 @@ class LoadCommands(CBase):
         for i in range(self.parent.Mhdr.ncmds):
             lh = LoadCommand(parent=self, content=self.parent.content, start=o)
             if lh.cmdsize > lh.bytelen:
-                log.warn("%s has %d bytes of additional padding", lh.__class__.__name__, lh.cmdsize-lh.bytelen)
+                log.warning("%s has %d bytes of additional padding", lh.__class__.__name__, lh.cmdsize-lh.bytelen)
             elif 8 <= lh.cmdsize < lh.bytelen:
-                log.warn("%s is %d bytes too short", lh.__class__.__name__, lh.bytelen-lh.cmdsize)
+                log.warning("%s is %d bytes too short", lh.__class__.__name__, lh.bytelen-lh.cmdsize)
             self.lhlist.append(lh)
             if self.parent.interval is not None :
                 self.parent.interval.delete(o,o+lh.bytelen)
             o += lh.cmdsize
         if self.parent.Mhdr.sizeofcmds > o-self.offset:
-            log.warn("LoadCommands have %d bytes of additional padding", self.parent.Mhdr.sizeofcmds-o+self.offset)
+            log.warning("LoadCommands have %d bytes of additional padding", self.parent.Mhdr.sizeofcmds-o+self.offset)
     def pack(self):
         data = data_empty
         for lc in self.lhlist:

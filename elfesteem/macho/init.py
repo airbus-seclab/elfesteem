@@ -206,7 +206,7 @@ class virt(object):
         # will cap values to 0x7FFFFFFF on 32 bit systems. A binary can have
         # a base address higher than this, resulting in the impossibility to
         # handle such programs.
-        log.warn("__len__ deprecated")
+        log.warning("__len__ deprecated")
         return self.max_addr()
     def max_addr(self):
         if not hasattr(self.parent, 'load'):
@@ -293,7 +293,7 @@ class MACHO(object):
                     if data != data_null:
                         self.rawdata.append( (i, data) )
                 if len(self.rawdata):
-                    log.warn("Part of the file was not parsed: %d bytes", len(self.rawdata))
+                    log.warning("Part of the file was not parsed: %d bytes", len(self.rawdata))
         else:
             raise ValueError("Not a Mach-O file")
 
@@ -301,11 +301,11 @@ class MACHO(object):
         lctext = self.load.findlctext()
         if self.Mhdr.cputype in (CPU_TYPE_I386, CPU_TYPE_X86_64):
             if lctext != None and lctext.flags == SG_PROTECTED_VERSION_1:
-                log.warn("cannot parse dynamic symbols because of encryption")
+                log.warning("cannot parse dynamic symbols because of encryption")
             else:
                 self.parse_dynamic_symbols()
         else:
-            log.warn("parse_dynamic_symbols() can only be used with x86 architectures, not %s", self.Mhdr.cputype)
+            log.warning("parse_dynamic_symbols() can only be used with x86 architectures, not %s", self.Mhdr.cputype)
 
     def pack(self):
         if hasattr(self,'Mhdr'):

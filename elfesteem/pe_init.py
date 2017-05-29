@@ -52,7 +52,7 @@ class ContentRVA(object):
             else:
                 s = self.parent.getsectionbyrva(start, section)
                 if s is None:
-                    log.warn('unknown rva address! %x'%start)
+                    log.warning('unknown rva address! %x'%start)
                     # We would like to return an empty list, but it is
                     # not compatible with miasm2 non-regression tests
                     # If we return None, then reading at an unknown RVA
@@ -87,7 +87,7 @@ class ContentRVA(object):
         off = 0
         for s, n_item in rva_items:
             if s is None:
-                log.warn('Cannot write at RVA %s', n_item)
+                log.warning('Cannot write at RVA %s', n_item)
                 continue
             i = slice(off, n_item.stop+off-n_item.start, n_item.step)
             data_slice = data.__getitem__(i)
@@ -136,7 +136,7 @@ class ContentVirtual(object):
         # will cap values to 0x7FFFFFFF on 32 bit systems. A binary can have
         # a base address higher than this, resulting in the impossibility to
         # handle such programs.
-        log.warn("__len__ deprecated")
+        log.warning("__len__ deprecated")
         return self.max_addr()
     def max_addr(self):
         l = 0
@@ -382,14 +382,14 @@ class PE(object):
         self.wsize = (magic>>8)*32
         if not magic in (0x10b, 0x20b):
             # e.g. Ange Albertini's d_nonnull.dll d_tiny.dll
-            log.warn('Opthdr magic %#x', magic)
+            log.warning('Opthdr magic %#x', magic)
             self.wsize = 32
         self.Opthdr = {32: pe.Opthdr32, 64: pe.Opthdr64}[self.wsize](parent=self, content=self.content, start=of)
         l = self.Opthdr.bytelen
         self.NThdr = pe.NThdr(parent=self, content=self.content, start=of+l)
         of += self.COFFhdr.sizeofoptionalheader
         if self.NThdr.numberofrvaandsizes < 13:
-            log.warn('Windows 8 needs at least 13 directories, %d found',
+            log.warning('Windows 8 needs at least 13 directories, %d found',
                 self.NThdr.numberofrvaandsizes)
         # Even if the NT header has 64-bit pointers, in 64-bit PE files
         # the Section headers have 32-bit pointers (it is a 32-bit COFF
@@ -569,10 +569,10 @@ class PE(object):
             if s.rawsize == 0:
                 continue
             if end_of_headers > s.scnptr:
-                log.warn("section %s offset %#x overlap pe hdr %#x",
+                log.warning("section %s offset %#x overlap pe hdr %#x",
                     s.name, s.scnptr, off)
             elif off > s.scnptr:
-                log.warn("section %s offset %#x overlap previous section",
+                log.warning("section %s offset %#x overlap previous section",
                     s.name, s.scnptr)
             off = s.scnptr+s.rawsize
             c[s.scnptr:off] = s.section_data.data.pack()
@@ -591,7 +591,7 @@ class PE(object):
         # final verifications
         l = self.DOShdr.lfanew + self.NTsig.bytelen + self.COFFhdr.bytelen
         if l%4:
-            log.warn("non aligned coffhdr, bad crc calculation")
+            log.warning("non aligned coffhdr, bad crc calculation")
         crcs = self.patch_crc(c.pack(), self.NThdr.CheckSum)
         c[l+64] = struct.pack('I', crcs)
         return c.pack()
@@ -763,11 +763,11 @@ class COFF(PE):
             self.SymbolStrings = StrTable(self.content[of:of+sz])
         
         if self.Opthdr.__class__.__name__ == 'OpthdrUnknown':
-            log.warn("Unknown Option Header format of size %d for machine %s:",
+            log.warning("Unknown Option Header format of size %d for machine %s:",
                 self.COFFhdr.sizeofoptionalheader,
                 pe.constants['IMAGE_FILE_MACHINE'].get(
                       self.COFFhdr.machine, '%#x'%self.COFFhdr.machine))
-            log.warn('%r', self.Opthdr)
+            log.warning('%r', self.Opthdr)
 
 # Backward compatibility
 Coff = COFF

@@ -758,7 +758,7 @@ class NThdr(CStruct):
         CStruct.unpack(self, c, o)
         sz_opt = self.parent.COFFhdr.sizeofoptionalheader
         if sz_opt != self.parent.Opthdr.bytelen + self.bytelen:
-            log.warn('Number of rva %d does not match sizeofoptionalheader %d',
+            log.warning('Number of rva %d does not match sizeofoptionalheader %d',
                 self.numberofrvaandsizes, sz_opt)
 
 ####################################################################
@@ -784,10 +784,10 @@ class SectionData(CBase):
         self.data = StrPatchwork()
         if filealignment != 0:
             if self.parent.scnptr % filealignment:
-                log.warn('Section %d offset %#x not aligned to %#x',
+                log.warning('Section %d offset %#x not aligned to %#x',
                     len(self.parent.parent), self.parent.scnptr, filealignment)
             if self.parent.rsize % filealignment:
-                log.warn('Section %d size %#x not aligned to %#x',
+                log.warning('Section %d size %#x not aligned to %#x',
                     len(self.parent.parent), self.parent.rsize, filealignment)
         raw_sz = self.parent.rsize
         raw_sz += self.parent.scnptr - self.parent.scn_baseoff

@@ -1100,10 +1100,10 @@ class Sections(object):
             if parent.interval is not None :
                 for s in lc.sect:
                     if s.__class__.__name__== 'Encryption':
-                        log.warn("Some encrypted text is not parsed with the section headers of LC_SEGMENT(__TEXT)")
+                        log.warning("Some encrypted text is not parsed with the section headers of LC_SEGMENT(__TEXT)")
                         continue
                     if not parent.interval.contains(s.offset,s.offset+len(s.pack())):
-                        #log.warn("This part of file has already been parsed")
+                        #log.warning("This part of file has already been parsed")
                         pass
                     parent.interval.delete(s.offset,s.offset+len(s.pack()))
         # Then if the load command is not a segment, add the section to the

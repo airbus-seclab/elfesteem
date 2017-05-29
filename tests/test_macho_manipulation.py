@@ -13,7 +13,7 @@ def run_test():
     ko = []
     # We want to be able to verify warnings in non-regression test
     log_history = []
-    log.warn = lambda *args, **kargs: log_history.append(('warn',args,kargs))
+    log.warning = lambda *args, **kargs: log_history.append(('warn',args,kargs))
     log.error = lambda *args, **kargs: log_history.append(('error',args,kargs))
     def assertion(target, value, message):
         if target != value: ko.append(message)
