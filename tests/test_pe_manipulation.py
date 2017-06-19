@@ -8,14 +8,11 @@ from elfesteem.pe_init import log, PE, COFF, Coff
 from elfesteem.strpatchwork import StrPatchwork
 from elfesteem import pe
 
-def run_test():
-    ko = []
+def run_test(assertion):
     # We want to be able to verify warnings in non-regression test
     log_history = []
     log.warning = lambda *args, **kargs: log_history.append(('warn',args,kargs))
     log.error = lambda *args, **kargs: log_history.append(('error',args,kargs))
-    def assertion(target, value, message):
-        if target != value: ko.append(message)
     import struct
     assertion('f71dbe52628a3f83a77ab494817525c6',
               hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
@@ -375,27 +372,27 @@ def run_test():
     try:
         e.NTsig.signature = 0x2000
         e = PE(e.pack())
-        ko.append('Not a PE, invalid NTsig')
+        assertion(0,1, 'Not a PE, invalid NTsig')
     except ValueError:
         pass
     try:
         e.DOShdr.lfanew = 0x200000
         data[60] = struct.pack("<I", e.DOShdr.lfanew)
         e = PE(data)
-        ko.append('Not a PE, NTsig offset after eof')
+        assertion(0,1, 'Not a PE, NTsig offset after eof')
     except ValueError:
         pass
     # Now, we parse COFF files
     try:
         # Not COFF: OptHdr size too big
         e = Coff(open(__dir__+'/binary_input/README.txt', 'rb').read())
-        ko.append('Not COFF')
+        assertion(0,1, 'Not COFF')
     except ValueError:
         pass
     obj_mingw = open(__dir__+'/binary_input/coff_mingw.obj', 'rb').read()
     try:
         e = PE(obj_mingw)
-        ko.append('Not PE')
+        assertion(0,1, 'Not PE')
     except ValueError:
         pass
     e = Coff(obj_mingw)
@@ -434,26 +431,26 @@ def run_test():
     try:
         obj_mingw[2] = struct.pack("<H", 0)
         e = COFF(obj_mingw)
-        ko.append('COFF cannot have no section')
+        assertion(0,1, 'COFF cannot have no section')
     except ValueError:
         pass
     try:
         obj_mingw[2] = struct.pack("<H", 0x2000)
         e = COFF(obj_mingw)
-        ko.append('Too many sections in COFF')
+        assertion(0,1, 'Too many sections in COFF')
     except ValueError:
         pass
     try:
         obj_mingw[2] = struct.pack("<H", 0x100)
         e = COFF(obj_mingw)
-        ko.append('Too many sections in COFF, past end of file')
+        assertion(0,1, 'Too many sections in COFF, past end of file')
     except ValueError:
         pass
     try:
         obj_mingw[2] = struct.pack("<H", 3)
         obj_mingw[8] = struct.pack("<I", 0x100000)
         e = COFF(obj_mingw)
-        ko.append('COFF invalid ptr to symbol table')
+        assertion(0,1, 'COFF invalid ptr to symbol table')
     except ValueError:
         pass
     obj_mingw[8] = struct.pack("<I", 220)
@@ -466,7 +463,6 @@ def run_test():
     assertion([],
               log_history,
               'No non-regression test created unwanted log messages')
-    return ko
     # print('HASH', hashlib.md5(d).hexdigest())
 
 if __name__ == "__main__":

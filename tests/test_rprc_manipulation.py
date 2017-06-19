@@ -6,10 +6,7 @@ __dir__ = os.path.dirname(__file__)
 from test_all import run_tests, hashlib
 from elfesteem.rprc import RPRC
 
-def run_test():
-    ko = []
-    def assertion(target, value, message):
-        if target != value: ko.append(message)
+def run_test(assertion):
     import struct
     assertion('f71dbe52628a3f83a77ab494817525c6',
               hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
@@ -71,20 +68,19 @@ def run_test():
               'Writing in memory (address)')
     try:
         e.virt[0x00040000] = e.virt[0x00004000:0x00004100]
-        ko.append('Writing in non-mapped memory')
+        assertion(0,1, 'Writing in non-mapped memory')
     except ValueError:
         pass
     try:
         e.virt[0x00003ff0:0x00004020] = e.virt[0x00003ff0:0x00004020]
-        ko.append('Writing in partially non-mapped memory')
+        assertion(0,1, 'Writing in partially non-mapped memory')
     except ValueError:
         pass
     try:
         e = RPRC(open(__dir__+'/binary_input/README.txt', 'rb').read())
-        ko.append('Not an RPRC')
+        assertion(0,1, 'Not an RPRC')
     except ValueError:
         pass
-    return ko
 
 if __name__ == "__main__":
     run_tests(run_test)

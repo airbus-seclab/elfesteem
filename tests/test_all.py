@@ -36,15 +36,18 @@ class print_colored(object): # Namespace
         print('\033[92;1m'+txt+self.end)
     boldgreen = classmethod(boldgreen)
 
+def assertion(target, value, message, status_ptr):
+    if target != value:
+        print_colored.boldred('Non-regression failure for %r' % message)
+        status_ptr[0] = False
+
 def run_tests(run_test):
-    ko = run_test()
-    if ko:
-        for k in ko:
-            print_colored.boldred('Non-regression failure for %r'%k)
-        return False
-    else:
+    status_ptr = [True]
+    run_test(lambda target, value, msg, status_ptr=status_ptr:
+        assertion(target, value, msg, status_ptr))
+    if status_ptr[0]:
         print_colored.boldgreen('OK')
-        return True
+    return status_ptr[0]
 
 if __name__ == "__main__":
     exit_value = 0

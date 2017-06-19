@@ -9,14 +9,11 @@ import struct
 from elfesteem.macho import MACHO, log
 from elfesteem import macho
 
-def run_test():
-    ko = []
+def run_test(assertion):
     # We want to be able to verify warnings in non-regression test
     log_history = []
     log.warning = lambda *args, **kargs: log_history.append(('warn',args,kargs))
     log.error = lambda *args, **kargs: log_history.append(('error',args,kargs))
-    def assertion(target, value, message):
-        if target != value: ko.append(message)
     assertion('f71dbe52628a3f83a77ab494817525c6',
               hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
               'MD5')
@@ -605,7 +602,6 @@ def run_test():
     assertion([],
               log_history,
               'No non-regression test created unwanted log messages')
-    return ko
 
 def changeMainToUnixThread(e, **kargs):
     main_pos, = e.load.getpos(macho.LC_MAIN)

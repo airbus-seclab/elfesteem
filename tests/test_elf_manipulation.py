@@ -8,14 +8,11 @@ from elfesteem.strpatchwork import StrPatchwork
 from elfesteem.elf_init import ELF, log
 from elfesteem import elf
 
-def run_test():
-    ko = []
+def run_test(assertion):
     # We want to be able to verify warnings in non-regression test
     log_history = []
     log.warning = lambda *args, **kargs: log_history.append(('warn',args,kargs))
     log.error = lambda *args, **kargs: log_history.append(('error',args,kargs))
-    def assertion(target, value, message):
-        if target != value: ko.append(message)
     import struct
     assertion('f71dbe52628a3f83a77ab494817525c6',
               hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
@@ -54,7 +51,7 @@ def run_test():
               'Creation of an ELF with a given list of sections')
     try:
         e = ELF(open(__dir__+'/binary_input/README.txt', 'rb').read())
-        ko.append('Not an ELF')
+        assertion(0,1, 'Not an ELF')
     except ValueError:
         pass
     e = ELF(elf_small)
@@ -120,7 +117,7 @@ def run_test():
               'Extract chunk from mapped memory, in a section')
     try:
         d = e.virt[0x08040000:0x08040020]
-        ko.append('Extract chunk from non-mapped memory')
+        assertion(0,1, 'Extract chunk from non-mapped memory')
     except ValueError:
         pass
     assertion(e.virt[0x080483d0:0x080483e0],
@@ -328,7 +325,6 @@ def run_test():
     assertion([],
               log_history,
               'No non-regression test created unwanted log messages')
-    return ko
 
 if __name__ == "__main__":
     run_tests(run_test)

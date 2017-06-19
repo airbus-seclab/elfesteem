@@ -6,10 +6,7 @@ __dir__ = os.path.dirname(__file__)
 from test_all import run_tests, hashlib
 from elfesteem.minidump_init import Minidump
 
-def run_test():
-    ko = []
-    def assertion(target, value, message):
-        if target != value: ko.append(message)
+def run_test(assertion):
     import struct
     assertion('f71dbe52628a3f83a77ab494817525c6',
               hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
@@ -41,7 +38,6 @@ def run_test():
     assertion('4357695a7e265aca04bb2809485b8634',
               hashlib.md5(d).hexdigest(),
               'Displaying the content of minidump-x86_64.dmp')
-    return ko
 
 if __name__ == "__main__":
     run_tests(run_test)

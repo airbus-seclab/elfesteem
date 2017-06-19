@@ -3,10 +3,7 @@
 from test_all import run_tests
 from elfesteem.intervals import Intervals
 
-def run_test():
-    ko = []
-    def assertion(target, value, message):
-        if target != value: ko.append(message)
+def run_test(assertion):
     i = Intervals()
     assertion(i.ranges, [],
               'Empty interval')
@@ -62,7 +59,6 @@ def run_test():
               'Display [10:14] [27:30]')
     assertion([_ for _ in i], [10, 11, 12, 13, 27, 28, 29],
               'Enumerate [10:14] [27:30]')
-    return ko
 
 if __name__ == "__main__":
     run_tests(run_test)

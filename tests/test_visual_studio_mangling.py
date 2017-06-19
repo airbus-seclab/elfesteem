@@ -335,13 +335,11 @@ tests = [
 from test_all import run_tests
 from elfesteem.visual_studio_mangling import symbol_demangle
 
-def run_test():
-    ko = []
+def run_test(assertion):
     for k, v in tests:
         n, r = symbol_demangle(k)
         if r or (v != n):
-            ko.append(k)
-    return ko
+            assertion(0,1, k)
 
 if __name__ == "__main__":
     run_tests(run_test)
