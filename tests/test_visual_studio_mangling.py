@@ -332,14 +332,17 @@ tests = [
 ("?_CxxThrowException@@$$J18YGXPAXPBU_s__ThrowInfo@@@Z", 'extern "C" void __stdcall _CxxThrowException(void *,struct _s__ThrowInfo const *)'),
 ]
 
-from test_all import run_tests
+from test_all import run_tests, assertion
 from elfesteem.visual_studio_mangling import symbol_demangle
 
-def run_test(assertion):
+def test_mangling(assertion):
     for k, v in tests:
         n, r = symbol_demangle(k)
         if r or (v != n):
             assertion(0,1, k)
+
+def run_test(assertion):
+    return test_mangling(assertion)
 
 if __name__ == "__main__":
     run_tests(run_test)

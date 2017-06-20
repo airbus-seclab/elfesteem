@@ -1,9 +1,9 @@
 #! /usr/bin/env python
 
-from test_all import run_tests
+from test_all import run_tests, assertion
 from elfesteem.intervals import Intervals
 
-def run_test(assertion):
+def test_intervals(assertion):
     i = Intervals()
     assertion(i.ranges, [],
               'Empty interval')
@@ -59,6 +59,11 @@ def run_test(assertion):
               'Display [10:14] [27:30]')
     assertion([_ for _ in i], [10, 11, 12, 13, 27, 28, 29],
               'Enumerate [10:14] [27:30]')
+
+def run_test(assertion):
+    for name, value in dict(globals()).items():
+        if name.startswith('test_'):
+            value(assertion)
 
 if __name__ == "__main__":
     run_tests(run_test)

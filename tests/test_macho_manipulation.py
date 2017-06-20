@@ -4,19 +4,17 @@ import os
 __dir__ = os.path.dirname(__file__)
 __dir__ += '/binary_input/macho/'
 
-from test_all import run_tests, hashlib
+from test_all import run_tests, assertion, hashlib
 import struct
 from elfesteem.macho import MACHO, log
 from elfesteem import macho
 
-def run_test(assertion):
-    # We want to be able to verify warnings in non-regression test
-    log_history = []
-    log.warning = lambda *args, **kargs: log_history.append(('warn',args,kargs))
-    log.error = lambda *args, **kargs: log_history.append(('error',args,kargs))
-    assertion('f71dbe52628a3f83a77ab494817525c6',
-              hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
-              'MD5')
+# We want to be able to verify warnings in non-regression test
+log_history = []
+log.warning = lambda *args, **kargs: log_history.append(('warn',args,kargs))
+log.error = lambda *args, **kargs: log_history.append(('error',args,kargs))
+
+def test_MACHO_xleb128(assertion):
     # Testing some internals
     from elfesteem.macho import Uleb128, Sleb128
     f = struct.pack("B", 0x0)
@@ -61,10 +59,14 @@ def run_test(assertion):
     v = Sleb128(parent=None,content=f)
     assertion(v.value, -0xf8080, 'Reading Sleb128 %#x' % v.value)
     assertion(v.pack(), f, 'Packing Sleb128 %#x' % v.value)
-    # Locale setting is used by otool to display time stamps.
-    # For non-regression tests, we need to negate the effet of the locale.
-    import os
-    os.environ['TZ'] = ''
+
+# Locale setting is used by otool to display time stamps.
+# For non-regression tests, we need to negate the effet of the locale.
+import os
+os.environ['TZ'] = ''
+
+def test_MACHO_minimal(assertion):
+    global log_history
     # Simple tests of object creation
     e = MACHO(struct.pack("<I",macho.MH_MAGIC))
     assertion([('warn', ('parse_dynamic_symbols() can only be used with x86 architectures, not %s', 0), {})],
@@ -81,6 +83,9 @@ def run_test(assertion):
     assertion('37b830a1776346543c72ff53fbbe2b4a',
               hashlib.md5(d).hexdigest(),
               'Parsing a minimal data, with Mach-O magic number only')
+
+def test_MACHO_zero_cmds(assertion):
+    global log_history
     f = struct.pack("<IIIIIIIII",macho.MH_MAGIC,macho.CPU_TYPE_I386,0,0,1,0,0,0,8)
     e = MACHO(f)
     assertion([('error', ('Too many load command: %d commands cannot fit in %d bytes', 1, 0), {}),
@@ -88,6 +93,9 @@ def run_test(assertion):
               log_history,
               'Parsing a invalid output with zero sizeofcmds (logs)')
     log_history = []
+
+def test_MACHO_toolarge_cmds(assertion):
+    global log_history
     f = struct.pack("<IIIIIIIII",macho.MH_MAGIC,macho.CPU_TYPE_I386,0,0,1,0xffff,0,0,8)
     e = MACHO(f)
     assertion([('error', ('LoadCommands longer than file length',), {}),
@@ -95,29 +103,43 @@ def run_test(assertion):
               log_history,
               'Parsing a invalid output with big sizeofcmds (logs)')
     log_history = []
+
+def test_MACHO_one_loader(assertion):
+    global log_history
     f = struct.pack("<IIIIIIIIII",macho.MH_MAGIC,macho.CPU_TYPE_I386,0,0,1,12,0,macho.LC_PREBIND_CKSUM,12,0)
     e = MACHO(f)
     d = e.pack()
     assertion(f, d,
               'Parsing data, with one LC_PREBIND_CKSU loader')
+
+def test_MACHO_one_loader_padding(assertion):
+    global log_history
     f = struct.pack("<IIIIIIIIIII",macho.MH_MAGIC,macho.CPU_TYPE_I386,0,0,1,16,0,macho.LC_PREBIND_CKSUM,16,0,0)
     e = MACHO(f)
     assertion([('warn', ('%s has %d bytes of additional padding', 'prebind_cksum_command', 4), {})],
               log_history,
               'Parsing invalid data, with one LC_PREBIND_CKSU loader with padding (logs)')
     log_history = []
+
+def test_MACHO_one_loader_too_short(assertion):
+    global log_history
     f = struct.pack("<IIIIIIIIIII",macho.MH_MAGIC,macho.CPU_TYPE_I386,0,0,1,8,0,macho.LC_PREBIND_CKSUM,8,0,0)
     e = MACHO(f)
     assertion([('warn', ('%s is %d bytes too short', 'prebind_cksum_command', 4), {})],
               log_history,
               'Parsing invalid data, with one LC_PREBIND_CKSU loader, too short (logs)')
     log_history = []
+
+def test_MACHO_additional_padding(assertion):
+    global log_history
     f = struct.pack("<IIIIIIIIIII",macho.MH_MAGIC,macho.CPU_TYPE_I386,0,0,1,16,0,macho.LC_PREBIND_CKSUM,12,0,0)
     e = MACHO(f)
     assertion([('warn', ('LoadCommands have %d bytes of additional padding', 4), {})],
               log_history,
               'Parsing invalid data, with padding after load commands (logs)')
     log_history = []
+
+def test_MACHO_empty_loader(assertion):
     f = struct.pack("<IIIIIIIII",macho.MH_MAGIC,macho.CPU_TYPE_I386,0,0,1,8,0,0,8)
     e = MACHO(f)
     assertion(1, len(e.load),
@@ -125,6 +147,8 @@ def run_test(assertion):
     d = e.pack()
     assertion(f, d,
               'Parsing data, with one empty loader (pack)')
+
+def test_MACHO_load_commands(assertion):
     l = macho.LoadCommand(sex='<',wsize=32,cmd=0)
     assertion(macho.LoadCommand, l.__class__,
               'Creation of an empty load command')
@@ -137,6 +161,9 @@ def run_test(assertion):
     l = macho.Section(parent=macho.sectionHeader(parent=None,sex='<',wsize=32))
     assertion(macho.Section, l.__class__,
               'Creation of an empty Section Header')
+
+def test_MACHO_macho32_obj(assertion):
+    global log_history
     # Parsing and modifying files
     macho_32 = open(__dir__+'macho_32.o', 'rb').read()
     macho_32_hash = hashlib.md5(macho_32).hexdigest()
@@ -186,6 +213,9 @@ def run_test(assertion):
               hashlib.md5(d).hexdigest(),
               'Scattered relocation in a 32-bit Mach-O object')
         break
+
+def test_MACHO_macho32_exe(assertion):
+    global log_history
     macho_32 = open(__dir__+'macho_32.out', 'rb').read()
     macho_32_hash = hashlib.md5(macho_32).hexdigest()
     e = MACHO(macho_32)
@@ -207,6 +237,8 @@ def run_test(assertion):
               log_history,
               'Changing entrypoint with an invalid address (logs)')
     log_history = []
+
+def test_MACHO_macho64_obj(assertion):
     macho_64 = open(__dir__+'macho_64.o', 'rb').read()
     macho_64_hash = hashlib.md5(macho_64).hexdigest()
     e = MACHO(macho_64)
@@ -214,6 +246,8 @@ def run_test(assertion):
     assertion(macho_64_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading 64-bit Mach-O object')
+
+def test_MACHO_macho64_exe(assertion):
     macho_64 = open(__dir__+'macho_64.out', 'rb').read()
     macho_64_hash = hashlib.md5(macho_64).hexdigest()
     e = MACHO(macho_64)
@@ -221,6 +255,9 @@ def run_test(assertion):
     assertion(macho_64_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading 64-bit Mach-O executable')
+
+def test_MACHO_fat(assertion):
+    global log_history
     macho_fat = open(__dir__+'macho_fat.out', 'rb').read()
     macho_fat_hash = hashlib.md5(macho_fat).hexdigest()
     e = MACHO(macho_fat)
@@ -245,6 +282,8 @@ def run_test(assertion):
               log_history,
               'Cannot set entrypoint directly in a fat Mach-O (logs)')
     log_history = []
+
+def test_MACHO_virt(assertion):
     macho_32 = open(__dir__+'macho_32.out', 'rb').read()
     e = MACHO(macho_32)
     d = e.virt[0x1f9c:0x1fae]
@@ -267,6 +306,8 @@ def run_test(assertion):
     assertion('b61b686819bd3c94e765b220ef708353',
               hashlib.md5(d).hexdigest(),
               'Adding a section (32 bits)')
+
+def test_MACHO_bin_sh(assertion):
     macho_bin = open(__dir__+'sh', 'rb').read()
     e = MACHO(macho_bin)
     macho_bin_hash = hashlib.md5(macho_bin).hexdigest()
@@ -274,6 +315,9 @@ def run_test(assertion):
     assertion(macho_bin_hash,
               hashlib.md5(d).hexdigest(),
               'Packing after reading /bin/sh')
+
+def test_MACHO_lib_dns(assertion):
+    global log_history
     macho_lib = open(__dir__+'libdns_services.dylib', 'rb').read()
     e = MACHO(macho_lib)
     assertion(e.entrypoint, -1,
@@ -291,6 +335,8 @@ def run_test(assertion):
     assertion('2d6194feedf82da26124d3128473a949',
               hashlib.md5(d).hexdigest(),
               'Otool-like output including LC_SOURCE_VERSION')
+
+def test_MACHO_lib_ecpg(assertion):
     macho_lib = open(__dir__+'libecpg.6.5.dylib', 'rb').read()
     e = MACHO(macho_lib)
     macho_lib_hash = hashlib.md5(macho_lib).hexdigest()
@@ -309,6 +355,8 @@ def run_test(assertion):
     assertion(e.symbols[1].otool(),
               'execute.c                           NO_SECT         0x4  D 0x00000000 0000',
               'Display symbol with N_STAB type')
+
+def test_MACHO_lib_ATcommand(assertion):
     macho_lib = open(__dir__+'libATCommandStudioDynamic.dylib', 'rb').read()
     e = MACHO(macho_lib)
     macho_lib_hash = hashlib.md5(macho_lib).hexdigest()
@@ -328,6 +376,8 @@ def run_test(assertion):
     assertion('66bb196759c094c0c08d8159cf61d67f',
               hashlib.md5(d).hexdigest(),
               'dyldinfo-like output for dyld opcodes (libATCommand...)')
+
+def test_MACHO_lib_system(assertion):
     macho_lib = open(__dir__+'libSystem.B.dylib', 'rb').read()
     e = MACHO(macho_lib)
     macho_lib_hash = hashlib.md5(macho_lib).hexdigest()
@@ -347,6 +397,8 @@ def run_test(assertion):
     assertion('c71cebc604ba70bfd348a3e08f7ea20c',
               hashlib.md5(d).hexdigest(),
               'dyldinfo-like output for rebase opcodes (libSystem)')
+
+def test_MACHO_lib_tls(assertion):
     macho_lib = open(__dir__+'libcoretls.dylib', 'rb').read()
     e = MACHO(macho_lib)
     macho_lib_hash = hashlib.md5(macho_lib).hexdigest()
@@ -360,6 +412,9 @@ def run_test(assertion):
     assertion('d7983c780f70e8c81d277ee0f7f8a27d',
               hashlib.md5(d).hexdigest(),
               'dyldinfo-like output for rebase and export (libcoretls)')
+
+def test_MACHO_app_OSXII(assertion):
+    global log_history
     macho_app = open(__dir__+'OSXII', 'rb').read()
     e = MACHO(macho_app)
     assertion([('warn', ('parse_dynamic_symbols() can only be used with x86 architectures, not %s', 18), {})],
@@ -375,6 +430,9 @@ def run_test(assertion):
     assertion('8b926db115b4cae5146774ef589674be',
               hashlib.md5(d).hexdigest(),
               'Otool-like output including ppc & i386 register state')
+
+def test_MACHO_app_MTR(assertion):
+    global log_history
     macho_app = open(__dir__+'MacTheRipper', 'rb').read()
     e = MACHO(macho_app)
     assertion([('warn', ('parse_dynamic_symbols() can only be used with x86 architectures, not %s', 18), {})],
@@ -392,6 +450,9 @@ def run_test(assertion):
     assertion('b10cd006c10906db3329e0dccd0babbe',
               hashlib.md5(d).hexdigest(),
               'Otool-like output including LC_PREBOUND_DYLIB')
+
+def test_MACHO_exe_SH3D(assertion):
+    global log_history
     macho_app = open(__dir__+'SweetHome3D', 'rb').read()
     e = MACHO(macho_app)
     assertion([('warn', ('parse_dynamic_symbols() can only be used with x86 architectures, not %s', 18), {})],
@@ -407,6 +468,9 @@ def run_test(assertion):
     assertion('4bf0088471bd2161baf4a42dbb09dc5b',
               hashlib.md5(d).hexdigest(),
               'Otool-like output including ppc, i386 & x86_64register state')
+
+def test_MACHO_lib_print(assertion):
+    global log_history
     macho_32be = open(__dir__+'libPrintServiceQuota.1.dylib', 'rb').read()
     e = MACHO(macho_32be)
     assertion([('warn', ('parse_dynamic_symbols() can only be used with x86 architectures, not %s', 18), {})],
@@ -422,6 +486,9 @@ def run_test(assertion):
     assertion('cabaf4f4368c094bbb0c09f278510006',
               hashlib.md5(d).hexdigest(),
               'Otool-like output for LC in 32-bit big-endian Mach-O shared library')
+
+def test_MACHO_ios_decibels(assertion):
+    global log_history
     macho_ios = open(__dir__+'Decibels', 'rb').read()
     e = MACHO(macho_ios)
     assertion([('warn', ('Some encrypted text is not parsed with the section headers of LC_SEGMENT(__TEXT)',), {}),
@@ -442,6 +509,9 @@ def run_test(assertion):
     assertion('0d3281e546fd6e41306dbf38e5fbd0b6',
               hashlib.md5(d).hexdigest(),
               'Otool-like output for LC in iOS application')
+
+def test_MACHO_ios_lyonmetro(assertion):
+    global log_history
     macho_ios = open(__dir__+'LyonMetro', 'rb').read()
     e = MACHO(macho_ios)
     assertion([('warn', ('Some encrypted text is not parsed with the section headers of LC_SEGMENT(__TEXT)',), {}),
@@ -461,6 +531,9 @@ def run_test(assertion):
     assertion('7bac82cc00b5cce2cb96344d678508e5',
               hashlib.md5(d).hexdigest(),
               'Otool-like output including LC_VERSION_MIN_IPHONEOS')
+
+def test_MACHO_obj_telephony(assertion):
+    global log_history
     macho_linkopt = open(__dir__+'TelephonyUtil.o', 'rb').read()
     macho_linkopt_hash = hashlib.md5(macho_linkopt).hexdigest()
     e = MACHO(macho_linkopt)
@@ -476,6 +549,10 @@ def run_test(assertion):
     assertion('984bf38084c14e435f30eebe36944b47',
               hashlib.md5(d).hexdigest(),
               'Otool-like output for LC in object file with LC_LINKER_OPTION')
+
+def test_MACHO_prebind_32(assertion):
+    global log_history
+    macho_32 = open(__dir__+'macho_32.out', 'rb').read()
     e = MACHO(macho_32)
     e.add(macho.LoadCommand(sex='<',wsize=32,cmd=0))
     d = e.pack()
@@ -514,6 +591,9 @@ def run_test(assertion):
     assertion('c4ad6da5422642cb15b91ccd3a09f592',
               hashlib.md5(d).hexdigest(),
               'Adding a segment (32 bits)')
+
+def test_MACHO_prebind_64(assertion):
+    global log_history
     macho_64 = open(__dir__+'macho_64.out', 'rb').read()
     e = MACHO(macho_64)
     d = e.virt[0x100000f50:0x100000f62]
@@ -544,9 +624,12 @@ def run_test(assertion):
     assertion('b4ad381503c51b6dc9dc3d79fb8ca568',
               hashlib.md5(d).hexdigest(),
               'Adding a segment (64 bits)')
+
+def test_MACHO_unixthread_32(assertion):
     # The function changeMainToUnixThread migrates a Mach-O binary for
     # recent MacOSX (using a LC_MAIN loader) to a Mac-O binary for older
     # versions of MacOSX (10.7 and older, using a LC_UNIXTHREAD loader).
+    macho_32 = open(__dir__+'macho_32.out', 'rb').read()
     e = MACHO(macho_32)
     changeMainToUnixThread(e)
     d = e.pack()
@@ -558,6 +641,9 @@ def run_test(assertion):
     assertion('14e8007a3b5b5070c56ea2a43b6b888e',
               hashlib.md5(d).hexdigest(),
               'Migrating from LC_MAIN to LC_UNIXTHREAD with new segment (32 bits)')
+
+def test_MACHO_unixthread_64(assertion):
+    macho_64 = open(__dir__+'macho_64.out', 'rb').read()
     e = MACHO(macho_64)
     changeMainToUnixThread(e)
     d = e.pack()
@@ -569,6 +655,9 @@ def run_test(assertion):
     assertion('16b63a2d3cdb3549fe9870b805eb80f5',
               hashlib.md5(d).hexdigest(),
               'Migrating from LC_MAIN to LC_UNIXTHREAD with new segment (64 bits)')
+
+def test_MACHO_changeUUID(assertion):
+    macho_64 = open(__dir__+'macho_64.out', 'rb').read()
     e = MACHO(macho_64)
     e.changeUUID("2A0405CF8B1F3502A605695A54C407BB")
     uuid_pos, = e.load.getpos(macho.LC_UUID)
@@ -591,6 +680,9 @@ def run_test(assertion):
     assertion('c8457df239deb4c51c316bd6670a445e',
               hashlib.md5(d).hexdigest(),
               'set UUID (pack)')
+
+def test_MACHO_extend_segment(assertion):
+    macho_64 = open(__dir__+'macho_64.out', 'rb').read()
     e = MACHO(macho_64)
     for l in e.load:
         if getattr(l,'segname',None) == "__LINKEDIT": break
@@ -602,6 +694,8 @@ def run_test(assertion):
     assertion([],
               log_history,
               'No non-regression test created unwanted log messages')
+
+
 
 def changeMainToUnixThread(e, **kargs):
     main_pos, = e.load.getpos(macho.LC_MAIN)
@@ -700,6 +794,11 @@ def insert_start_function(e):
     call = mainasmpos + call_offset - off
     exit = mainasmpos + exit_offset - off
     e.sect.sect[-1].content = content[:offset_of_call_main+1] + struct.pack("<i", call) + content[offset_of_call_main+5:offset_of_call_exit+1] + struct.pack("<i", exit) + content[offset_of_call_exit+5:]
+
+def run_test(assertion):
+    for name, value in dict(globals()).items():
+        if name.startswith('test_'):
+            value(assertion)
 
 if __name__ == "__main__":
     run_tests(run_test)

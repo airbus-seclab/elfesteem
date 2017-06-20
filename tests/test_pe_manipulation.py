@@ -3,20 +3,19 @@
 import os
 __dir__ = os.path.dirname(__file__)
 
-from test_all import run_tests, hashlib
+from test_all import run_tests, assertion, hashlib
 from elfesteem.pe_init import log, PE, COFF, Coff
 from elfesteem.strpatchwork import StrPatchwork
 from elfesteem import pe
+import struct
 
-def run_test(assertion):
-    # We want to be able to verify warnings in non-regression test
-    log_history = []
-    log.warning = lambda *args, **kargs: log_history.append(('warn',args,kargs))
-    log.error = lambda *args, **kargs: log_history.append(('error',args,kargs))
-    import struct
-    assertion('f71dbe52628a3f83a77ab494817525c6',
-              hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
-              'MD5')
+# We want to be able to verify warnings in non-regression test
+log_history = []
+log.warning = lambda *args, **kargs: log_history.append(('warn',args,kargs))
+log.error = lambda *args, **kargs: log_history.append(('error',args,kargs))
+
+def test_PE_addsections_32(assertion):
+    global log_history
     e = PE()
     d = e.pack()
     assertion('901e6383ee161b569af1d35d3f77b038',
@@ -41,11 +40,16 @@ def run_test(assertion):
     assertion(90, # Should be 91 if the last section could been added
               len(e.SHList),
               'Add too many sections')
+
+def test_PE_empty64(assertion):
     e = PE(wsize=64)
     d = e.pack()
     assertion('863bf62f521b0cad3209e42cff959eed',
               hashlib.md5(d).hexdigest(),
               'Creation of a standard empty PE+')
+
+def test_PE_manipulate(assertion):
+    global log_history
     pe_mingw = open(__dir__+'/binary_input/pe_mingw.exe', 'rb').read()
     e = PE(pe_mingw)
     # Packed file is not identical :-(
@@ -266,6 +270,9 @@ def run_test(assertion):
     assertion('47a864481296d88f908126fb822ded59',
               hashlib.md5(d).hexdigest(),
               'Adding imports, no specified section')
+
+def test_PE_dll(assertion):
+    global log_history
     # Small DLL created with Visual Studio
     dll_vstudio = open(__dir__+'/binary_input/pe_vstudio.dll', 'rb').read()
     e = PE(dll_vstudio)
@@ -295,6 +302,9 @@ def run_test(assertion):
     assertion('87951bfbb3c09dec8c54d41f72cc4263',
               hashlib.md5(d).hexdigest(),
               'Display all relocations')
+
+def test_PE_ange(assertion):
+    global log_history
     # Parse some ill-formed PE made by Ange Albertini
     e = PE(open(__dir__+'/binary_input/Ange/resourceloop.exe', 'rb').read())
     assertion([('warn', ('Resource tree too deep',), {})]*212,
@@ -366,6 +376,8 @@ def run_test(assertion):
     assertion('98701be30b09759a64340e5245e48195',
               hashlib.md5(d).hexdigest(),
               'Display Directory RESOURCE that is too deep')
+
+def test_PE_invalids(assertion):
     # Some various ways for a PE to be detected as invalid
     e = PE()
     data = StrPatchwork(e.pack())
@@ -382,6 +394,8 @@ def run_test(assertion):
         assertion(0,1, 'Not a PE, NTsig offset after eof')
     except ValueError:
         pass
+
+def test_COFF_invalid(assertion):
     # Now, we parse COFF files
     try:
         # Not COFF: OptHdr size too big
@@ -389,6 +403,8 @@ def run_test(assertion):
         assertion(0,1, 'Not COFF')
     except ValueError:
         pass
+
+def test_COFF_valid(assertion):
     obj_mingw = open(__dir__+'/binary_input/coff_mingw.obj', 'rb').read()
     try:
         e = PE(obj_mingw)
@@ -402,12 +418,16 @@ def run_test(assertion):
     assertion(None, d, 'Invalid RVA cannot be converted')
     d = e.virt2off(0x10)
     assertion(None, d, 'No virt for .obj')
+
+def test_COFF_tms320(assertion):
     out_tms320 = open(__dir__+'/binary_input/C28346_Load_Program_to_Flash.out', 'rb').read()
     e = Coff(out_tms320)
     d = e.SHList.display().encode('latin1')
     assertion('a63cf686186105b83e49509f213b20ea',
               hashlib.md5(d).hexdigest(),
               'Display Sections from COFF')
+
+def test_COFF_ckermit(assertion):
     # C-Kermit binary for OSF1
     out_osf1 = open(__dir__+'/binary_input/cku200.dec-osf-1.3a', 'rb').read()
     e = Coff(out_osf1)
@@ -425,7 +445,11 @@ def run_test(assertion):
     e = Coff(open(__dir__+'/binary_input/cku192.irix40', 'rb').read())
     # C-Kermit eCOFF32 binary for MIPS, little endian
     e = Coff(open(__dir__+'/binary_input/cku192.ultrix43c-mips3', 'rb').read())
+
+def test_COFF_invalidity(assertion):
+    global log_history
     # Some various ways for a COFF to be detected as invalid
+    obj_mingw = open(__dir__+'/binary_input/coff_mingw.obj', 'rb').read()
     obj_mingw = StrPatchwork(obj_mingw)
     e = COFF(obj_mingw)
     try:
@@ -463,6 +487,11 @@ def run_test(assertion):
     assertion([],
               log_history,
               'No non-regression test created unwanted log messages')
+
+def run_test(assertion):
+    for name, value in dict(globals()).items():
+        if name.startswith('test_'):
+            value(assertion)
     # print('HASH', hashlib.md5(d).hexdigest())
 
 if __name__ == "__main__":

@@ -24,6 +24,19 @@ except ImportError:
             return oldpy_md5.new(data)
         md5 = classmethod(md5)
 
+try:
+    # This way, we can use our code with pytest, but we can also
+    # use it directly, e.g. when testing for python2.3.
+    # No decorator, the syntax is forbidden in python2.3.
+    import pytest
+    def assertion():
+        def inner_assertion(target, value, message):
+            assert target == value
+        return inner_assertion
+    assertion = pytest.fixture(assertion)
+except:
+    assertion = None
+
 class print_colored(object): # Namespace
     end = '\033[0m'
     def bold(self, txt):
@@ -36,7 +49,7 @@ class print_colored(object): # Namespace
         print('\033[92;1m'+txt+self.end)
     boldgreen = classmethod(boldgreen)
 
-def assertion(target, value, message, status_ptr):
+def assertion_status(target, value, message, status_ptr):
     if target != value:
         print_colored.boldred('Non-regression failure for %r' % message)
         status_ptr[0] = False
@@ -44,13 +57,22 @@ def assertion(target, value, message, status_ptr):
 def run_tests(run_test):
     status_ptr = [True]
     run_test(lambda target, value, msg, status_ptr=status_ptr:
-        assertion(target, value, msg, status_ptr))
+        assertion_status(target, value, msg, status_ptr))
     if status_ptr[0]:
         print_colored.boldgreen('OK')
     return status_ptr[0]
 
+def test_MD5(assertion):
+    import struct
+    assertion('f71dbe52628a3f83a77ab494817525c6',
+              hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
+              'MD5')
+
 if __name__ == "__main__":
     exit_value = 0
+    print_colored.bold('test_MD5')
+    if not run_tests(test_MD5):
+        exit_value = 1
     for name in (
             'visual_studio_mangling',
             'pe_manipulation',

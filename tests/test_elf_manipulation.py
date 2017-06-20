@@ -3,20 +3,19 @@
 import os
 __dir__ = os.path.dirname(__file__)
 
-from test_all import run_tests, hashlib
+from test_all import run_tests, assertion, hashlib
 from elfesteem.strpatchwork import StrPatchwork
 from elfesteem.elf_init import ELF, log
 from elfesteem import elf
 
-def run_test(assertion):
-    # We want to be able to verify warnings in non-regression test
-    log_history = []
-    log.warning = lambda *args, **kargs: log_history.append(('warn',args,kargs))
-    log.error = lambda *args, **kargs: log_history.append(('error',args,kargs))
-    import struct
-    assertion('f71dbe52628a3f83a77ab494817525c6',
-              hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
-              'MD5')
+import struct
+
+# We want to be able to verify warnings in non-regression test
+log_history = []
+log.warning = lambda *args, **kargs: log_history.append(('warn',args,kargs))
+log.error = lambda *args, **kargs: log_history.append(('error',args,kargs))
+
+def test_ELF_empty(assertion):
     e = ELF()
     d = e.pack()
     assertion('0ddf18391c150850c72257b3f3caa67b',
@@ -32,10 +31,15 @@ def run_test(assertion):
     assertion(True,
               e.has_relocatable_sections(),
               'Standard empty ELF is relocatable')
-    elf_small = open(__dir__+'/binary_input/elf_small.out', 'rb').read()
-    assertion('d5284d5f438e25ef5502a0c1de97d84f',
-              hashlib.md5(elf_small).hexdigest(),
-              'Reading elf_small.out')
+
+def test_ELF_invalid(assertion):
+    try:
+        e = ELF(open(__dir__+'/binary_input/README.txt', 'rb').read())
+        assertion(0,1, 'Not an ELF')
+    except ValueError:
+        pass
+
+def test_ELF_creation(assertion):
     e = ELF(
         e_type    = elf.ET_REL, # Default value
         e_machine = elf.EM_386, # Default value
@@ -49,11 +53,13 @@ def run_test(assertion):
     assertion('dc3f17080d002ba0bfb3aec9f3bec8b2',
               hashlib.md5(d).hexdigest(),
               'Creation of an ELF with a given list of sections')
-    try:
-        e = ELF(open(__dir__+'/binary_input/README.txt', 'rb').read())
-        assertion(0,1, 'Not an ELF')
-    except ValueError:
-        pass
+
+def test_ELF_small32(assertion):
+    global log_history
+    elf_small = open(__dir__+'/binary_input/elf_small.out', 'rb').read()
+    assertion('d5284d5f438e25ef5502a0c1de97d84f',
+              hashlib.md5(elf_small).hexdigest(),
+              'Reading elf_small.out')
     e = ELF(elf_small)
     d = e.pack()
     assertion('d5284d5f438e25ef5502a0c1de97d84f',
@@ -145,6 +151,8 @@ def run_test(assertion):
     assertion(-1,
               e.virt.find(struct.pack('BBBB', 1,2,3,4)),
               'Find pattern (not existing)')
+
+def test_ELF_small64(assertion):
     elf64_small = open(__dir__+'/binary_input/elf64_small.out', 'rb').read()
     assertion('dc21d928bb6a3a0fa59b17fafe803d50',
               hashlib.md5(elf64_small).hexdigest(),
@@ -167,6 +175,8 @@ def run_test(assertion):
     assertion('650cf3f99117d39d63fae73232e09acf',
               hashlib.md5(d).hexdigest(),
               'Display Reloc Table (elf64)')
+
+def test_ELF_group(assertion):
     elf_group = open(__dir__+'/binary_input/elf_cpp.o', 'rb').read()
     assertion('57fed5de9474bc0600173a1db5ee6327',
               hashlib.md5(elf_group).hexdigest(),
@@ -181,6 +191,8 @@ def run_test(assertion):
     assertion('5c80b11a64a32e7aaee8ef378da4ccef',
               hashlib.md5(d).hexdigest(),
               'Display Group Section')
+
+def test_ELF_TMP320C6x(assertion):
     elf_tmp320c6x = open(__dir__+'/binary_input/notle-tesla-dsp.xe64T', 'rb').read()
     assertion('fb83ed8d809f394e70f5d84d0c8e593f',
               hashlib.md5(elf_tmp320c6x).hexdigest(),
@@ -195,6 +207,9 @@ def run_test(assertion):
     assertion('ecf169c765d29175177528e24601f1be',
               hashlib.md5(d).hexdigest(),
               'Display Section Headers (TMP320C6x)')
+
+def test_ELF_invalid_entsize(assertion):
+    global log_history
     # Some various ways for an ELF to be detected as invalid
     e = ELF()
     e.symbols.sh.entsize = 24
@@ -203,21 +218,30 @@ def run_test(assertion):
               log_history,
               'Invalid entsize for symbols (logs)')
     log_history = []
+
+def test_ELF_invalid_shstrndx(assertion):
+    global log_history
     e = ELF()
     e.Ehdr.shstrndx = 20
     e = ELF(e.pack())
     assertion([('error', ('No section of index shstrndx=20',), {})],
               log_history,
               'Invalid shstrndx (logs)')
+    assertion(88,
+              e.Ehdr.shoff,
+              'Normal e.Ehdr.shoff')
     log_history = []
+
+def test_ELF_offset_to_sections(assertion):
+    global log_history
     data = StrPatchwork(ELF().pack())
-    data[e.Ehdr.shoff+20] = struct.pack("<I", 0x1000)
+    data[88+20] = struct.pack("<I", 0x1000)
     e = ELF(data)
     assertion([('error', ('Offset to end of section %d after end of file', 0), {})],
               log_history,
               'Section offset+size too far away (logs)')
     log_history = []
-    data[e.Ehdr.shoff+16] = struct.pack("<I", 0x1000)
+    data[88+16] = struct.pack("<I", 0x1000)
     e = ELF(data)
     assertion([('error', ('Offset to section %d after end of file', 0), {})],
               log_history,
@@ -237,6 +261,9 @@ def run_test(assertion):
               log_history,
               'SH offset very far away (logs)')
     log_history = []
+
+def test_ELF_wordsize_endianess(assertion):
+    global log_history
     data = StrPatchwork(ELF().pack())
     data[4] = struct.pack("B", 4)
     e = ELF(data)
@@ -251,6 +278,9 @@ def run_test(assertion):
               log_history,
               'Invalid ELF endianess (logs)')
     log_history = []
+
+def test_ELF_tiny84(assertion):
+    global log_history
     elf_tiny = open(__dir__+'/binary_input/tiny84.bin', 'rb').read()
     assertion('90f9fa06566389883d82b9cda016b10d',
               hashlib.md5(elf_tiny).hexdigest(),
@@ -264,6 +294,9 @@ def run_test(assertion):
     assertion('90f9fa06566389883d82b9cda016b10d',
               hashlib.md5(d).hexdigest(),
               'Packing after reading tiny84')
+
+def test_ELF_tiny76(assertion):
+    global log_history
     elf_tiny = open(__dir__+'/binary_input/tiny76.bin', 'rb').read()
     assertion('3a5753c93c492d2d1d3fc6c227baec7a',
               hashlib.md5(elf_tiny).hexdigest(),
@@ -277,6 +310,9 @@ def run_test(assertion):
               log_history,
               'tiny76 (logs)')
     log_history = []
+
+def test_ELF_tiny64(assertion):
+    global log_history
     elf_tiny = open(__dir__+'/binary_input/tiny64.bin', 'rb').read()
     assertion('0dd8a6325f7cf633ed8c527add5dc634',
               hashlib.md5(elf_tiny).hexdigest(),
@@ -291,6 +327,9 @@ def run_test(assertion):
     assertion('05ab778ceccbbf67840d5d35bcd84ed9',
               hashlib.md5(d).hexdigest(),
               'Packing after reading tiny64')
+
+def test_ELF_tiny52(assertion):
+    global log_history
     elf_tiny = open(__dir__+'/binary_input/tiny52.bin', 'rb').read()
     assertion('18ddd4966cb003b80862735d19ddbeb7',
               hashlib.md5(elf_tiny).hexdigest(),
@@ -306,6 +345,9 @@ def run_test(assertion):
     assertion('18ddd4966cb003b80862735d19ddbeb7',
               hashlib.md5(d).hexdigest(),
               'Packing after reading tiny52')
+
+def test_ELF_tiny45(assertion):
+    global log_history
     elf_tiny = open(__dir__+'/binary_input/tiny45.bin', 'rb').read()
     assertion('44023f74799f2e009a1400c74de50cdd',
               hashlib.md5(elf_tiny).hexdigest(),
@@ -325,6 +367,11 @@ def run_test(assertion):
     assertion([],
               log_history,
               'No non-regression test created unwanted log messages')
+
+def run_test(assertion):
+    for name, value in dict(globals()).items():
+        if name.startswith('test_'):
+            value(assertion)
 
 if __name__ == "__main__":
     run_tests(run_test)

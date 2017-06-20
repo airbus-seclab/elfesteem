@@ -3,14 +3,10 @@
 import os
 __dir__ = os.path.dirname(__file__)
 
-from test_all import run_tests, hashlib
+from test_all import run_tests, assertion, hashlib
 from elfesteem.rprc import RPRC
 
-def run_test(assertion):
-    import struct
-    assertion('f71dbe52628a3f83a77ab494817525c6',
-              hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
-              'MD5')
+def test_RPRC_empty(assertion):
     e = RPRC()
     d = e.pack()
     assertion('865001a37fa24754bd17012e85d2bfff',
@@ -20,6 +16,8 @@ def run_test(assertion):
     assertion('865001a37fa24754bd17012e85d2bfff',
               hashlib.md5(d).hexdigest(),
               'Creation of a standard empty RPRC; fix point')
+
+def test_RPRC_ducati(assertion):
     rprc_m3 = open(__dir__+'/binary_input/ducati-m3_p768.bin', 'rb').read()
     assertion('d31c5887b98b37f949da3570b8688983',
               hashlib.md5(rprc_m3).hexdigest(),
@@ -76,11 +74,18 @@ def run_test(assertion):
         assertion(0,1, 'Writing in partially non-mapped memory')
     except ValueError:
         pass
+
+def test_RPRC_invalid(assertion):
     try:
         e = RPRC(open(__dir__+'/binary_input/README.txt', 'rb').read())
         assertion(0,1, 'Not an RPRC')
     except ValueError:
         pass
+
+def run_test(assertion):
+    for name, value in dict(globals()).items():
+        if name.startswith('test_'):
+            value(assertion)
 
 if __name__ == "__main__":
     run_tests(run_test)
