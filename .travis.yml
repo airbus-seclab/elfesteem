@@ -1,21 +1,36 @@
 language: python
-python:
-  - '3.6'
-  - '3.5'
-  - '3.4'
-  - '3.3'
-  - '3.2'
-  - '2.7'
-  - '2.6'
-  # elfesteem works with 2.3, 2.4 and 2.5 too, but they are not available in travis
-  - 'pypy3'
-  - 'pypy'
+jobs:
+  include:
+    - python: '3.7'
+    - python: '2.7'
+    - name: 'Python: 2.3'
+      # python 2.3 not available in travis
+      install:
+        - cd ..
+        - curl -O https://www.python.org/ftp/python/2.3.7/Python-2.3.7.tgz
+        - tar xzf Python-2.3.7.tgz
+        - cd Python-2.3.7
+        # We need to disable FORTIFY_SOURCE to compile python 2.3
+        # cf. https://bugs.launchpad.net/ubuntu/+source/gcc-defaults/+bug/286334
+        - ./configure BASECFLAGS=-U_FORTIFY_SOURCE
+        - make
+        - export PATH=$(pwd):$PATH
+        - cd ../elfesteem
+        - python -c 'import sys;print(sys.version)'
+      script:
+        - python ./tests/test_all.py
+      after_success:
+        - true # coverage needs python >= 2.6
+    - python: 'pypy3'
+    - python: 'pypy'
+    - python: '3.8'
+    - python: '3.4'
 install:
   - pip install coverage codecov
 before_script:
   export PYTHONPATH=$PYTHONPATH:$(pwd)
 script:
-  - if [[ $TRAVIS_PYTHON_VERSION == 3.2 ]]; then ./tests/test_all.py; else coverage run ./tests/test_all.py; fi
+  - coverage run ./tests/test_all.py
   # We don't use e.g. tox for non-regression tests, because we want to have
   # a script that works with old python too, and tox needs python2.5
   # python2.4 ./tests/test_all.py will work fine :-)
