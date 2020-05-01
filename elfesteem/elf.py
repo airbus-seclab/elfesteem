@@ -1122,8 +1122,9 @@ R_386_TLS_GOTDESC  = 39,           # GOT offset for TLS descriptor.
 R_386_TLS_DESC_CALL = 40,          # Marker of call through TLS descriptor for relaxation. 
 R_386_TLS_DESC     = 41,           # TLS descriptor containing pointer to code and to argument, returning the TLS offset for the symbol. 
 R_386_IRELATIVE    = 42,           # Adjust indirectly by program base
+R_386_GOT32X       = 43,           # Load from 32 bit GOT entry, relaxable.
 # Keep this the last entry. 
-R_386_NUM          = 43,
+R_386_NUM          = 44,
 )
 
 SetConstants(
@@ -1996,7 +1997,13 @@ R_X86_64_GOTPC32_TLSDESC = 34,     # GOT offset for TLS descriptor.
 R_X86_64_TLSDESC_CALL   = 35,      # Marker for call through TLS descriptor. 
 R_X86_64_TLSDESC        = 36,      # TLS descriptor. 
 R_X86_64_IRELATIVE      = 37,      # Adjust indirectly by program base
-R_X86_64_NUM            = 38,
+R_X86_64_RELATIVE64     = 38,      # 64-bit adjust by program base */
+R_X86_64_PC32_BND       = 39,      # Deprecated, reserved
+R_X86_64_PLT32_BND      = 40,      # Deprecated, reserved
+R_X86_64_GOTPCRELX      = 41,      # Load from 32 bit signed pc relative offset to GOT entry without REX prefix, relaxable.
+R_X86_64_REX_GOTPCRELX  = 42,      # Load from 32 bit signed pc relative offset to GOT entry with REX prefix, relaxable.
+
+R_X86_64_NUM            = 43,
 )
 
 SetConstants(
