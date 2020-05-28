@@ -248,8 +248,11 @@ class LoadCommand(LoadBase):
                 value = "%#010x" % value
             elif name == "flags":
                 value = "%#x" % value
-            elif name == "sdk" and value == 0:
-                value = "n/a"
+            elif name in ("sdk", "minos"):
+                if value == 0:
+                    value = "n/a"
+                else:
+                    value = split_integer(value, 8, 3, truncate=1)
             elif name == "timestamp":
                 name = "time stamp"
                 value = "%u %s" %(value, time.ctime(value))
@@ -263,10 +266,7 @@ class LoadCommand(LoadBase):
             elif name == "raw_uuid":
                 name = "uuid"
                 value = "%.8X-%.4X-%.4X-%.4X-%.4X%.8X" % self.uuid
-            elif self.cmd == LC_VERSION_MIN_MACOSX:
-                shift = 2
-                value = split_integer(value, 8, 3, truncate=1)
-            elif self.cmd == LC_VERSION_MIN_IPHONEOS:
+            elif self.cmd in version_min_command.lc_types:
                 shift = 2
                 value = split_integer(value, 8, 3, truncate=2)
             elif self.cmd == LC_SOURCE_VERSION:
@@ -355,6 +355,10 @@ LC_LINKER_OPTION       = 0x2D, # linker options in MH_OBJECT files
 LC_LINKER_OPTIMIZATION_HINT = 0x2E, # optimization hints in MH_OBJECT files
 LC_VERSION_MIN_TVOS    = 0x2F,
 LC_VERSION_MIN_WATCHOS = 0x30,
+LC_NOTE            = 0x31, # arbitrary data included within a Mach-O file
+LC_BUILD_VERSION   = 0x32, # build for platform min OS version
+LC_DYLD_EXPORTS_TRIE  = 0x33|LC_REQ_DYLD, # used with linkedit_data_command, payload is trie
+LC_DYLD_CHAINED_FIXUPS= 0x34|LC_REQ_DYLD, # used with linkedit_data_command
 )
 
 # * In loader.h, there are two data structures: section and section_64, which are merged in one structure below.
@@ -1371,10 +1375,24 @@ class encryption_info_command_64(encryption_info_command):
 # The version_min_command contains the min OS version on which this
 # binary was built to run.
 class version_min_command(LoadCommand):
-    lc_types = (LC_VERSION_MIN_MACOSX, LC_VERSION_MIN_IPHONEOS)
+    lc_types = (LC_VERSION_MIN_MACOSX, LC_VERSION_MIN_IPHONEOS,
+                LC_VERSION_MIN_WATCHOS, LC_VERSION_MIN_TVOS)
     _fields = [
         ("version","u32"), # X.Y.Z is encoded in nibbles xxxx.yy.zz
         ("sdk","u32"),     # X.Y.Z is encoded in nibbles xxxx.yy.zz
+        ]
+
+# The build_version_command contains the min OS version on which this 
+# binary was built to run for its platform.  The list of known platforms and
+# tool values following it.
+class build_version_command(LoadCommand):
+    lc_types = (LC_BUILD_VERSION, )
+    _fields = [
+        ("platform","u32"),# platform
+        ("minos","u32"),   # X.Y.Z is encoded in nibbles xxxx.yy.zz
+        ("sdk","u32"),     # X.Y.Z is encoded in nibbles xxxx.yy.zz
+        ("ntools","u32"),  # number of tool entries following this
+        # TODO: if ntools != 0
         ]
 
 # The dyld_info_command contains the file offsets and sizes of
