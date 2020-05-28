@@ -253,6 +253,12 @@ class LoadCommand(LoadBase):
                     value = "n/a"
                 else:
                     value = split_integer(value, 8, 3, truncate=1)
+            elif name == "tools":
+                for tool in value:
+                    value = tool.tool
+                    lc_value.append(('tool', value))
+                    value = split_integer(tool.version, 8, 3, truncate=2)
+                    lc_value.append(('version', value))
             elif name == "timestamp":
                 name = "time stamp"
                 value = "%u %s" %(value, time.ctime(value))
@@ -1385,6 +1391,16 @@ class version_min_command(LoadCommand):
 # The build_version_command contains the min OS version on which this 
 # binary was built to run for its platform.  The list of known platforms and
 # tool values following it.
+class build_tool_version(CStruct):
+    _fields = [
+        ("tool","u32"),    # enum for the tool
+        ("version","u32"), # version number of the tool
+        ]
+
+class toolsArray(CArray):
+    _cls = build_tool_version
+    count = lambda _:_.parent.ntools
+
 class build_version_command(LoadCommand):
     lc_types = (LC_BUILD_VERSION, )
     _fields = [
@@ -1392,7 +1408,7 @@ class build_version_command(LoadCommand):
         ("minos","u32"),   # X.Y.Z is encoded in nibbles xxxx.yy.zz
         ("sdk","u32"),     # X.Y.Z is encoded in nibbles xxxx.yy.zz
         ("ntools","u32"),  # number of tool entries following this
-        # TODO: if ntools != 0
+        ("tools",toolsArray),
         ]
 
 # The dyld_info_command contains the file offsets and sizes of

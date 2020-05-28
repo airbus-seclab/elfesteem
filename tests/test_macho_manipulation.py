@@ -550,6 +550,20 @@ def test_MACHO_obj_telephony(assertion):
               hashlib.md5(d).hexdigest(),
               'Otool-like output for LC in object file with LC_LINKER_OPTION')
 
+def test_MACHO_loader_lc_build_version(assertion):
+    global log_history
+    macho_lcbuild = open(__dir__+'macho_lcbuild.out', 'rb').read()
+    macho_lcbuild_hash = hashlib.md5(macho_lcbuild).hexdigest()
+    e = MACHO(macho_lcbuild)
+    d = e.pack()
+    assertion(macho_lcbuild_hash,
+              hashlib.md5(d).hexdigest(),
+              "Packing after reading executable with LC_BUILD_VERSION")
+    d = ('\n'.join([_ for l in e.load for _ in l.otool()])).encode('latin1')
+    assertion('6dd985753ccf51b0d5c7470126d43a6c',
+              hashlib.md5(d).hexdigest(),
+              'Otool-like output for LC in executable with LC_BUILD_VERSION')
+
 def test_MACHO_prebind_32(assertion):
     global log_history
     macho_32 = open(__dir__+'macho_32.out', 'rb').read()
