@@ -5,7 +5,7 @@ from distutils.core import setup
 setup(
     name = 'ELF-Esteem',
     version = '0.1',    
-    packages = ['elfesteem'],
+    packages = ['elfesteem', 'elfesteem.macho'],
     requires = ['python (>= 2.3)'],
     scripts = ['examples/readelf.py','examples/otool.py','examples/readpe.py'],
     # Metadata
