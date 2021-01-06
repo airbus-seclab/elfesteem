@@ -579,7 +579,7 @@ class segment_command(LoadCommand):
         from elfesteem.macho.sections import Section, Reloc, SymbolStubList, SymbolPtrList
         self.sect = []
         for sh in self.sh:
-            if sh.type == S_ZEROFILL:
+            if sh.type == S_ZEROFILL or sh.type == S_THREAD_LOCAL_ZEROFILL or sh.type == S_GB_ZEROFILL:
                 sh.sect = Section(parent=sh, content=data_empty)
             elif sh.type == S_SYMBOL_STUBS:
                 sh.sect = SymbolStubList(parent=sh, content=raw, start=sh.offset)
