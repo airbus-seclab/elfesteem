@@ -342,7 +342,7 @@ if __name__ == '__main__':
         try:
             e = macho_init.MACHO(raw,
                 parseSymbols = False)
-        except ValueError, err:
+        except ValueError as err:
             print("%s:" %file)
             print("    %s" % err)
             continue
