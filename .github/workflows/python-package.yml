@@ -1,0 +1,91 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Python package
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "macos-latest"]
+        python-version: ["2.7", "3.10", "pypy2.7", "pypy3.9"]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install coverage codecov
+    - name: Non-regression tests
+      run: |
+        export PYTHONPATH=$PYTHONPATH:$(pwd)
+        coverage run ./tests/test_all.py
+    - name: Update codecov
+      run: |
+        codecov
+
+  python34:
+    name: python3.4
+    runs-on: "ubuntu-18.04"
+    strategy:
+      fail-fast: false
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.4
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.4"
+    - name: Install dependencies
+      run: |
+        python -m pip install coverage codecov
+    - name: Non-regression tests
+      run: |
+        export PYTHONPATH=$PYTHONPATH:$(pwd)
+        coverage run ./tests/test_all.py
+    - name: Update codecov
+      run: |
+        codecov
+
+  python23:
+    name: python2.3
+    runs-on: "ubuntu-latest"
+    strategy:
+      fail-fast: false
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 2.3
+      run: |
+        pwd
+        ls -l
+        cd ..
+        pwd
+        ls -l
+        pwd
+        curl -O https://www.python.org/ftp/python/2.3.7/Python-2.3.7.tgz
+        tar xzf Python-2.3.7.tgz
+        cd Python-2.3.7
+        # We need to disable FORTIFY_SOURCE to compile python 2.3
+        # cf. https://bugs.launchpad.net/ubuntu/+source/gcc-defaults/+bug/286334
+        ./configure BASECFLAGS=-U_FORTIFY_SOURCE
+        make
+        export PATH=$(pwd):$PATH
+        cd ../elfesteem
+        pwd
+        ls -l
+        python -c 'import sys;print(sys.version)'
+    - name: Non-regression tests
+      run: |
+        export PYTHONPATH=$PYTHONPATH:$(pwd)
+        pwd
+        ls -l
+        python ./tests/test_all.py
