@@ -216,18 +216,6 @@ class LoadCommand(LoadBase):
         # and others
         res = []
         import time
-        def split_integer(v, nbits, ndigits, truncate=None):
-            mask = (1<<nbits)-1
-            res = []
-            while ndigits > 0:
-                res.insert(0, v & mask)
-                v = v >> nbits
-                ndigits -= 1
-            res[0] += v << nbits
-            if truncate is not None:
-                while len(res) > truncate and res[-1] == 0:
-                    res = res[:-1]
-            return ".".join(["%u"%_ for _ in res])
         lc_value = []
         shift = 1
         for name, f_type in self._fields:
@@ -298,6 +286,18 @@ class LoadCommand(LoadBase):
         return [format % _ for _ in lc_value]
         # NB: for some load commands, additional information will be displayed
 
+def split_integer(v, nbits, ndigits, truncate=None):
+    mask = (1<<nbits)-1
+    res = []
+    while ndigits > 0:
+        res.insert(0, v & mask)
+        v = v >> nbits
+        ndigits -= 1
+    res[0] += v << nbits
+    if truncate is not None:
+        while len(res) > truncate and res[-1] == 0:
+            res = res[:-1]
+    return ".".join(["%u"%_ for _ in res])
 
 # After MacOS X 10.1 when a new load command is added that is required to be
 # understood by the dynamic linker for the image to execute properly the
@@ -1410,6 +1410,21 @@ class build_version_command(LoadCommand):
         ("ntools","u32"),  # number of tool entries following this
         ("tools",toolsArray),
         ]
+    def otool(self, llvm=False):
+        res = [
+    "       cmd %s" % "LC_"+constants['LC'].get(self.cmd, hex(self.cmd)),
+    "   cmdsize %s" % self.cmdsize,
+    "  platform %s" % self.platform,
+    "       sdk %s" % split_integer(self.sdk, 8, 3, truncate=1),
+    "     minos %s" % split_integer(self.minos, 8, 3, truncate=1),
+    "    ntools %s" % self.ntools,
+            ]
+        for tool in self.tools:
+            res.extend([
+    "      tool %s" % tool.tool,
+    "   version %s" % split_integer(tool.version, 8, 3, truncate=2),
+                ])
+        return res
 
 # The dyld_info_command contains the file offsets and sizes of
 # the new compressed form of the information dyld needs to

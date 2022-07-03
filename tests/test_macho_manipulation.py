@@ -560,7 +560,7 @@ def test_MACHO_loader_lc_build_version(assertion):
               hashlib.md5(d).hexdigest(),
               "Packing after reading executable with LC_BUILD_VERSION")
     d = ('\n'.join([_ for l in e.load for _ in l.otool()])).encode('latin1')
-    assertion('6dd985753ccf51b0d5c7470126d43a6c',
+    assertion('6667406b2a037f5593e6997c6964bbe4',
               hashlib.md5(d).hexdigest(),
               'Otool-like output for LC in executable with LC_BUILD_VERSION')
 
