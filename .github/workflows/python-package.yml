@@ -1,7 +1,7 @@
 # This workflow will install Python dependencies, run tests and lint with a variety of Python versions
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: Python package
+name: Unit tests
 
 on:
   push:
@@ -89,3 +89,21 @@ jobs:
         pwd
         ls -l
         python ./tests/test_all.py
+
+  examples:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["macos-10.15", "macos-11", "macos-12"]
+        python-version: ["2.7", "3.10"]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Non-regression tests
+      run: |
+        export PYTHONPATH=$PYTHONPATH:$(pwd)
+        zsh ./tests/examples_macos.sh
