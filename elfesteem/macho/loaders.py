@@ -554,7 +554,7 @@ class segment_command(LoadCommand):
             if self.cmd == LC_SEGMENT_64: fmt = "%#018x"
             else:                         fmt = "%#010x"
             res.append(("      addr "+fmt) %s.parent.addr)
-            if (not llvm or llvm >= 8) and s.parent.offset + s.parent.size > len(e.content):
+            if (not llvm or llvm in (8, 9, 10, 11)) and s.parent.offset + s.parent.size > len(e.content):
                 fmt += " (past end of file)"
             res.append(("      size "+fmt) %s.parent.size)
             res.append("    offset %u" %s.parent.offset)
@@ -1411,20 +1411,37 @@ class build_version_command(LoadCommand):
         ("tools",toolsArray),
         ]
     def otool(self, llvm=False):
-        res = [
-    "       cmd %s" % "LC_"+constants['LC'].get(self.cmd, hex(self.cmd)),
-    "   cmdsize %s" % self.cmdsize,
-    "  platform %s" % self.platform,
-    "       sdk %s" % split_integer(self.sdk, 8, 3, truncate=1),
-    "     minos %s" % split_integer(self.minos, 8, 3, truncate=1),
-    "    ntools %s" % self.ntools,
-            ]
-        for tool in self.tools:
-            res.extend([
-    "      tool %s" % tool.tool,
-    "   version %s" % split_integer(tool.version, 8, 3, truncate=2),
-                ])
-        return res
+        if llvm == 9:
+            res = [
+                    "       cmd %s" % "LC_"+constants['LC'].get(self.cmd, hex(self.cmd)),
+                    "   cmdsize %s" % self.cmdsize,
+                    "  platform %s" % {1: "macos"}.get(self.platform, self.platform),
+                    "       sdk %s" % split_integer(self.sdk, 8, 3, truncate=1),
+                    "     minos %s" % split_integer(self.minos, 8, 3, truncate=1),
+                    "    ntools %s" % self.ntools,
+                ]
+            for tool in self.tools:
+                res.extend([
+                    "      tool %s" % {3: "ld"}.get(tool.tool, tool.tool),
+                    "   version %s" % split_integer(tool.version, 8, 3, truncate=2),
+                    ])
+            return res
+        if llvm == 11:
+            res = [
+                    "       cmd %s" % "LC_"+constants['LC'].get(self.cmd, hex(self.cmd)),
+                    "   cmdsize %s" % self.cmdsize,
+                    "  platform %s" % self.platform,
+                    "       sdk %s" % split_integer(self.sdk, 8, 3, truncate=1),
+                    "     minos %s" % split_integer(self.minos, 8, 3, truncate=1),
+                    "    ntools %s" % self.ntools,
+                ]
+            for tool in self.tools:
+                res.extend([
+                    "      tool %s" % tool.tool,
+                    "   version %s" % split_integer(tool.version, 8, 3, truncate=2),
+                    ])
+            return res
+        return LoadCommand.otool(self, llvm=llvm)
 
 # The dyld_info_command contains the file offsets and sizes of
 # the new compressed form of the information dyld needs to

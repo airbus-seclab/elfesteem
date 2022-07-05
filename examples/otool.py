@@ -13,6 +13,25 @@ def print_header(e, **fargs):
     print("      magic cputype cpusubtype  caps    filetype ncmds sizeofcmds      flags")
     print(" 0x%08x %7d %10d  0x%02x  %10u %5u %10u 0x%08x" %(e.Mhdr.magic,e.Mhdr.cputype ,e.Mhdr.cpusubtype & (0xffffffff ^ macho.CPU_SUBTYPE_MASK),(e.Mhdr.cpusubtype & macho.CPU_SUBTYPE_MASK) >> 24,e.Mhdr.filetype,e.Mhdr.ncmds,e.Mhdr.sizeofcmds,e.Mhdr.flags))
 
+import subprocess
+def popen_read_out_err(cmd):
+    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p.wait()
+    p.stdin.close()
+    return p.stdout.read() + p.stderr.read()
+
+import re
+def get_otool_version():
+    otool_v = popen_read_out_err(["otool", "--version"])
+    if type(otool_v) != str: otool_v = str(otool_v, encoding='latin1')
+    r = re.search(r' LLVM version (\d+)', otool_v)
+    if r:
+        return int(r.groups()[0])
+    else:
+        sys.stderr.write("Could not detect otool version\n")
+        sys.stderr.write(otool_v)
+        return None
+
 def split_integer(v, nbits, ndigits, truncate=None):
     mask = (1<<nbits)-1
     res = []
@@ -298,15 +317,17 @@ if __name__ == '__main__':
     fargs = {}
     dyldinfo_simulation = False
     if args.llvm_version:
-        # Currently only two variants of llvm-otool are known, the one
-        # shipped with Xcode 7, and the one shipped with Xcode 8.
+        # Hypothesis: the major number of the version of Xcode is sufficient
+        # to determine what the output format of llvm-otool is.
         for llvm in args.llvm_version:
-            if '7' in llvm: fargs['llvm'] = 7
-            if '8' in llvm: fargs['llvm'] = 8
+            if 'native' in llvm:
+                fargs['llvm'] = get_otool_version()
+            else:
+                fargs['llvm'] = int(llvm)
     if 'header' in args.options:
         functions.append(print_header)
     if 'load' in args.options:
-        if fargs.get('llvm',8) >= 8 and not 'header' in args.options:
+        if fargs.get('llvm',8) in (8, 9, 10, 11) and not 'header' in args.options:
             functions.append(print_header)
         functions.append(print_lc)
     if 'symbols' in args.options:
