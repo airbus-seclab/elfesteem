@@ -6,7 +6,7 @@ The goal of this library is to manipulate various containers of executable code.
 ELF, PE, COFF and Mach-O files are fully supported.
 It includes a partial support of Minidump and RPRC files, and a non-working implementation of Java classes.
 
-It aims at being self-contained and portable: it is pure python, compatible from python 2.3 upwards.
+It aims at being self-contained and portable: it is pure python, compatible from python 2.3 upwards (including python 3.x).
 
 ## Parsing with ELF Esteem
 
