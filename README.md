@@ -36,5 +36,4 @@ When modifications are made, then (depending on the details of the file format) 
 ## Development status
 
 [![codecov](https://codecov.io/gh/LRGH/elfesteem/branch/master/graph/badge.svg)](https://codecov.io/gh/LRGH/elfesteem)
-[![Build Status](https://github.com/LRGH/elfesteem/workflows/Unit%20tests/badge.svg?event=push)](https://github.com/LRGH/elfesteem/actions?query=workflow%3A%22Unit+tests%22+branch%3Amaster+event%3Apush)
-[![Build Status](https://travis-ci.org/LRGH/elfesteem.svg?branch=master)](https://travis-ci.org/LRGH/elfesteem)
+[![Unit tests](https://github.com/LRGH/elfesteem/actions/workflows/python-package.yml/badge.svg)](https://github.com/LRGH/elfesteem/actions/workflows/python-package.yml)
