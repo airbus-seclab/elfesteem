@@ -1179,7 +1179,7 @@ class ImportNamePtr(CStruct):
         CStruct.unpack(self, c, o)
         # The function can be imported by name, or by ordinal
         mask = {32: 0x80000000, 64: 0x8000000000000000}[self.wsize]
-        if self.rva is 0:
+        if self.rva == 0:
             self.name = None
         elif self.rva & mask:
             self.obj = self.rva & (mask-1)

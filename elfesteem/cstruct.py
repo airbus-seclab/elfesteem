@@ -409,10 +409,10 @@ def Constants(globs = {}, table = {},
     if name is None:
         if prefix.endswith('_'): name = prefix[:-1]
         else:                    name = prefix
-    if name is not '' and not name in table: table[name] = {}
+    if name != '' and not name in table: table[name] = {}
     for k in kargs:
         globs[k] = kargs[k]
-        if name is not '':
+        if name != '':
             if k.startswith(prefix) and not k in no_name:
                 if kargs[k] in table[name]:
                     print("Duplicate at %s[%s]=%s; %s"%(name,kargs[k],table[name][kargs[k]],k))
