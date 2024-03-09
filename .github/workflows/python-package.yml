@@ -43,12 +43,7 @@ jobs:
     - uses: actions/checkout@v3
     - name: Set up Python 2.3
       run: |
-        pwd
-        ls -l
         cd ..
-        pwd
-        ls -l
-        pwd
         curl -O https://www.python.org/ftp/python/2.3.7/Python-2.3.7.tgz
         tar xzf Python-2.3.7.tgz
         cd Python-2.3.7
@@ -56,16 +51,11 @@ jobs:
         # cf. https://bugs.launchpad.net/ubuntu/+source/gcc-defaults/+bug/286334
         ./configure BASECFLAGS=-U_FORTIFY_SOURCE
         make
-        export PATH=$(pwd):$PATH
-        cd ../elfesteem
-        pwd
-        ls -l
-        python -c 'import sys;print(sys.version)'
+        sudo ln -fs $(pwd)/python /usr/local/bin/python
     - name: Non-regression tests
       run: |
+        python -c 'import sys;print(sys.version)'
         export PYTHONPATH=$PYTHONPATH:$(pwd)
-        pwd
-        ls -l
         python ./tests/test_all.py
 
   examples:
