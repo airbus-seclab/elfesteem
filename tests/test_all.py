@@ -3,15 +3,22 @@
 # These non-regression tests should be OK from python2.3 to python3.x
 
 # How to import by name, compatible with python2 and python3
-import sys, os, imp
+import sys, os
 __dir__ = os.path.dirname(__file__)
-def import_by_name(name):
-    fp, pathname, description = imp.find_module(name, [__dir__])
-    try:
-        module = imp.load_module(name, fp, pathname, description)
-    finally:
-        if fp is not None: fp.close()
-    return module
+try:
+    # The following is working starting with python2.7
+    import importlib
+    import_by_name = importlib.import_module
+except ImportError:
+    # The following is working for python2.3 to python3.11
+    import imp
+    def import_by_name(name):
+        fp, pathname, description = imp.find_module(name, [__dir__])
+        try:
+            module = imp.load_module(name, fp, pathname, description)
+        finally:
+            if fp is not None: fp.close()
+        return module
 
 try:
     import hashlib
