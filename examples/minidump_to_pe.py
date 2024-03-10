@@ -4,7 +4,12 @@ import sys
 from elfesteem.minidump_init import Minidump
 from elfesteem.pe_init import PE
 
-minidump = Minidump(open(sys.argv[1]).read())
+fd = open(sys.argv[1])
+try:
+    raw = fd.read()
+finally:
+    fd.close()
+minidump = Minidump(raw)
 
 pe = PE()
 for i, memory in enumerate(sorted(minidump.memory.itervalues(),
@@ -37,4 +42,8 @@ for i, memory in enumerate(sorted(minidump.memory.itervalues(),
 entry_point = minidump.threads.Threads[0].ThreadContext.Eip[0]
 pe.Opthdr.AddressOfEntryPoint = entry_point
 
-open("out_pe.bin", "w").write(str(pe))
+fd = open("out_pe.bin", "w")
+try:
+    fd.write(str(pe))
+finally:
+    fd.close()

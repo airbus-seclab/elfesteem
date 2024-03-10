@@ -25,4 +25,8 @@ e_.DirImport.add_dlldesc(new_dll)
 
 s_myimp = e_.SHList.add_section(name = "myimp", rawsize = 0x1000)
 e_.DirImport.set_rva(s_myimp.addr)
-open('uu.bin', 'wb').write(str(e_))
+fd = open('uu.bin', 'wb')
+try:
+    fd.write(str(e_))
+finally:
+    fd.close()

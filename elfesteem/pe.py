@@ -2,7 +2,7 @@
 
 from elfesteem.cstruct import Constants, CBase, CString, CStruct, CArray
 from elfesteem.cstruct import data_null, data_empty
-from elfesteem.cstruct import bytes_to_name, name_to_bytes
+from elfesteem.cstruct import bytes_to_name
 from elfesteem.strpatchwork import StrPatchwork
 import struct
 import logging
@@ -1066,10 +1066,10 @@ class SHList(CArray):
         return s
     
     def align_sections(self, f_align=None, s_align=None):
-        if f_align == None:
+        if f_align is None:
             f_align = self.parent.NThdr.filealignment
             f_align = max(0x200, f_align)
-        if s_align == None:
+        if s_align is None:
             s_align = self.parent.NThdr.sectionalignment
             s_align = max(0x1000, s_align)
         addr = self[0].offset
@@ -1982,8 +1982,7 @@ class CoffSymbols(CArray):
         for s in self._array:
             if n == 0: return s
             n -= 1 + len(s.aux)
-        else:
-            return None
+        return None
     def display(self):
         res = '<%s>' % self.__class__.__name__
         for s in self.symbols:

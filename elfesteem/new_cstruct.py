@@ -88,7 +88,7 @@ class Cstruct_Metaclass(type):
         return o
 
     def unpack_l(cls, s, off = 0, parent_head = None, _sex=None, _wsize=None):
-        if _sex == None and _wsize == None:
+        if _sex is None and _wsize is None:
             # get sex and size from parent
             if parent_head:
                 _sex = parent_head._sex
@@ -97,7 +97,7 @@ class Cstruct_Metaclass(type):
                 _sex = 0
                 _wsize = 32
         c = cls(_sex = _sex, _wsize = _wsize)
-        if parent_head == None:
+        if parent_head is None:
             parent_head = c
         c.parent_head = parent_head
 
@@ -170,7 +170,7 @@ class CStruct(CStructBase):
         self.parent_head = parent_head
         kargs = dict(kargs)
         #if not sex or size: get the one of the parent
-        if _sex == None and _wsize == None:
+        if _sex is None and _wsize is None:
             if parent_head:
                 _sex = parent_head._sex
                 _wsize = parent_head._wsize
@@ -203,15 +203,15 @@ class CStruct(CStructBase):
             if ffmt in type_size or (isinstance(ffmt, str) and re.match(r'\d+s', ffmt)):
                 # basic types
                 fmt = real_fmt(ffmt, self.wsize)
-                if cpt == None:
-                    if value == None:
+                if cpt is None:
+                    if value is None:
                         o = struct.calcsize(fmt)*data_null
                     else:
                         o = struct.pack(self.sex+fmt, value)
                 else:
                     o = data_empty
                     for v in value:
-                        if value == None:
+                        if value is None:
                             o += struct.calcsize(fmt)*data_null
                         else:
                             o += struct.pack(self.sex+fmt, v)
@@ -220,7 +220,7 @@ class CStruct(CStructBase):
                 o = value+data_null
             elif ffmt in all_cstructs:
                 # sub structures
-                if cpt == None:
+                if cpt is None:
                     o = value.pack()
                 else:
                     o = data_empty
@@ -290,12 +290,12 @@ if __name__ == "__main__":
                           lambda c, value:c.sets(value))),
                    ("f", "u16"),
                    ]
-        def gets(cls, s, of):
+        def gets(self, s, of):
             i = 0
             while s[of+i] != "\x00":
                 i+=1
             return s[of:of+i], of+i+1
-        def sets(cls, value):
+        def sets(self, value):
             return str(value)+'\x00'
 
     """

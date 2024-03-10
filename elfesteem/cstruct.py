@@ -395,7 +395,7 @@ class CArray(CArray_base):
 
 # Method that defines constants (as in .h headers) and tables that
 # can recover the constant's name from its value.
-def Constants(globs = {}, table = {},
+def Constants(globs = None, table = None,
               name = None, prefix = None,
               no_name = (), **kargs):
     if prefix is None:

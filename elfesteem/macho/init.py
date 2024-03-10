@@ -130,7 +130,7 @@ class MachoList(CBase):
             inverse = intervals.Intervals().add(0,farch.size)
             for j in e.interval.ranges:
                 inverse.delete(j.start,j.stop)
-            if not self.parent.interval == None:
+            if not self.parent.interval is None:
                 for j in inverse.ranges:
                     if not self.parent.interval.contains(farch.offset+j.start,farch.offset+j.stop):
                         raise ValueError("This part of file has already been parsed")
@@ -173,7 +173,7 @@ class virt(object):
     def get_rvaitem(self, item, section = None):
         if item.step != None:
             raise ValueError("pas de step")
-        if item.stop == None:
+        if item.stop is None:
             s = self.parent.getsectionbyvad(item.start, section = section)
             if not s:
                 raise ValueError('unknown rva address! 0x%x'%item.start)
@@ -476,7 +476,7 @@ class MACHO(object):
             if 'content' in kargs :
                 nwsh = Section(parent=sectionHeader(parent=self.load),
                                content=kargs['content'])
-                if not nwlc.segname==None:
+                if not nwlc.segname is None:
                     nwsh.parent.segname = nwlc.segname
             self.add(nwlc)
             self.add(nwsh)
@@ -507,7 +507,7 @@ class MACHO(object):
             return result
 
     def checkParsedCompleted(self, **kargs):
-        if self.interval == None :
+        if self.interval is None :
             raise ValueError("No interval argument in macho_init call")
         result = []
         for i in self.interval :

@@ -201,13 +201,17 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--section-groups', dest='options', action='append_const', const='groups',   help='Display the section groups')
     parser.add_argument('file', nargs='+', help='ELF file(s)')
     args = parser.parse_args()
-    if args.options == None:
+    if args.options is None:
         args.options = []
 
     for file in args.file:
         if len(args.file) > 1:
             print("\nFile: %s" % file)
-        raw = open(file, 'rb').read()
+        fd = open(file, 'rb')
+        try:
+            raw = fd.read()
+        finally:
+            fd.close()
         e = elf_init.ELF(raw)
         if 'headers' in args.options:
             display_headers(e)

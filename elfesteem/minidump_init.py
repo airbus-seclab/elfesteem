@@ -302,6 +302,10 @@ class ContentVirtual(object):
 if __name__ == "__main__":
     for file in sys.argv[1:]:
         if len(sys.argv) > 2: print("File: %s"%file)
-        raw = open(file, 'rb').read()
+        fd = open(file, 'rb')
+        try:
+            raw = fd.read()
+        finally:
+            fd.close()
         e = Minidump(raw)
         print(e.dump())

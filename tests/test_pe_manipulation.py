@@ -3,7 +3,7 @@
 import os
 __dir__ = os.path.dirname(__file__)
 
-from test_all import run_tests, assertion, hashlib
+from test_all import run_tests, assertion, hashlib, open_read
 from elfesteem.pe_init import log, PE, COFF, Coff
 from elfesteem.strpatchwork import StrPatchwork
 from elfesteem import pe
@@ -50,7 +50,7 @@ def test_PE_empty64(assertion):
 
 def test_PE_manipulate(assertion):
     global log_history
-    pe_mingw = open(__dir__+'/binary_input/pe_mingw.exe', 'rb').read()
+    pe_mingw = open_read(__dir__+'/binary_input/pe_mingw.exe')
     e = PE(pe_mingw)
     # Packed file is not identical :-(
     # Are missing:
@@ -274,7 +274,7 @@ def test_PE_manipulate(assertion):
 def test_PE_dll(assertion):
     global log_history
     # Small DLL created with Visual Studio
-    dll_vstudio = open(__dir__+'/binary_input/pe_vstudio.dll', 'rb').read()
+    dll_vstudio = open_read(__dir__+'/binary_input/pe_vstudio.dll')
     e = PE(dll_vstudio)
     d = e.pack()
     assertion('19028e1a1bde785fb4a58aeacf56007b',
@@ -306,51 +306,51 @@ def test_PE_dll(assertion):
 def test_PE_ange(assertion):
     global log_history
     # Parse some ill-formed PE made by Ange Albertini
-    e = PE(open(__dir__+'/binary_input/Ange/resourceloop.exe', 'rb').read())
+    PE(open_read(__dir__+'/binary_input/Ange/resourceloop.exe'))
     assertion([('warn', ('Resource tree too deep',), {})]*212,
               log_history,
               'Ange/resourceloop.exe (logs)')
     log_history = []
-    e = PE(open(__dir__+'/binary_input/Ange/namedresource.exe', 'rb').read())
+    PE(open_read(__dir__+'/binary_input/Ange/namedresource.exe'))
     assertion([],
               log_history,
               'Ange/namedresource.exe (logs)')
-    e = PE(open(__dir__+'/binary_input/Ange/weirdsord.exe', 'rb').read())
+    PE(open_read(__dir__+'/binary_input/Ange/weirdsord.exe'))
     assertion([('warn', ('Section %d offset %#x not aligned to %#x', 0, 513, 16384), {}), ('warn', ('Section %d size %#x not aligned to %#x', 0, 270, 16384), {})],
               log_history,
               'Ange/weirdsord.exe (logs)')
     log_history = []
-    e = PE(open(__dir__+'/binary_input/Ange/nosectionW7.exe', 'rb').read())
+    PE(open_read(__dir__+'/binary_input/Ange/nosectionW7.exe'))
     assertion([('warn', ('Number of rva %d does not match sizeofoptionalheader %d', 16, 0), {})],
               log_history,
               'Ange/nosectionW7.exe (logs)')
     log_history = []
-    e = PE(open(__dir__+'/binary_input/Ange/imports_relocW7.exe', 'rb').read())
+    PE(open_read(__dir__+'/binary_input/Ange/imports_relocW7.exe'))
     assertion([],
               log_history,
               'Ange/imports_relocW7.exe (logs)')
-    e = PE(open(__dir__+'/binary_input/Ange/imports_tinyXP.exe', 'rb').read())
+    PE(open_read(__dir__+'/binary_input/Ange/imports_tinyXP.exe'))
     assertion([],
               log_history,
               'Ange/imports_tinyXP.exe (logs)')
-    e = PE(open(__dir__+'/binary_input/Ange/bottomsecttbl.exe', 'rb').read())
+    PE(open_read(__dir__+'/binary_input/Ange/bottomsecttbl.exe'))
     assertion([('warn', ('Number of rva %d does not match sizeofoptionalheader %d', 16, 696), {})],
               log_history,
               'Ange/bottomsecttbl.exe (logs)')
     log_history = []
-    e = PE(open(__dir__+'/binary_input/Ange/delayfake.exe', 'rb').read())
+    PE(open_read(__dir__+'/binary_input/Ange/delayfake.exe'))
     assertion([],
               log_history,
               'Ange/delayfake.exe (logs)')
-    e = PE(open(__dir__+'/binary_input/Ange/exportobf.exe', 'rb').read())
+    PE(open_read(__dir__+'/binary_input/Ange/exportobf.exe'))
     assertion([],
               log_history,
               'Ange/exportobf.exe (logs)')
-    e = PE(open(__dir__+'/binary_input/Ange/dllbound-ld.exe', 'rb').read())
+    PE(open_read(__dir__+'/binary_input/Ange/dllbound-ld.exe'))
     assertion([],
               log_history,
               'Ange/dllbound-ld.exe (logs)')
-    e = PE(open(__dir__+'/binary_input/Ange/d_tiny.dll', 'rb').read())
+    PE(open_read(__dir__+'/binary_input/Ange/d_tiny.dll'))
     assertion([('warn', ('Opthdr magic %#x', 31074), {}),
                ('warn', ('Number of rva %d does not match sizeofoptionalheader %d', 0, 13864), {}),
                ('warn', ('Windows 8 needs at least 13 directories, %d found', 0), {}),
@@ -359,18 +359,18 @@ def test_PE_ange(assertion):
               log_history,
               'Ange/d_tiny.dll (logs)')
     log_history = []
-    e = PE(open(__dir__+'/binary_input/Ange/dllfw.dll', 'rb').read())
+    PE(open_read(__dir__+'/binary_input/Ange/dllfw.dll'))
     assertion([],
               log_history,
               'Ange/dllfw.dll (logs)')
-    e = PE(open(__dir__+'/binary_input/Ange/tinydllXP.dll', 'rb').read())
+    PE(open_read(__dir__+'/binary_input/Ange/tinydllXP.dll'))
     assertion([('warn', ('Number of rva %d does not match sizeofoptionalheader %d', 0, 0), {}),
                ('warn', ('Windows 8 needs at least 13 directories, %d found', 0), {}),
                ('warn', ('File too short for StrTable 0x55 != 0xc258016a',), {})],
               log_history,
               'Ange/tinydllXP.dll (logs)')
     log_history = []
-    e = PE(open(__dir__+'/binary_input/Ange/resourceloop.exe', 'rb').read())
+    e = PE(open_read(__dir__+'/binary_input/Ange/resourceloop.exe'))
     log_history = []
     d = e.DirRes.display().encode('latin1')
     assertion('98701be30b09759a64340e5245e48195',
@@ -399,13 +399,13 @@ def test_COFF_invalid(assertion):
     # Now, we parse COFF files
     try:
         # Not COFF: OptHdr size too big
-        e = Coff(open(__dir__+'/binary_input/README.txt', 'rb').read())
+        e = Coff(open_read(__dir__+'/binary_input/README.txt'))
         assertion(0,1, 'Not COFF')
     except ValueError:
         pass
 
 def test_COFF_valid(assertion):
-    obj_mingw = open(__dir__+'/binary_input/coff_mingw.obj', 'rb').read()
+    obj_mingw = open_read(__dir__+'/binary_input/coff_mingw.obj')
     try:
         e = PE(obj_mingw)
         assertion(0,1, 'Not PE')
@@ -420,7 +420,7 @@ def test_COFF_valid(assertion):
     assertion(None, d, 'No virt for .obj')
 
 def test_COFF_tms320(assertion):
-    out_tms320 = open(__dir__+'/binary_input/C28346_Load_Program_to_Flash.out', 'rb').read()
+    out_tms320 = open_read(__dir__+'/binary_input/C28346_Load_Program_to_Flash.out')
     e = Coff(out_tms320)
     d = e.SHList.display().encode('latin1')
     assertion('a63cf686186105b83e49509f213b20ea',
@@ -429,57 +429,57 @@ def test_COFF_tms320(assertion):
 
 def test_COFF_ckermit(assertion):
     # C-Kermit binary for OSF1
-    out_osf1 = open(__dir__+'/binary_input/cku200.dec-osf-1.3a', 'rb').read()
+    out_osf1 = open_read(__dir__+'/binary_input/cku200.dec-osf-1.3a')
     e = Coff(out_osf1)
     d = repr(e.OSF1Symbols).encode('latin1')
     assertion('c7df867846612e6fc1c52a8042f706cc',
               hashlib.md5(d).hexdigest(),
               'Display OSF/1 Symbols')
     # C-Kermit binary for Clipper CLIX
-    e = Coff(open(__dir__+'/binary_input/cku196.clix-3.1', 'rb').read())
+    Coff(open_read(__dir__+'/binary_input/cku196.clix-3.1'))
     # C-Kermit binary for Apollo
-    e = Coff(open(__dir__+'/binary_input/cku193a05.apollo-sr10-s5r3', 'rb').read())
+    Coff(open_read(__dir__+'/binary_input/cku193a05.apollo-sr10-s5r3'))
     # C-Kermit XCOFF32 binary for AIX
-    e = Coff(open(__dir__+'/binary_input/cku190.rs6aix32c-3.2.4', 'rb').read())
+    Coff(open_read(__dir__+'/binary_input/cku190.rs6aix32c-3.2.4'))
     # C-Kermit eCOFF32 binary for MIPS, big endian
-    e = Coff(open(__dir__+'/binary_input/cku192.irix40', 'rb').read())
+    Coff(open_read(__dir__+'/binary_input/cku192.irix40'))
     # C-Kermit eCOFF32 binary for MIPS, little endian
-    e = Coff(open(__dir__+'/binary_input/cku192.ultrix43c-mips3', 'rb').read())
+    Coff(open_read(__dir__+'/binary_input/cku192.ultrix43c-mips3'))
 
 def test_COFF_invalidity(assertion):
     global log_history
     # Some various ways for a COFF to be detected as invalid
-    obj_mingw = open(__dir__+'/binary_input/coff_mingw.obj', 'rb').read()
+    obj_mingw = open_read(__dir__+'/binary_input/coff_mingw.obj')
     obj_mingw = StrPatchwork(obj_mingw)
-    e = COFF(obj_mingw)
+    COFF(obj_mingw)
     try:
         obj_mingw[2] = struct.pack("<H", 0)
-        e = COFF(obj_mingw)
+        COFF(obj_mingw)
         assertion(0,1, 'COFF cannot have no section')
     except ValueError:
         pass
     try:
         obj_mingw[2] = struct.pack("<H", 0x2000)
-        e = COFF(obj_mingw)
+        COFF(obj_mingw)
         assertion(0,1, 'Too many sections in COFF')
     except ValueError:
         pass
     try:
         obj_mingw[2] = struct.pack("<H", 0x100)
-        e = COFF(obj_mingw)
+        COFF(obj_mingw)
         assertion(0,1, 'Too many sections in COFF, past end of file')
     except ValueError:
         pass
     try:
         obj_mingw[2] = struct.pack("<H", 3)
         obj_mingw[8] = struct.pack("<I", 0x100000)
-        e = COFF(obj_mingw)
+        COFF(obj_mingw)
         assertion(0,1, 'COFF invalid ptr to symbol table')
     except ValueError:
         pass
     obj_mingw[8] = struct.pack("<I", 220)
     obj_mingw[436] = struct.pack("<I", 10000)
-    e = COFF(obj_mingw)
+    COFF(obj_mingw)
     assertion([('warn', ('File too short for StrTable 0x4 != 0x2710',), {})],
               log_history,
               'File too short for StrTable (logs)')

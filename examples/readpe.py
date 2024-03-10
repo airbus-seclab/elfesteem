@@ -7,7 +7,7 @@ if sys.version_info[0] == 2 and sys.version_info[1] < 4:
 
 sys.path.insert(1, os.path.abspath(sys.path[0]+'/..'))
 from elfesteem import pe_init, pe
-import pprint, struct
+import struct
 
 def test_rebuild(e):
     bin = str(e)
@@ -435,7 +435,7 @@ if __name__ == '__main__':
                 help=help)
         parser.add_argument('file', nargs='+', help='ELF file(s)')
         args = parser.parse_args()
-        if args.options == None:
+        if args.options is None:
             args.options = []
     except ImportError:
         # Emulate argparse for python < 2.7
@@ -454,7 +454,11 @@ if __name__ == '__main__':
     for file in args.file:
         if len(args.file) > 1:
             print("\nFile: %s" % file)
-        raw = open(file, 'rb').read()
+        fd = open(file, 'rb')
+        try:
+            raw = fd.read()
+        finally:
+            fd.close()
         if raw[:2] == struct.pack("2B", 0x48,0x52):
             # IDA's bochsys.dll is a normal PE with its magic number replaced
             # by 'HR', probably meaning HexRays.

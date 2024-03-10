@@ -31,7 +31,7 @@ class ContentRVA(object):
         return data_out
 
     def get_rvaitem(self, start, stop = None, section = None):
-        if stop == None:
+        if stop is None:
             s = self.parent.getsectionbyrva(start, section)
             if s is None:
                 return [(None, start)]
@@ -157,7 +157,7 @@ class ContentVirtual(object):
             s_max = max(s.size, s.rawsize)
             if s.vaddr+s_max <= start:
                 continue
-            if end == None or s.vaddr < end:
+            if end is None or s.vaddr < end:
                 sections.append(s)
 
         if not sections:
@@ -186,7 +186,7 @@ class ContentVirtual(object):
             s_max = max(s.size, s.rawsize)
             if s.vaddr+s_max <= start:
                 continue
-            if end == None or s.vaddr < end:
+            if end is None or s.vaddr < end:
                 sections.append(s)
         if not sections:
             return -1
@@ -196,7 +196,7 @@ class ContentVirtual(object):
                 off = start - s.vaddr
             else:
                 off = 0
-            if end == None:
+            if end is None:
                 ret = s.section_data.rfind(pattern, off)
             else:
                 ret = s.data.rfind(pattern, off, end-s.vaddr)
@@ -278,7 +278,7 @@ class PE(object):
                  wsize = 32):
         self._rva = ContentRVA(self)
         self._virt = ContentVirtual(self)
-        if pestr == None:
+        if pestr is None:
             self.sex = '<'
             self.wsize = wsize
             self.DOShdr = pe.DOShdr(parent=self, wsize=32)

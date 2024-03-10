@@ -38,7 +38,7 @@ SectionBase = SectionMetaclass('SectionBase', (object,), {})
 class Section(SectionBase):
     sht = None
     def create(cls, parent, shstr=None):
-        if shstr == None:
+        if shstr is None:
             sh = None
         else:
             sh = elf.Shdr(parent = None, content = shstr, sex = parent.sex, 
@@ -247,9 +247,6 @@ class StrTable(Section):
     def mod_name(self, idx, name):
         name = name_to_bytes(name)
         n = self.content[idx:self.content.find(data_null, idx)]
-        data = self.content
-        if type(data) != str: data = data.pack()
-        data = data[:idx]+name+data[idx+len(n):]
         dif = len(name) - len(n)
         if dif != 0:
             for sh in self.parent.shlist:
@@ -560,7 +557,7 @@ class virt(object):
         self.parent = x
 
     def get_rvaitem(self, item, section = None):
-        if item.stop == None:
+        if item.stop is None:
             s = self.parent.getsectionbyvad(item.start, section)
             return [(s, item.start-s.addr)]
 
@@ -775,7 +772,7 @@ def elf_set_offsets(self):
         + [ ".shstrtab", None, ".symtab", ".strtab"] \
         + [ ".rel"+name for name in section_layout ]
     for name in section_layout:
-        if name == None:
+        if name is None:
             pos = ((pos + 3)//4)*4
             self.Ehdr.shoff = pos
             self.Ehdr.shentsize = self.sh._shstrtab.sh.bytelen
@@ -967,10 +964,14 @@ class ELF(object):
     _content = property(lambda _:_.content)
 
 if __name__ == "__main__":
-    import rlcompleter,readline,pdb
-    from pprint import pprint as pp
+    import readline
     readline.parse_and_bind("tab: complete")
 
-    e = ELF(open("/bin/ls").read())
+    fd = open("/bin/ls")
+    try:
+        raw = fd.read()
+    finally:
+        fd.close()
+    e = ELF(raw)
     print (repr(e))
     #o = ELF(open("/tmp/svg-main.o").read())

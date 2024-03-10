@@ -20,7 +20,7 @@
 # is used, e.g. a value of 'version' greater than 2 in the header.
 
 import struct
-from elfesteem.cstruct import CBase, CData, CStruct, data_null, data_empty
+from elfesteem.cstruct import CData, CStruct, data_null, data_empty
 from elfesteem.strpatchwork import StrPatchwork
 
 # Section types
@@ -270,9 +270,19 @@ if __name__ == "__main__":
     if len(sys.argv) > 2:
         for f in sys.argv[1:]:
             print('File: %s'%f)
-            e = RPRC(open(f, 'rb').read())
+            fd = open(f, 'rb')
+            try:
+                raw = fd.read()
+            finally:
+                fd.close()
+            e = RPRC(raw)
             print (e.display())
         sys.exit(0)
     if len(sys.argv) == 2:
-        e = RPRC(open(sys.argv[1], 'rb').read())
+        fd = open(sys.argv[1], 'rb')
+        try:
+            raw = fd.read()
+        finally:
+            fd.close()
+        e = RPRC(raw)
     code.interact('Interactive Python Console', None, locals())

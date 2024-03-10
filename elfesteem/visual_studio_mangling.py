@@ -158,6 +158,8 @@ def symbol_demangle_variable(name, data):
         assert data[:1] == 'A'
         data.advance(1)
         ret = parse_value(data, calling_convention, logmsg='CALL=%r')
+    else:
+        raise ValueError("Unknown thunk value %r"%thunk)
     name = '::'.join(reversed(name))
     ret += name
     if access: access += ' '
@@ -683,7 +685,6 @@ def parse_value(data, table, logmsg=None):
             if logmsg is not None:
                 data.log(logmsg % table[k])
             return table[k]
-    if logmsg is not None: data.log(logmsg % 'NONE')
 
 special_fragment = {
     '0': '?0', # to be done by name_finalize()
@@ -855,7 +856,7 @@ thunk_access = {
     'I': (None, 'protected:'),
     'J': (None, 'protected:'),
     'K': (None, 'protected: static'),
-    'K': (None, 'protected: static'),
+    'L': (None, 'protected: static'),
     'M': (None, 'protected: virtual'),
     'N': (None, 'protected: virtual'),
     'O': (None, 'protected: thunk'),

@@ -1,12 +1,10 @@
 #! /usr/bin/env python
 
 import sys, os
-import time
 import platform
 
 sys.path.insert(1, os.path.abspath(sys.path[0]+'/..'))
 from elfesteem import macho_init, macho
-from elfesteem.cstruct import data_null, CBase
 
 def print_header(e, **fargs):
     print("Mach header")
@@ -309,7 +307,7 @@ if __name__ == '__main__':
     parser.add_argument('-export', dest='options', action='append_const', const='export', help='addresses of all symbols this file exports')
     parser.add_argument('file', nargs='*', help='object file')
     args = parser.parse_args()
-    if args.options == None:
+    if args.options is None:
         args.options = []
     if len(args.file) == 0:
         parser.print_help()
@@ -358,7 +356,11 @@ if __name__ == '__main__':
         dyldinfo_simulation = True
 
     for file in args.file:
-        raw = open(file, 'rb').read()
+        fd = open(file, 'rb')
+        try:
+            raw = fd.read()
+        finally:
+            fd.close()
         filesize = os.path.getsize(file)
         try:
             e = macho_init.MACHO(raw,

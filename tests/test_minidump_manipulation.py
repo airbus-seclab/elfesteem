@@ -3,11 +3,11 @@
 import os
 __dir__ = os.path.dirname(__file__)
 
-from test_all import run_tests, assertion, hashlib
+from test_all import run_tests, assertion, hashlib, open_read
 from elfesteem.minidump_init import Minidump
 
 def test_MD_windows(assertion):
-    md = open(__dir__+'/binary_input/windows.dmp', 'rb').read()
+    md = open_read(__dir__+'/binary_input/windows.dmp')
     assertion('82a09a9d801bddd1dc94dfb9ba6eddf0',
               hashlib.md5(md).hexdigest(),
               'Reading windows.dmp')
@@ -18,7 +18,7 @@ def test_MD_windows(assertion):
               'Displaying the content of windows.dmp')
 
 def test_MD_i386(assertion):
-    md = open(__dir__+'/binary_input/minidump-i386.dmp', 'rb').read()
+    md = open_read(__dir__+'/binary_input/minidump-i386.dmp')
     assertion('0f2ee1a0a2e6351e64929197c07679e6',
               hashlib.md5(md).hexdigest(),
               'Reading minidump-i386.dmp')
@@ -29,7 +29,7 @@ def test_MD_i386(assertion):
               'Displaying the content of minidump-i386.dmp')
 
 def test_MD_x86_64(assertion):
-    md = open(__dir__+'/binary_input/minidump-x86_64.dmp', 'rb').read()
+    md = open_read(__dir__+'/binary_input/minidump-x86_64.dmp')
     assertion('ecde7af61615e05ffcde1f064c1a22f8',
               hashlib.md5(md).hexdigest(),
               'Reading minidump-x86_64.dmp')

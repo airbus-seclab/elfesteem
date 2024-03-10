@@ -214,7 +214,6 @@ class LoadCommand(LoadBase):
         # Output similar to llvm-otool (depending on llvm version)
         # Cf. https://opensource.apple.com/source/cctools/cctools-895/otool/ofile_print.c
         # and others
-        res = []
         import time
         lc_value = []
         shift = 1
@@ -1565,7 +1564,7 @@ DICE_KIND_ABS_JUMP_TABLE32  = 0x0005,
 ######################################################################
 
 def isOffsetChangeable(offset, min_offset):
-    return (min_offset == None or offset >= min_offset) and offset != 0
+    return (min_offset is None or offset >= min_offset) and offset != 0
 
 class LoadCommands(CBase):
     def unpack(self, c, o):

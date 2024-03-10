@@ -4,7 +4,6 @@ import sys
 import code
 #import elfesteem.elf
 import readline
-import rlcompleter
 import argparse
 
 

@@ -1,11 +1,8 @@
 #! /usr/bin/env python
 
-import struct, array
-from strpatchwork import StrPatchwork
+import struct
 from new_cstruct import CStruct
 import logging
-from collections import defaultdict
-from pprint import pprint as pp
 log = logging.getLogger("classparse")
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
@@ -19,7 +16,7 @@ def gensapce(lvl):
     return '    '*lvl
 
 def out_attrs(o, lvl =  None):
-    if lvl == None:
+    if lvl is None:
         lvl = 0
     out = ""
     if not isinstance(o, list):
@@ -593,6 +590,9 @@ class JCLASS(object):
 
 if __name__ == "__main__":
     import sys
-    from pprint import pprint as pp
-    data = open(sys.argv[1]).read()
+    fd = open(sys.argv[1])
+    try:
+        data = fd.read()
+    finally:
+        fd.close()
     e = JCLASS(data)

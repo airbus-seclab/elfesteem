@@ -7,7 +7,7 @@ data_empty = struct.pack("")
 
 class StrPatchwork(object):
     def __init__(self, s=data_empty, paddingbyte=data_null):
-        if s == None: s = data_empty
+        if s is None: s = data_empty
         if isinstance(s, StrPatchwork): s = s.pack()
         self.s = array("B",s)
         # cache s to avoid rebuilding str after each find
@@ -48,7 +48,7 @@ class StrPatchwork(object):
         else:
             return r.tostring()
     def __setitem__(self, item, val):
-        if val == None:
+        if val is None:
             return
         if sys.version_info[0] >= 3 and type(val) == str:
             val = val.encode(encoding="latin1")

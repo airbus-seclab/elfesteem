@@ -41,7 +41,7 @@ try:
             assert target == value
         return inner_assertion
     assertion = pytest.fixture(assertion)
-except:
+except Exception:
     assertion = None
 
 class print_colored(object): # Namespace
@@ -74,6 +74,14 @@ def test_MD5(assertion):
     assertion('f71dbe52628a3f83a77ab494817525c6',
               hashlib.md5(struct.pack('BBBB',116,111,116,111)).hexdigest(),
               'MD5')
+
+def open_read(f):
+    fd = open(f, 'rb')
+    try:
+        data = fd.read()
+    finally:
+        fd.close()
+    return data
 
 if __name__ == "__main__":
     exit_value = 0

@@ -3,7 +3,7 @@
 import os
 __dir__ = os.path.dirname(__file__)
 
-from test_all import run_tests, assertion, hashlib
+from test_all import run_tests, assertion, hashlib, open_read
 from elfesteem.rprc import RPRC
 
 def test_RPRC_empty(assertion):
@@ -18,7 +18,7 @@ def test_RPRC_empty(assertion):
               'Creation of a standard empty RPRC; fix point')
 
 def test_RPRC_ducati(assertion):
-    rprc_m3 = open(__dir__+'/binary_input/ducati-m3_p768.bin', 'rb').read()
+    rprc_m3 = open_read(__dir__+'/binary_input/ducati-m3_p768.bin')
     assertion('d31c5887b98b37f949da3570b8688983',
               hashlib.md5(rprc_m3).hexdigest(),
               'Reading ducati-m3_p768.bin')
@@ -77,7 +77,7 @@ def test_RPRC_ducati(assertion):
 
 def test_RPRC_invalid(assertion):
     try:
-        e = RPRC(open(__dir__+'/binary_input/README.txt', 'rb').read())
+        e = RPRC(open_read(__dir__+'/binary_input/README.txt'))
         assertion(0,1, 'Not an RPRC')
     except ValueError:
         pass

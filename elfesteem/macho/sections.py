@@ -1,6 +1,6 @@
 import struct
 from elfesteem.macho.common import *
-from elfesteem.cstruct import Constants, CBase, CData, CString, CArray, CStructWithStrTable
+from elfesteem.cstruct import Constants, CBase, CString, CArray, CStructWithStrTable
 from elfesteem.strpatchwork import StrPatchwork
 
 import sys
@@ -528,8 +528,9 @@ class bind_opcode(bind_entry):
     _fields = [ ("val", "u08") ]
     def apply(self):
         self.parent.index = self.index + self.bytelen
+del bind_opcode
 
-class bind_opcode(bind_entry):
+class bind_opcode_libord(bind_entry):
     opcode = BIND_OPCODE_SET_DYLIB_ORDINAL_IMM
     _fields = [ ("val", "u08") ]
     libord = property(lambda _: _.imm)
@@ -538,17 +539,20 @@ class bind_opcode(bind_entry):
     def apply(self):
         self.parent.libord = int(self.libord)
 
-class bind_opcode(bind_opcode):
+class bind_opcode(bind_opcode_libord):
     opcode = BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB
     _fields = [ ("val", "u08"), ("libord", Uleb128) ]
+del bind_opcode
 
-class bind_opcode(bind_opcode):
+class bind_opcode(bind_opcode_libord):
     opcode = BIND_OPCODE_SET_DYLIB_SPECIAL_IMM
     _fields = [ ("val", "u08") ]
     def libord(self):
         if self.imm: return self.imm | BIND_OPCODE_MASK
         else:        return 0
     libord = property(libord)
+del bind_opcode
+del bind_opcode_libord
 
 class bind_opcode(bind_entry):
     opcode = BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM
@@ -561,6 +565,7 @@ class bind_opcode(bind_entry):
             self.parent.weak_import = " (weak import)"
         else:
             self.parent.weak_import = ""
+del bind_opcode
 
 class bind_opcode(bind_entry):
     opcode = BIND_OPCODE_SET_TYPE_IMM
@@ -574,6 +579,7 @@ class bind_opcode(bind_entry):
             BIND_TYPE_TEXT_ABSOLUTE32: "text abs32",
             BIND_TYPE_TEXT_PCREL32: "text rel32",
             }.get(self.imm,"!!unknown!!")
+del bind_opcode
 
 class bind_opcode(bind_entry):
     opcode = BIND_OPCODE_SET_ADDEND_SLEB
@@ -582,6 +588,7 @@ class bind_opcode(bind_entry):
         return bind_entry.__str__(self) + '(%d)' % int(self.addend)
     def apply(self):
         self.parent.addend = self.addend
+del bind_opcode
 
 class bind_opcode(bind_entry):
     opcode = BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB
@@ -598,6 +605,7 @@ class bind_opcode(bind_entry):
         else:
             self.parent.seg = None
             self.parent.addr = None
+del bind_opcode
 
 class bind_opcode(bind_entry):
     opcode = BIND_OPCODE_ADD_ADDR_ULEB
@@ -608,6 +616,7 @@ class bind_opcode(bind_entry):
         if not hasattr(self.parent, 'addr'): raise ValueError
         self.parent.addr += int(self.addr)
         self.parent.addr &= mask64
+del bind_opcode
 
 class bind_opcode(bind_entry):
     opcode = BIND_OPCODE_DO_BIND
@@ -618,6 +627,7 @@ class bind_opcode(bind_entry):
         if not hasattr(self.parent, 'addr'): raise ValueError
         self.parent._info.append(self.parent.cls(self))
         self.parent.addr += self.wsize//8
+del bind_opcode
 
 class bind_opcode(bind_entry):
     opcode = BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB
@@ -629,6 +639,7 @@ class bind_opcode(bind_entry):
         self.parent._info.append(self.parent.cls(self))
         self.parent.addr += self.wsize//8 + int(self.addr)
         self.parent.addr &= mask64
+del bind_opcode
 
 class bind_opcode(bind_entry):
     opcode = BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED
@@ -639,6 +650,7 @@ class bind_opcode(bind_entry):
     def apply(self):
         self.parent._info.append(self.parent.cls(self))
         self.parent.addr += self.add_addr
+del bind_opcode
 
 class bind_opcode(bind_entry):
     opcode = BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB
@@ -651,7 +663,6 @@ class bind_opcode(bind_entry):
         for i in range(int(self.count)):
             self.parent._info.append(self.parent.cls(self))
             self.parent.addr += int(self.skip) + self.wsize//8
-
 del bind_opcode
 
 class DyldArrayBind(DyldArrayGeneric):
@@ -748,6 +759,7 @@ class rebase_opcode(rebase_entry):
     _fields = [ ("val", "u08") ]
     def __str__(self):
         return rebase_entry.__str__(self) + '()'
+del rebase_opcode
 
 class rebase_opcode(rebase_entry):
     opcode = REBASE_OPCODE_SET_TYPE_IMM
@@ -761,6 +773,7 @@ class rebase_opcode(rebase_entry):
             REBASE_TYPE_TEXT_ABSOLUTE32: "text abs32",
             REBASE_TYPE_TEXT_PCREL32: "text rel32",
             }.get(self.imm,"!!unknown!!")
+del rebase_opcode
 
 class rebase_opcode(rebase_entry):
     opcode = REBASE_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB
@@ -777,6 +790,7 @@ class rebase_opcode(rebase_entry):
         else:
             self.parent.seg = None
             self.parent.addr = None
+del rebase_opcode
 
 class rebase_opcode(rebase_entry):
     opcode = REBASE_OPCODE_ADD_ADDR_ULEB
@@ -786,6 +800,7 @@ class rebase_opcode(rebase_entry):
     def apply(self):
         if not hasattr(self.parent, 'addr'): raise ValueError
         self.parent.addr += int(self.addr)
+del rebase_opcode
 
 class rebase_opcode(rebase_entry):
     opcode = REBASE_OPCODE_ADD_ADDR_IMM_SCALED
@@ -796,6 +811,7 @@ class rebase_opcode(rebase_entry):
     def apply(self):
         if not hasattr(self.parent, 'addr'): raise ValueError
         self.parent.addr += self.add_addr
+del rebase_opcode
 
 class rebase_opcode(rebase_entry):
     opcode = REBASE_OPCODE_DO_REBASE_IMM_TIMES
@@ -807,6 +823,7 @@ class rebase_opcode(rebase_entry):
         for i in range(self.imm):
             self.parent._info.append(self.parent.cls(self))
             self.parent.addr += self.wsize//8
+del rebase_opcode
 
 class rebase_opcode(rebase_entry):
     opcode = REBASE_OPCODE_DO_REBASE_ULEB_TIMES
@@ -818,6 +835,7 @@ class rebase_opcode(rebase_entry):
         for i in range(int(self.count)):
             self.parent._info.append(self.parent.cls(self))
             self.parent.addr += self.wsize//8
+del rebase_opcode
 
 class rebase_opcode(rebase_entry):
     opcode = REBASE_OPCODE_DO_REBASE_ADD_ADDR_ULEB
@@ -829,6 +847,7 @@ class rebase_opcode(rebase_entry):
         if not hasattr(self.parent, 'addr'): raise ValueError
         self.parent._info.append(self.parent.cls(self))
         self.parent.addr += self.add_addr
+del rebase_opcode
 
 class rebase_opcode(rebase_entry):
     opcode = REBASE_OPCODE_DO_REBASE_ULEB_TIMES_SKIPPING_ULEB
@@ -840,7 +859,6 @@ class rebase_opcode(rebase_entry):
         for i in range(int(self.count)):
             self.parent._info.append(self.parent.cls(self))
             self.parent.addr += int(self.skip) + self.wsize//8
-
 del rebase_opcode
 
 class DyldArrayRebase(DyldArrayGeneric):
@@ -1074,9 +1092,6 @@ class StringTable(LinkEditSection):
     def mod_name(self, idx, name):
         name = name_to_bytes(name)
         n = self.content[idx:self.content.find(data_null,idx)]
-        data = self.content
-        if type(data) != str: data = data.pack()
-        data = data[:idx]+name+data[idx+len(n):]
         dif = len(name) - len(n)
         if dif != 0:
             for sh in self.parent.shlist:
