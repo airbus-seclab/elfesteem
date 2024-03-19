@@ -1,6 +1,6 @@
 import struct
 from elfesteem.macho.common import *
-from elfesteem.cstruct import Constants, CBase, CString, CArray, CStructWithStrTable
+from elfesteem.cstruct import Constants, CBase, CString, CArray, CStruct, CStructWithStrTable
 from elfesteem.strpatchwork import StrPatchwork
 
 import sys

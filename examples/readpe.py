@@ -393,16 +393,15 @@ def print_layout(e, filesz):
         context.append((l[0],l[0]+l[1]))
         print(format % (l[0], l[0]+l[1], ". " * (len(context)-2),
             ' '.join(l[2:])))
-    if True:
-            # If we did not reach the end of the file
-            l = (filesz,)
-            while len(context) > 1 and l[0] >= context[-1][1]:
-                b, f = context[-1][1], min(l[0], context[-2][1])
-                if f > b:
-                    unknown(b, f, len(context)-2)
-                context.pop()
-            if context[-1][1] > filesz:
-                print(format % (context[-1][1], filesz, "", "(went after EOF!)"))
+    # If we did not reach the end of the file
+    l = (filesz,)
+    while len(context) > 1 and l[0] >= context[-1][1]:
+        b, f = context[-1][1], min(l[0], context[-2][1])
+        if f > b:
+            unknown(b, f, len(context)-2)
+        context.pop()
+    if context[-1][1] > filesz:
+        print(format % (context[-1][1], filesz, "", "(went after EOF!)"))
     for l in not_in_section:
         print("Not in a section: %s" % (' '.join(l[2:])))
 

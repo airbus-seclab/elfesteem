@@ -350,6 +350,7 @@ class MACHO(object):
             return -1
         if ep[0].cmd == LC_MAIN: return self.off2ad(ep[0].entryoff)
         if ep[0].cmd == LC_UNIXTHREAD: return ep[0].entrypoint
+        return -1
     def set_entrypoint(self, val):
         if not hasattr(self, 'load'):
             log.error("Not a unique entrypoint in Mach-O fat")

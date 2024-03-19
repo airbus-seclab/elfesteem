@@ -11,13 +11,27 @@ console_handler.setFormatter(logging.Formatter("%(levelname)-5s: %(message)s"))
 log.addHandler(console_handler)
 log.setLevel(logging.WARN)
 
+__all__ = [ 'data_empty', 'data_null', 'bytes_to_name', 'name_to_bytes',
+            'log', 'relocation_info' ]
+
+# Variables defined below and that need to be visible when import *.
+def ImportAll(**kargs):
+    __all__.extend(kargs.keys())
+    globals().update(kargs)
+
+# In addition for needing to be visible when import *, these values
+# are added to constants, built in a way allowing to recover the
+# constant's name from its value.
 constants = {}
 def SetConstants(**kargs):
+    __all__.extend([_ for _ in kargs.keys() if _ != 'no_name'])
     Constants(globs = globals(), table = constants, **kargs)
 
 #### Main source: /usr/include/mach/machine.h
 # VEO is found on http://www.opensource.apple.com/source/cctools/cctools-809/include/mach/machine.h
+ImportAll(
 CPU_ARCH_ABI64  = 0x01000000
+)
 SetConstants(
 CPU_TYPE_VAX         = 1,
 CPU_TYPE_ROMP        = 2, # Deprecated
@@ -45,37 +59,45 @@ CPU_TYPE_VEO         = 255,
 no_name = ('CPU_TYPE_I386', 'CPU_TYPE_I860_LITTLE',)
 )
 
-CPU_SUBTYPE_MASK      = 0xff000000  # mask for feature flags
-CPU_SUBTYPE_LIB64     = 0x80000000  # 64 bit libraries
+ImportAll(
+CPU_SUBTYPE_MASK      = 0xff000000,  # mask for feature flags
+CPU_SUBTYPE_LIB64     = 0x80000000,  # 64 bit libraries
+)
 
 # VAX subtypes.
-CPU_SUBTYPE_VAX_ALL  = 0
-CPU_SUBTYPE_VAX780   = 1
-CPU_SUBTYPE_VAX785   = 2
-CPU_SUBTYPE_VAX750   = 3
-CPU_SUBTYPE_VAX730   = 4
-CPU_SUBTYPE_UVAXI    = 5
-CPU_SUBTYPE_UVAXII   = 6
-CPU_SUBTYPE_VAX8200  = 7
-CPU_SUBTYPE_VAX8500  = 8
-CPU_SUBTYPE_VAX8600  = 9
-CPU_SUBTYPE_VAX8650  = 10
-CPU_SUBTYPE_VAX8800  = 11
-CPU_SUBTYPE_UVAXIII  = 12
+ImportAll(
+CPU_SUBTYPE_VAX_ALL  = 0,
+CPU_SUBTYPE_VAX780   = 1,
+CPU_SUBTYPE_VAX785   = 2,
+CPU_SUBTYPE_VAX750   = 3,
+CPU_SUBTYPE_VAX730   = 4,
+CPU_SUBTYPE_UVAXI    = 5,
+CPU_SUBTYPE_UVAXII   = 6,
+CPU_SUBTYPE_VAX8200  = 7,
+CPU_SUBTYPE_VAX8500  = 8,
+CPU_SUBTYPE_VAX8600  = 9,
+CPU_SUBTYPE_VAX8650  = 10,
+CPU_SUBTYPE_VAX8800  = 11,
+CPU_SUBTYPE_UVAXIII  = 12,
+)
 
 # ROMP subtypes.
-CPU_SUBTYPE_RT_ALL = 0
-CPU_SUBTYPE_RT_PC  = 1
-CPU_SUBTYPE_RT_APC = 2
-CPU_SUBTYPE_RT_135 = 3
+ImportAll(
+CPU_SUBTYPE_RT_ALL = 0,
+CPU_SUBTYPE_RT_PC  = 1,
+CPU_SUBTYPE_RT_APC = 2,
+CPU_SUBTYPE_RT_135 = 3,
+)
 
 # 2032/32332/32532 subtypes.
-CPU_SUBTYPE_MMAX_ALL      = 0
-CPU_SUBTYPE_MMAX_DPC      = 1 # 032 CPU
-CPU_SUBTYPE_SQT           = 2
-CPU_SUBTYPE_MMAX_APC_FPU  = 3 # 32081 FPU
-CPU_SUBTYPE_MMAX_APC_FPA  = 4 # Weitek FPA
-CPU_SUBTYPE_MMAX_XPC      = 5 # 532 CPU
+ImportAll(
+CPU_SUBTYPE_MMAX_ALL      = 0,
+CPU_SUBTYPE_MMAX_DPC      = 1, # 032 CPU
+CPU_SUBTYPE_SQT           = 2,
+CPU_SUBTYPE_MMAX_APC_FPU  = 3, # 32081 FPU
+CPU_SUBTYPE_MMAX_APC_FPA  = 4, # Weitek FPA
+CPU_SUBTYPE_MMAX_XPC      = 5, # 532 CPU
+)
 
 # 680x0 subtypes
 #   NeXT used to consider 68030 code as generic 68000 code.
@@ -86,133 +108,161 @@ CPU_SUBTYPE_MMAX_XPC      = 5 # 532 CPU
 #     subtype as CPU_SUBTYPE_MC68030 for binary comatability.
 #   * CPU_SUBTYPE_MC68030_ONLY has been added to allow new object
 #     files to be tagged as containing 68030-specific instructions.
-CPU_SUBTYPE_MC680x0_ALL  = 1
-CPU_SUBTYPE_MC68030      = 1
-CPU_SUBTYPE_MC68040      = 2
-CPU_SUBTYPE_MC68030_ONLY = 3
+ImportAll(
+CPU_SUBTYPE_MC680x0_ALL  = 1,
+CPU_SUBTYPE_MC68030      = 1,
+CPU_SUBTYPE_MC68040      = 2,
+CPU_SUBTYPE_MC68030_ONLY = 3,
+)
 
 # I386 subtypes.
 def CPU_SUBTYPE_INTEL(f, m): return f + (m << 4)
-CPU_SUBTYPE_I386_ALL       = CPU_SUBTYPE_INTEL(3, 0)
-CPU_SUBTYPE_386            = CPU_SUBTYPE_INTEL(3, 0)
-CPU_SUBTYPE_486            = CPU_SUBTYPE_INTEL(4, 0)
-CPU_SUBTYPE_486SX          = CPU_SUBTYPE_INTEL(4, 8)
-CPU_SUBTYPE_586            = CPU_SUBTYPE_INTEL(5, 0)
-CPU_SUBTYPE_PENT           = CPU_SUBTYPE_INTEL(5, 0)
-CPU_SUBTYPE_PENTPRO        = CPU_SUBTYPE_INTEL(6, 1)
-CPU_SUBTYPE_PENTII_M3      = CPU_SUBTYPE_INTEL(6, 3)
-CPU_SUBTYPE_PENTII_M5      = CPU_SUBTYPE_INTEL(6, 5)
-CPU_SUBTYPE_CELERON        = CPU_SUBTYPE_INTEL(7, 6)
-CPU_SUBTYPE_CELERON_MOBILE = CPU_SUBTYPE_INTEL(7, 7)
-CPU_SUBTYPE_PENTIUM_3      = CPU_SUBTYPE_INTEL(8, 0)
-CPU_SUBTYPE_PENTIUM_3_M    = CPU_SUBTYPE_INTEL(8, 1)
-CPU_SUBTYPE_PENTIUM_3_XEON = CPU_SUBTYPE_INTEL(8, 2)
-CPU_SUBTYPE_PENTIUM_M      = CPU_SUBTYPE_INTEL(9, 0)
-CPU_SUBTYPE_PENTIUM_4      = CPU_SUBTYPE_INTEL(10, 0)
-CPU_SUBTYPE_PENTIUM_4_M    = CPU_SUBTYPE_INTEL(10, 1)
-CPU_SUBTYPE_ITANIUM        = CPU_SUBTYPE_INTEL(11, 0)
-CPU_SUBTYPE_ITANIUM_2      = CPU_SUBTYPE_INTEL(11, 1)
-CPU_SUBTYPE_XEON           = CPU_SUBTYPE_INTEL(12, 0)
-CPU_SUBTYPE_XEON_MP        = CPU_SUBTYPE_INTEL(12, 1)
+ImportAll(
+CPU_SUBTYPE_I386_ALL       = CPU_SUBTYPE_INTEL(3, 0),
+CPU_SUBTYPE_386            = CPU_SUBTYPE_INTEL(3, 0),
+CPU_SUBTYPE_486            = CPU_SUBTYPE_INTEL(4, 0),
+CPU_SUBTYPE_486SX          = CPU_SUBTYPE_INTEL(4, 8),
+CPU_SUBTYPE_586            = CPU_SUBTYPE_INTEL(5, 0),
+CPU_SUBTYPE_PENT           = CPU_SUBTYPE_INTEL(5, 0),
+CPU_SUBTYPE_PENTPRO        = CPU_SUBTYPE_INTEL(6, 1),
+CPU_SUBTYPE_PENTII_M3      = CPU_SUBTYPE_INTEL(6, 3),
+CPU_SUBTYPE_PENTII_M5      = CPU_SUBTYPE_INTEL(6, 5),
+CPU_SUBTYPE_CELERON        = CPU_SUBTYPE_INTEL(7, 6),
+CPU_SUBTYPE_CELERON_MOBILE = CPU_SUBTYPE_INTEL(7, 7),
+CPU_SUBTYPE_PENTIUM_3      = CPU_SUBTYPE_INTEL(8, 0),
+CPU_SUBTYPE_PENTIUM_3_M    = CPU_SUBTYPE_INTEL(8, 1),
+CPU_SUBTYPE_PENTIUM_3_XEON = CPU_SUBTYPE_INTEL(8, 2),
+CPU_SUBTYPE_PENTIUM_M      = CPU_SUBTYPE_INTEL(9, 0),
+CPU_SUBTYPE_PENTIUM_4      = CPU_SUBTYPE_INTEL(10, 0),
+CPU_SUBTYPE_PENTIUM_4_M    = CPU_SUBTYPE_INTEL(10, 1),
+CPU_SUBTYPE_ITANIUM        = CPU_SUBTYPE_INTEL(11, 0),
+CPU_SUBTYPE_ITANIUM_2      = CPU_SUBTYPE_INTEL(11, 1),
+CPU_SUBTYPE_XEON           = CPU_SUBTYPE_INTEL(12, 0),
+CPU_SUBTYPE_XEON_MP        = CPU_SUBTYPE_INTEL(12, 1),
+)
 
-CPU_SUBTYPE_X86_ALL    = 3
-CPU_SUBTYPE_X86_64_ALL = 3
-CPU_SUBTYPE_X86_ARCH1  = 4
-CPU_SUBTYPE_X86_64_H   = 8 # Haswell feature subset
+ImportAll(
+CPU_SUBTYPE_X86_ALL    = 3,
+CPU_SUBTYPE_X86_64_ALL = 3,
+CPU_SUBTYPE_X86_ARCH1  = 4,
+CPU_SUBTYPE_X86_64_H   = 8, # Haswell feature subset
+)
 
 # Mips subtypes.
-CPU_SUBTYPE_MIPS_ALL     = 0
-CPU_SUBTYPE_MIPS_R2300   = 1
-CPU_SUBTYPE_MIPS_R2600   = 2
-CPU_SUBTYPE_MIPS_R2800   = 3
-CPU_SUBTYPE_MIPS_R2000a  = 4 # pmax
-CPU_SUBTYPE_MIPS_R2000   = 5
-CPU_SUBTYPE_MIPS_R3000a  = 6 # 3max
-CPU_SUBTYPE_MIPS_R3000   = 7
+ImportAll(
+CPU_SUBTYPE_MIPS_ALL     = 0,
+CPU_SUBTYPE_MIPS_R2300   = 1,
+CPU_SUBTYPE_MIPS_R2600   = 2,
+CPU_SUBTYPE_MIPS_R2800   = 3,
+CPU_SUBTYPE_MIPS_R2000a  = 4, # pmax
+CPU_SUBTYPE_MIPS_R2000   = 5,
+CPU_SUBTYPE_MIPS_R3000a  = 6, # 3max
+CPU_SUBTYPE_MIPS_R3000   = 7,
+)
 
 # HPPA subtypes for Hewlett-Packard HP-PA family of risc processors.
 # Port by NeXT to 700 series. 
-CPU_SUBTYPE_HPPA_ALL     = 0
-CPU_SUBTYPE_HPPA_7100    = 0
-CPU_SUBTYPE_HPPA_7100LC  = 1
+ImportAll(
+CPU_SUBTYPE_HPPA_ALL     = 0,
+CPU_SUBTYPE_HPPA_7100    = 0,
+CPU_SUBTYPE_HPPA_7100LC  = 1,
+)
 
 # MC88000 subtypes
-CPU_SUBTYPE_MC88000_ALL  = 0
-CPU_SUBTYPE_MMAX_JPC     = 1
-CPU_SUBTYPE_MC88100      = 1
-CPU_SUBTYPE_MC88110      = 2
+ImportAll(
+CPU_SUBTYPE_MC88000_ALL  = 0,
+CPU_SUBTYPE_MMAX_JPC     = 1,
+CPU_SUBTYPE_MC88100      = 1,
+CPU_SUBTYPE_MC88110      = 2,
+)
 
 # MC98000 (PowerPC) subtypes
-CPU_SUBTYPE_MC98000_AL   = 0
-CPU_SUBTYPE_MC98601      = 1
+ImportAll(
+CPU_SUBTYPE_MC98000_AL   = 0,
+CPU_SUBTYPE_MC98601      = 1,
+)
 
 
 # I860 subtypes
-CPU_SUBTYPE_I860_ALL     = 0
-CPU_SUBTYPE_I860_860     = 1
+ImportAll(
+CPU_SUBTYPE_I860_ALL     = 0,
+CPU_SUBTYPE_I860_860     = 1,
 
-CPU_SUBTYPE_I860_LITTLE_ALL = 0
-CPU_SUBTYPE_I860_LITTLE     = 1
+CPU_SUBTYPE_I860_LITTLE_ALL = 0,
+CPU_SUBTYPE_I860_LITTLE     = 1,
+)
 
 # RS6000 subtypes
-CPU_SUBTYPE_RS6000_ALL = 0
-CPU_SUBTYPE_RS6000     = 1
+ImportAll(
+CPU_SUBTYPE_RS6000_ALL = 0,
+CPU_SUBTYPE_RS6000     = 1,
+)
 
 # Sun4 subtypes - port done at CMU
-CPU_SUBTYPE_SUN4_ALL     = 0
-CPU_SUBTYPE_SUN4_260     = 1
-CPU_SUBTYPE_SUN4_110     = 2
-CPU_SUBTYPE_SPARC_ALL    = 0
+ImportAll(
+CPU_SUBTYPE_SUN4_ALL     = 0,
+CPU_SUBTYPE_SUN4_260     = 1,
+CPU_SUBTYPE_SUN4_110     = 2,
+CPU_SUBTYPE_SPARC_ALL    = 0,
+)
 
 # PowerPC subtypes
-CPU_SUBTYPE_POWERPC_ALL   = 0
-CPU_SUBTYPE_POWERPC_601   = 1
-CPU_SUBTYPE_POWERPC_602   = 2
-CPU_SUBTYPE_POWERPC_603   = 3
-CPU_SUBTYPE_POWERPC_603e  = 4
-CPU_SUBTYPE_POWERPC_603ev = 5
-CPU_SUBTYPE_POWERPC_604   = 6
-CPU_SUBTYPE_POWERPC_604e  = 7
-CPU_SUBTYPE_POWERPC_620   = 8
-CPU_SUBTYPE_POWERPC_750   = 9
-CPU_SUBTYPE_POWERPC_7400  = 10
-CPU_SUBTYPE_POWERPC_7450  = 11
-CPU_SUBTYPE_POWERPC_970   = 100
+ImportAll(
+CPU_SUBTYPE_POWERPC_ALL   = 0,
+CPU_SUBTYPE_POWERPC_601   = 1,
+CPU_SUBTYPE_POWERPC_602   = 2,
+CPU_SUBTYPE_POWERPC_603   = 3,
+CPU_SUBTYPE_POWERPC_603e  = 4,
+CPU_SUBTYPE_POWERPC_603ev = 5,
+CPU_SUBTYPE_POWERPC_604   = 6,
+CPU_SUBTYPE_POWERPC_604e  = 7,
+CPU_SUBTYPE_POWERPC_620   = 8,
+CPU_SUBTYPE_POWERPC_750   = 9,
+CPU_SUBTYPE_POWERPC_7400  = 10,
+CPU_SUBTYPE_POWERPC_7450  = 11,
+CPU_SUBTYPE_POWERPC_970   = 100,
 
-CPU_SUBTYPE_POWERPC64_ALL = 0
+CPU_SUBTYPE_POWERPC64_ALL = 0,
+)
 
 # VEO subtypes
 #  Note: the CPU_SUBTYPE_VEO_ALL will likely change over time to be defined as
 #  one of the specific subtypes.
-CPU_SUBTYPE_VEO_1     = 1
-CPU_SUBTYPE_VEO_2     = 2
-CPU_SUBTYPE_VEO_3     = 3
-CPU_SUBTYPE_VEO_4     = 4
-CPU_SUBTYPE_VEO_ALL   = CPU_SUBTYPE_VEO_2
+ImportAll(
+CPU_SUBTYPE_VEO_1     = 1,
+CPU_SUBTYPE_VEO_2     = 2,
+CPU_SUBTYPE_VEO_3     = 3,
+CPU_SUBTYPE_VEO_4     = 4,
+CPU_SUBTYPE_VEO_ALL   = 2, # CPU_SUBTYPE_VEO_2
+)
 
 # Acorn subtypes
-CPU_SUBTYPE_ARM_ALL    = 0
-CPU_SUBTYPE_ARM_V4T    = 5
-CPU_SUBTYPE_ARM_V6     = 6
-CPU_SUBTYPE_ARM_V5TEJ  = 7
-CPU_SUBTYPE_ARM_XSCALE = 8
-CPU_SUBTYPE_ARM_V7     = 9
-CPU_SUBTYPE_ARM_V7F    = 10 # Cortex A9
-CPU_SUBTYPE_ARM_V7S    = 11 # Swift
-CPU_SUBTYPE_ARM_V7K    = 12
-CPU_SUBTYPE_ARM_V8     = 13
-CPU_SUBTYPE_ARM_V6M    = 14 # Not meant to be run under xnu
-CPU_SUBTYPE_ARM_V7M    = 15 # Not meant to be run under xnu
-CPU_SUBTYPE_ARM_V7EM   = 16 # Not meant to be run under xnu
+ImportAll(
+CPU_SUBTYPE_ARM_ALL    = 0,
+CPU_SUBTYPE_ARM_V4T    = 5,
+CPU_SUBTYPE_ARM_V6     = 6,
+CPU_SUBTYPE_ARM_V5TEJ  = 7,
+CPU_SUBTYPE_ARM_XSCALE = 8,
+CPU_SUBTYPE_ARM_V7     = 9,
+CPU_SUBTYPE_ARM_V7F    = 10, # Cortex A9
+CPU_SUBTYPE_ARM_V7S    = 11, # Swift
+CPU_SUBTYPE_ARM_V7K    = 12,
+CPU_SUBTYPE_ARM_V8     = 13,
+CPU_SUBTYPE_ARM_V6M    = 14, # Not meant to be run under xnu
+CPU_SUBTYPE_ARM_V7M    = 15, # Not meant to be run under xnu
+CPU_SUBTYPE_ARM_V7EM   = 16, # Not meant to be run under xnu
 
-CPU_SUBTYPE_ARM64_ALL  = 0
-CPU_SUBTYPE_ARM64_V8   = 1
+CPU_SUBTYPE_ARM64_ALL  = 0,
+CPU_SUBTYPE_ARM64_V8   = 1,
+)
 
 
 #### Source: /usr/include/mach-o/reloc.h
 
 # * In reloc.h, there are two data structures: relocation_info and scattered_relocation_info, which are merged in one structure below.
+ImportAll(
 R_SCATTERED = 0x80000000
+)
 class relocation_info(CStruct):
     _fields = [
         ("relocaddr","u32"),
@@ -252,12 +302,14 @@ class relocation_info(CStruct):
 # (...)
 # The implemention is quite messy given the compatibility with the existing
 # relocation entry format. (...)
-GENERIC_RELOC_VANILLA        = 0 # generic relocation as described above
-GENERIC_RELOC_PAIR           = 1 # Only follows a GENERIC_RELOC_SECTDIFF
-GENERIC_RELOC_SECTDIFF       = 2
-GENERIC_RELOC_PB_LA_PTR      = 3 # prebound lazy pointer */
-GENERIC_RELOC_LOCAL_SECTDIFF = 4
-GENERIC_RELOC_TLV            = 5 # thread local variables */
+ImportAll(
+GENERIC_RELOC_VANILLA        = 0, # generic relocation as described above
+GENERIC_RELOC_PAIR           = 1, # Only follows a GENERIC_RELOC_SECTDIFF
+GENERIC_RELOC_SECTDIFF       = 2,
+GENERIC_RELOC_PB_LA_PTR      = 3, # prebound lazy pointer */
+GENERIC_RELOC_LOCAL_SECTDIFF = 4,
+GENERIC_RELOC_TLV            = 5, # thread local variables */
+)
 
 #### Source: /usr/include/mach-o/x86_64/reloc.h
 # Relocations for x86_64 are a bit different than for other architectures in
@@ -266,13 +318,15 @@ GENERIC_RELOC_TLV            = 5 # thread local variables */
 # r_extern bit set to 1 and the r_symbolnum field contains the symbol table
 # index of the target label.
 # (...)
-X86_64_RELOC_UNSIGNED    = 0 # for absolute addresses
-X86_64_RELOC_SIGNED      = 1 # for signed 32-bit displacement
-X86_64_RELOC_BRANCH      = 2 # a CALL/JMP instruction with 32-bit displacement
-X86_64_RELOC_GOT_LOAD    = 3 # a MOVQ load of a GOT entry
-X86_64_RELOC_GOT         = 4 # other GOT references
-X86_64_RELOC_SUBTRACTOR  = 5 # must be followed by a X86_64_RELOC_UNSIGNED
-X86_64_RELOC_SIGNED_1    = 6 # for signed 32-bit displacement with a -1 addend
-X86_64_RELOC_SIGNED_2    = 7 # for signed 32-bit displacement with a -2 addend
-X86_64_RELOC_SIGNED_4    = 8 # for signed 32-bit displacement with a -4 addend
-X86_64_RELOC_TLV         = 9 # for thread local variables
+ImportAll(
+X86_64_RELOC_UNSIGNED    = 0, # for absolute addresses
+X86_64_RELOC_SIGNED      = 1, # for signed 32-bit displacement
+X86_64_RELOC_BRANCH      = 2, # a CALL/JMP instruction with 32-bit displacement
+X86_64_RELOC_GOT_LOAD    = 3, # a MOVQ load of a GOT entry
+X86_64_RELOC_GOT         = 4, # other GOT references
+X86_64_RELOC_SUBTRACTOR  = 5, # must be followed by a X86_64_RELOC_UNSIGNED
+X86_64_RELOC_SIGNED_1    = 6, # for signed 32-bit displacement with a -1 addend
+X86_64_RELOC_SIGNED_2    = 7, # for signed 32-bit displacement with a -2 addend
+X86_64_RELOC_SIGNED_4    = 8, # for signed 32-bit displacement with a -4 addend
+X86_64_RELOC_TLV         = 9, # for thread local variables
+)

@@ -1,5 +1,5 @@
 from elfesteem.macho.common import *
-from elfesteem.cstruct import convert_size2type, Constants, CBase, CArray
+from elfesteem.cstruct import convert_size2type, Constants, CBase, CArray, CStruct
 import struct
 
 constants = {}
