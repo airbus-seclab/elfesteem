@@ -53,11 +53,7 @@ class ContentRVA(object):
                 s = self.parent.getsectionbyrva(start, section)
                 if s is None:
                     log.warning('unknown rva address! %x'%start)
-                    # We would like to return an empty list, but it is
-                    # not compatible with miasm2 non-regression tests
-                    # If we return None, then reading at an unknown RVA
-                    # will result in getting one null byte.
-                    return None
+                    return []
                 s_max = s.rawsize
                 if hasattr(self.parent, 'NThdr'):
                     # PE, not COFF
@@ -97,9 +93,6 @@ class ContentRVA(object):
             file_off = self.parent.rva2off(s.vaddr+n_item.start)
             if self.parent.content:
                 self.parent.content = self.parent.content[:file_off]+ data_slice + self.parent.content[file_off+len(data_slice):]
-    def set(self, rva, data):
-        # API used by miasm2
-        self[rva] = data
 
 
 class ContentVirtual(object):

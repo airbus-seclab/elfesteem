@@ -128,7 +128,7 @@ def test_PE_manipulate(assertion):
               log_history,
               'Extract chunk from non-mapped memory (logs)')
     log_history = []
-    assertion('93b885adfe0da089cdf634904fd59f71',
+    assertion('d41d8cd98f00b204e9800998ecf8427e',
               hashlib.md5(d).hexdigest(),
               'Extract chunk from non-mapped memory')
     assertion(e.virt[0x401000:0x401020],
@@ -139,11 +139,6 @@ def test_PE_manipulate(assertion):
     assertion('2f08b8315c4e0a30d51a8decf104345c',
               hashlib.md5(d).hexdigest(),
               'Writing in raw data')
-    e.rva.set(0x1100, e.virt[0x401100:0x401120])
-    d = e.pack()
-    assertion('2f08b8315c4e0a30d51a8decf104345c',
-              hashlib.md5(d).hexdigest(),
-              'Writing at RVA')
     e.virt[0x401100:0x401120] = e.virt[0x401100:0x401120]
     d = e.pack()
     assertion('2f08b8315c4e0a30d51a8decf104345c',

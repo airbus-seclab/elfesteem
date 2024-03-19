@@ -108,9 +108,6 @@ def test_ELF_small32(assertion):
     assertion('5e94f899265a799826a46ec86a293e16',
               hashlib.md5(d).hexdigest(),
               'Extract chunk from raw data')
-    assertion(e[0x100:0x120],
-              e._content[0x100:0x120],
-              'Extract chunk from raw data, deprecated API')
     assertion(True,
               e.virt.is_addr_in(0x080483d0),
               'Address in mapped virtual memory')

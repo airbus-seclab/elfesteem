@@ -523,8 +523,6 @@ class DOShdr(CStruct):
 
 class NTsig(CStruct):
     _fields = [ ("signature","u32") ]
-    # Needed for miasm2/analysis/binary.py
-    signature_value = property(lambda _:_.signature)
 
 class COFFhdr(CStruct):
     _fields = [ ("machine","u16"),

@@ -959,10 +959,6 @@ class ELF(object):
                 return True
         return False
 
-    # Old API, needed by miasm2
-    size = property(lambda _:_.wsize)
-    _content = property(lambda _:_.content)
-
 if __name__ == "__main__":
     import readline
     readline.parse_and_bind("tab: complete")

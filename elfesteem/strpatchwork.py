@@ -14,7 +14,6 @@ class StrPatchwork(object):
         self.s_cache = s
         self.paddingbyte=paddingbyte
     def __str__(self):
-        return self.pack() # Needed for miasm2 :-(
         raise AttributeError("Use pack() instead of str()")
     def pack(self):
         if sys.version_info[0] >= 3:
